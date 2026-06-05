@@ -164,17 +164,51 @@ async function simulateIncoming() {
   els.simText.value = "";
 }
 
-// ---------- Real-time (SSE) ----------
+// ---------- Real-time (SSE) with polling fallback ----------
+let pollTimer = null;
+
+function startPolling() {
+  if (pollTimer) return;
+  els.connection.textContent = "actualizando…";
+  els.connection.className = "status-dot";
+  pollTimer = setInterval(async () => {
+    await loadConversations();
+    if (state.activePhone) {
+      const res = await fetch(
+        `/api/conversations/${encodeURIComponent(state.activePhone)}/messages`
+      );
+      state.messagesCache[state.activePhone] = await res.json();
+      renderMessages(state.activePhone);
+    }
+  }, 3000);
+}
+
+function stopPolling() {
+  if (pollTimer) {
+    clearInterval(pollTimer);
+    pollTimer = null;
+  }
+}
+
 function connectStream() {
-  const source = new EventSource("/api/stream");
+  let source;
+  try {
+    source = new EventSource("/api/stream");
+  } catch (e) {
+    startPolling();
+    return;
+  }
 
   source.onopen = () => {
+    stopPolling();
     els.connection.textContent = "en línea";
     els.connection.className = "status-dot online";
   };
   source.onerror = () => {
-    els.connection.textContent = "reconectando…";
+    els.connection.textContent = "modo sin tiempo real";
     els.connection.className = "status-dot offline";
+    // Serverless platforms may not keep SSE open; fall back to polling.
+    startPolling();
   };
   source.onmessage = (event) => {
     const payload = JSON.parse(event.data);
