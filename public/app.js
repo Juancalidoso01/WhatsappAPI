@@ -253,6 +253,7 @@ function showTemplate(t) {
   const footer = (t.components || []).find((x) => x.type === "FOOTER");
   const st = (t.status || "").toLowerCase();
   const cls = st === "approved" ? "approved" : st === "rejected" ? "rejected" : "pending";
+  const canSend = (t.status || "").toLowerCase() === "approved";
   d.innerHTML = `
     <h2>${escapeHtml(t.name)}</h2>
     <span class="status-badge ${cls}">${escapeHtml(t.status || "—")}</span>
@@ -260,7 +261,9 @@ function showTemplate(t) {
       ${header && header.text ? `<div class="tpl-h">${escapeHtml(header.text)}</div>` : ""}
       <div>${escapeHtml(bodyOf(t))}</div>
       ${footer && footer.text ? `<div class="tpl-f">${escapeHtml(footer.text)}</div>` : ""}
-    </div>`;
+    </div>
+    ${canSend ? `<button class="btn-primary block" id="tplSendBtn">Enviar a un número</button>` : `<div class="tpl-none" style="margin-top:16px">Solo las plantillas aprobadas se pueden enviar.</div>`}`;
+  if (canSend) $("tplSendBtn").addEventListener("click", () => openNewChat(t.name));
 }
 
 async function createTemplate() {
@@ -292,37 +295,124 @@ async function createTemplate() {
   }
 }
 
+/* ---------- template parameter detection ---------- */
+function tplByName(name) { return state.templates.find((t) => t.name === name); }
+
+function bodyVarCount(t) {
+  const b = (t.components || []).find((c) => c.type === "BODY");
+  if (!b || !b.text) return 0;
+  const m = b.text.match(/{{\s*\d+\s*}}/g);
+  return m ? new Set(m.map((x) => x.replace(/[^0-9]/g, ""))).size : 0;
+}
+function headerSpec(t) {
+  const h = (t.components || []).find((c) => c.type === "HEADER");
+  if (!h) return null;
+  if (h.format === "TEXT") return /{{\s*\d+\s*}}/.test(h.text || "") ? { kind: "text" } : null;
+  if (["IMAGE", "VIDEO", "DOCUMENT"].includes(h.format)) return { kind: "media", format: h.format };
+  return null;
+}
+function buttonSpecs(t) {
+  const b = (t.components || []).find((c) => c.type === "BUTTONS");
+  if (!b || !b.buttons) return [];
+  const specs = [];
+  b.buttons.forEach((btn, idx) => {
+    const type = (btn.type || "").toUpperCase();
+    if (type === "URL" && /{{\s*\d+\s*}}/.test(btn.url || "")) specs.push({ idx, kind: "url", text: btn.text });
+    else if (type === "FLOW") specs.push({ idx, kind: "flow", text: btn.text });
+    else if (type === "COPY_CODE") specs.push({ idx, kind: "copy", text: btn.text });
+  });
+  return specs;
+}
+function templateNeedsConfig(t) {
+  return Boolean(headerSpec(t)) || bodyVarCount(t) > 0 || buttonSpecs(t).length > 0;
+}
+
+function renderTemplateFields(t) {
+  const box = $("ncFields");
+  if (!t) { box.innerHTML = ""; return; }
+  const parts = [];
+  const hs = headerSpec(t);
+  if (hs && hs.kind === "text") parts.push(`<label>Encabezado (variable)<input data-field="header" type="text" placeholder="Texto del encabezado" /></label>`);
+  if (hs && hs.kind === "media") parts.push(`<label>${hs.format === "IMAGE" ? "Imagen" : hs.format === "VIDEO" ? "Video" : "Documento"} del encabezado (URL)<input data-field="headerMedia" type="text" placeholder="https://…" /></label>`);
+
+  const n = bodyVarCount(t);
+  for (let i = 1; i <= n; i++) parts.push(`<label>Variable del cuerpo {{${i}}}<input data-field="body${i}" type="text" placeholder="Valor para {{${i}}}" /></label>`);
+
+  buttonSpecs(t).forEach((s) => {
+    if (s.kind === "url") parts.push(`<label>URL del botón “${escapeHtml(s.text)}”<input data-field="btnurl${s.idx}" type="text" placeholder="parte dinámica de la URL" /></label>`);
+    else if (s.kind === "copy") parts.push(`<label>Código del botón “${escapeHtml(s.text)}”<input data-field="btncode${s.idx}" type="text" placeholder="CUPON20" /></label>`);
+    else if (s.kind === "flow") parts.push(`<label>Token del Flow “${escapeHtml(s.text)}” (opcional)<input data-field="flow${s.idx}" type="text" placeholder="unused" /></label>`);
+  });
+
+  box.innerHTML = parts.length
+    ? `<div class="field-group"><div class="fg-title">Parámetros de la plantilla</div>${parts.join("")}</div>`
+    : `<div class="tpl-none">Esta plantilla no requiere parámetros.</div>`;
+}
+
+function collectComponents(t) {
+  const box = $("ncFields");
+  const val = (f) => { const el = box.querySelector(`[data-field="${f}"]`); return el ? el.value.trim() : ""; };
+  const comps = [];
+
+  const hs = headerSpec(t);
+  if (hs && hs.kind === "text" && val("header")) comps.push({ type: "header", parameters: [{ type: "text", text: val("header") }] });
+  if (hs && hs.kind === "media" && val("headerMedia")) {
+    const k = hs.format.toLowerCase();
+    comps.push({ type: "header", parameters: [{ type: k, [k]: { link: val("headerMedia") } }] });
+  }
+
+  const n = bodyVarCount(t);
+  if (n > 0) {
+    const params = [];
+    for (let i = 1; i <= n; i++) params.push({ type: "text", text: val("body" + i) });
+    comps.push({ type: "body", parameters: params });
+  }
+
+  buttonSpecs(t).forEach((s) => {
+    if (s.kind === "url") comps.push({ type: "button", sub_type: "url", index: String(s.idx), parameters: [{ type: "text", text: val("btnurl" + s.idx) }] });
+    else if (s.kind === "copy") comps.push({ type: "button", sub_type: "copy_code", index: String(s.idx), parameters: [{ type: "coupon_code", coupon_code: val("btncode" + s.idx) }] });
+    else if (s.kind === "flow") comps.push({ type: "button", sub_type: "flow", index: String(s.idx), parameters: [{ type: "action", action: { flow_token: val("flow" + s.idx) || "unused" } }] });
+  });
+
+  return comps;
+}
+
 /* ---------- new chat (send template) ---------- */
-async function openNewChat() {
+async function openNewChat(prefillName) {
   showModal("modalNewChat");
   const sel = $("ncTemplate");
   const hint = $("ncHint");
+  $("ncFields").innerHTML = "";
   sel.innerHTML = `<option>Cargando…</option>`;
-  await loadTemplates();
+  if (!state.templates.length) await loadTemplates();
   const approved = state.templates.filter((t) => (t.status || "").toLowerCase() === "approved");
   if (!approved.length) {
     sel.innerHTML = `<option value="">— sin plantillas aprobadas —</option>`;
     hint.className = "hint error";
-    hint.textContent = "No tienes plantillas aprobadas. Crea una en la sección Plantillas y espera la aprobación de Meta.";
-  } else {
-    sel.innerHTML = approved
-      .map((t) => `<option value="${escapeHtml(t.name)}|${escapeHtml(t.language)}">${escapeHtml(t.name)} (${escapeHtml(t.language)})</option>`)
-      .join("");
-    hint.className = "hint";
-    hint.textContent = "Se enviará la plantilla para abrir la conversación.";
+    hint.textContent = "No tienes plantillas aprobadas. Crea una en Plantillas y espera la aprobación de Meta.";
+    return;
   }
+  sel.innerHTML = approved
+    .map((t) => `<option value="${escapeHtml(t.name)}">${escapeHtml(t.name)} (${escapeHtml(t.language)})</option>`)
+    .join("");
+  if (prefillName && approved.some((t) => t.name === prefillName)) sel.value = prefillName;
+  hint.className = "hint";
+  hint.textContent = "Configura los parámetros y envía para abrir la conversación.";
+  renderTemplateFields(tplByName(sel.value));
 }
 
 async function sendNewChat() {
   const phone = $("ncPhone").value.replace(/[^0-9]/g, "");
   const name = $("ncName").value.trim();
-  const val = $("ncTemplate").value;
-  if (!phone || !val) { toast("Indica número y plantilla.", "error"); return; }
-  const [template, language] = val.split("|");
-  const res = await post("/api/send-template", { phone, name, template, language });
+  const tplName = $("ncTemplate").value;
+  if (!phone || !tplName) { toast("Indica número y plantilla.", "error"); return; }
+  const t = tplByName(tplName);
+  const components = t ? collectComponents(t) : [];
+  const res = await post("/api/send-template", { phone, name, template: tplName, language: t ? t.language : "es", components });
   if (res.ok) {
     closeModals();
     toast("Plantilla enviada.", "ok");
+    switchScreen("chats");
     await loadConversations();
     openConversation(phone, name || phone);
   } else {
@@ -386,7 +476,8 @@ function bindEvents() {
   );
   $("searchInput").addEventListener("input", (e) => { state.filter = e.target.value; renderConversations(); });
   $("composer").addEventListener("submit", (e) => { e.preventDefault(); sendText($("messageInput").value); });
-  $("newChatBtn").addEventListener("click", openNewChat);
+  $("newChatBtn").addEventListener("click", () => openNewChat());
+  $("ncTemplate").addEventListener("change", (e) => renderTemplateFields(tplByName(e.target.value)));
   $("ncSend").addEventListener("click", sendNewChat);
   $("attachBtn").addEventListener("click", () => showModal("modalMedia"));
   $("detailMediaBtn").addEventListener("click", () => showModal("modalMedia"));
@@ -395,7 +486,7 @@ function bindEvents() {
   $("simSend").addEventListener("click", simulate);
   $("newTemplateBtn").addEventListener("click", () => showModal("modalTemplate"));
   $("tpCreate").addEventListener("click", createTemplate);
-  $("detailTemplateBtn").addEventListener("click", openNewChat);
+  $("detailTemplateBtn").addEventListener("click", () => openNewChat());
   $("detailToggle").addEventListener("click", () => $("detailPane").classList.toggle("collapsed"));
   document.querySelectorAll("[data-close]").forEach((b) => b.addEventListener("click", closeModals));
   document.querySelectorAll(".modal").forEach((m) =>
