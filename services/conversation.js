@@ -16,14 +16,14 @@ const Cache = require('./redis');
 const Store = require('./store');
 
 function recordBotReply(phoneNumberId, recipientPhoneNumber, text) {
-  Store.addMessage({
+  return Store.addMessage({
     phone: recipientPhoneNumber,
     phoneNumberId,
     direction: 'out',
     text,
     type: 'bot',
     status: 'sent',
-  });
+  }).catch(err => console.error('recordBotReply error:', err.message));
 }
 
 

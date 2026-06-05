@@ -78,7 +78,8 @@ app.post('/webhook', webhookJson, (req, res) => {
 
           if (value.statuses) {
             value.statuses.forEach(status => {
-              Store.updateMessageStatus(status.recipient_id, status.id, status.status);
+              Promise.resolve(Store.updateMessageStatus(status.recipient_id, status.id, status.status))
+                .catch(err => console.error('updateMessageStatus error:', err));
               // Handle message status updates
               Promise.resolve(Conversation.handleStatus(senderPhoneNumberId, status))
                 .catch(err => console.error('handleStatus error:', err));
@@ -88,7 +89,7 @@ app.post('/webhook', webhookJson, (req, res) => {
           if (value.messages) {
             value.messages.forEach(rawMessage => {
               // Mirror the incoming message into the local web interface
-              Store.addMessage({
+              Promise.resolve(Store.addMessage({
                 phone: rawMessage.from,
                 name: contactNames[rawMessage.from],
                 phoneNumberId: senderPhoneNumberId,
@@ -96,7 +97,7 @@ app.post('/webhook', webhookJson, (req, res) => {
                 text: extractMessageText(rawMessage),
                 type: rawMessage.type,
                 id: rawMessage.id,
-              });
+              })).catch(err => console.error('addMessage error:', err));
 
               // Respond to message
               Promise.resolve(Conversation.handleMessage(senderPhoneNumberId, rawMessage))
@@ -114,13 +115,23 @@ app.post('/webhook', webhookJson, (req, res) => {
 // ----- Local web interface API -----
 
 // List all conversations
-app.get('/api/conversations', (req, res) => {
-  res.json(Store.listConversations());
+app.get('/api/conversations', async (req, res) => {
+  try {
+    res.json(await Store.listConversations());
+  } catch (err) {
+    console.error('listConversations error:', err.message);
+    res.status(500).json({ error: 'No se pudieron cargar las conversaciones.' });
+  }
 });
 
 // Get the messages of a single conversation
-app.get('/api/conversations/:phone/messages', (req, res) => {
-  res.json(Store.getMessages(req.params.phone));
+app.get('/api/conversations/:phone/messages', async (req, res) => {
+  try {
+    res.json(await Store.getMessages(req.params.phone));
+  } catch (err) {
+    console.error('getMessages error:', err.message);
+    res.status(500).json({ error: 'No se pudieron cargar los mensajes.' });
+  }
 });
 
 // Send a text message manually from the web interface
@@ -130,12 +141,12 @@ app.post('/api/send', apiJson, async (req, res) => {
     return res.status(400).json({ error: 'Se requieren "phone" y "text".' });
   }
 
-  const convo = Store.getConversation(phone);
+  const convo = await Store.getConversation(phone);
   const phoneNumberId =
     (convo && convo.phoneNumberId) || process.env.PHONE_NUMBER_ID;
 
   // Store the outgoing message right away so the UI feels responsive
-  const stored = Store.addMessage({
+  const stored = await Store.addMessage({
     phone,
     phoneNumberId,
     direction: 'out',
@@ -145,21 +156,21 @@ app.post('/api/send', apiJson, async (req, res) => {
   });
 
   if (!phoneNumberId || !config.accessToken) {
-    Store.updateMessageStatus(phone, stored.id, 'failed');
+    await Store.updateMessageStatus(phone, stored.id, 'failed');
     return res.status(200).json({
       ok: false,
       message: stored,
       warning:
-        'Mensaje guardado localmente, pero no se envió por WhatsApp: falta PHONE_NUMBER_ID o ACCESS_TOKEN en .env.',
+        'Mensaje guardado, pero no se envió por WhatsApp: falta PHONE_NUMBER_ID o ACCESS_TOKEN.',
     });
   }
 
   try {
     await GraphApi.messageWithText(undefined, phoneNumberId, phone, text);
-    Store.updateMessageStatus(phone, stored.id, 'sent');
+    await Store.updateMessageStatus(phone, stored.id, 'sent');
     res.json({ ok: true, message: stored });
   } catch (error) {
-    Store.updateMessageStatus(phone, stored.id, 'failed');
+    await Store.updateMessageStatus(phone, stored.id, 'failed');
     res
       .status(200)
       .json({ ok: false, message: stored, error: String(error.message || error) });
@@ -167,13 +178,13 @@ app.post('/api/send', apiJson, async (req, res) => {
 });
 
 // Inject a fake incoming message, so the UI can be tested without WhatsApp
-app.post('/api/simulate-incoming', apiJson, (req, res) => {
+app.post('/api/simulate-incoming', apiJson, async (req, res) => {
   const { phone, name, text } = req.body || {};
   if (!phone || !text) {
     return res.status(400).json({ error: 'Se requieren "phone" y "text".' });
   }
 
-  const message = Store.addMessage({
+  const message = await Store.addMessage({
     phone,
     name: name || `Demo ${phone}`,
     direction: 'in',

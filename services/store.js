@@ -1,22 +1,35 @@
 /**
- * Lightweight in-memory store for conversations and messages.
+ * Conversation/message store for the web interface.
  *
- * Keeps the chat history that powers the local web interface and exposes a
- * tiny pub/sub so the UI can receive new messages in real time via SSE.
- * This is intentionally simple (process memory only) so the demo works
- * without extra infrastructure. Restarting the server clears the history.
+ * Two backends behind one async interface:
+ *  - Upstash Redis (when configured) -> persistent across serverless instances.
+ *  - In-memory (fallback) -> great for local dev without extra infra.
+ *
+ * A small in-process EventEmitter is kept for real-time SSE on long-lived
+ * servers (local). On serverless the UI relies on polling instead.
+ *
+ * Redis layout (prefixed with "wa:" so it can safely share a database):
+ *   wa:convos              ZSET   score=lastActivity, member=phone
+ *   wa:convo:<phone>       HASH   { name, phoneNumberId }
+ *   wa:msgs:<phone>        LIST   JSON messages (oldest -> newest)
  */
 
 "use strict";
 
 const EventEmitter = require("events");
+const redis = require("./upstash");
 
-const conversations = new Map();
+const PREFIX = "wa:";
+const MAX_CONVOS = 100;
+
 const emitter = new EventEmitter();
 emitter.setMaxListeners(0);
 
-function getOrCreateConversation(phone, name, phoneNumberId) {
-  let convo = conversations.get(phone);
+// ---------- In-memory fallback ----------
+const memConversations = new Map();
+
+function memGetOrCreate(phone, name, phoneNumberId) {
+  let convo = memConversations.get(phone);
   if (!convo) {
     convo = {
       phone,
@@ -25,18 +38,27 @@ function getOrCreateConversation(phone, name, phoneNumberId) {
       messages: [],
       lastActivity: Date.now(),
     };
-    conversations.set(phone, convo);
+    memConversations.set(phone, convo);
   }
-  if (name && (!convo.name || convo.name === convo.phone)) {
-    convo.name = name;
-  }
-  if (phoneNumberId) {
-    convo.phoneNumberId = phoneNumberId;
-  }
+  if (name && (!convo.name || convo.name === convo.phone)) convo.name = name;
+  if (phoneNumberId) convo.phoneNumberId = phoneNumberId;
   return convo;
 }
 
-function addMessage({
+// ---------- Helpers ----------
+function buildMessage({ direction, text, type = "text", status = null, id = null }) {
+  return {
+    id: id || `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    direction,
+    text,
+    type,
+    status,
+    timestamp: Date.now(),
+  };
+}
+
+// ---------- Public API ----------
+async function addMessage({
   phone,
   name,
   phoneNumberId,
@@ -46,37 +68,96 @@ function addMessage({
   status = null,
   id = null,
 }) {
-  const convo = getOrCreateConversation(phone, name, phoneNumberId);
-  const message = {
-    id: id || `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-    direction,
-    text,
-    type,
-    status,
-    timestamp: Date.now(),
-  };
-  convo.messages.push(message);
-  convo.lastActivity = message.timestamp;
-  emitter.emit("message", { phone: convo.phone, name: convo.name, message });
+  const message = buildMessage({ direction, text, type, status, id });
+
+  if (redis) {
+    const convoKey = `${PREFIX}convo:${phone}`;
+    const meta = {};
+    if (name) meta.name = name;
+    if (phoneNumberId) meta.phoneNumberId = phoneNumberId;
+    const ops = [
+      redis.rpush(`${PREFIX}msgs:${phone}`, JSON.stringify(message)),
+      redis.zadd(`${PREFIX}convos`, { score: message.timestamp, member: phone }),
+    ];
+    if (Object.keys(meta).length) ops.push(redis.hset(convoKey, meta));
+    // Ensure a name exists even if not provided
+    ops.push(redis.hsetnx(convoKey, "name", name || phone));
+    await Promise.all(ops);
+  } else {
+    const convo = memGetOrCreate(phone, name, phoneNumberId);
+    convo.messages.push(message);
+    convo.lastActivity = message.timestamp;
+  }
+
+  emitter.emit("message", { phone, name: name || phone, message });
   return message;
 }
 
-function updateMessageStatus(phone, messageId, status) {
-  const convo = conversations.get(phone);
+async function updateMessageStatus(phone, messageId, status) {
+  if (redis) {
+    const key = `${PREFIX}msgs:${phone}`;
+    const raw = await redis.lrange(key, 0, -1);
+    for (let i = 0; i < raw.length; i++) {
+      const msg = typeof raw[i] === "string" ? JSON.parse(raw[i]) : raw[i];
+      if (msg.id === messageId) {
+        msg.status = status;
+        await redis.lset(key, i, JSON.stringify(msg));
+        emitter.emit("message", { phone, name: phone, message: msg });
+        return;
+      }
+    }
+    return;
+  }
+
+  const convo = memConversations.get(phone);
   if (!convo) return;
   const message = convo.messages.find((m) => m.id === messageId);
   if (message) {
     message.status = status;
-    emitter.emit("message", { phone: convo.phone, name: convo.name, message });
+    emitter.emit("message", { phone, name: convo.name, message });
   }
 }
 
-function getConversation(phone) {
-  return conversations.get(phone) || null;
+async function getConversation(phone) {
+  if (redis) {
+    const meta = await redis.hgetall(`${PREFIX}convo:${phone}`);
+    if (!meta) return null;
+    return { phone, name: meta.name || phone, phoneNumberId: meta.phoneNumberId || null };
+  }
+  return memConversations.get(phone) || null;
 }
 
-function listConversations() {
-  return Array.from(conversations.values())
+async function listConversations() {
+  if (redis) {
+    const phones = await redis.zrange(`${PREFIX}convos`, 0, MAX_CONVOS - 1, {
+      rev: true,
+    });
+    if (!phones || !phones.length) return [];
+
+    const results = await Promise.all(
+      phones.map(async (phone) => {
+        const [meta, lastRaw, score] = await Promise.all([
+          redis.hgetall(`${PREFIX}convo:${phone}`),
+          redis.lindex(`${PREFIX}msgs:${phone}`, -1),
+          redis.zscore(`${PREFIX}convos`, phone),
+        ]);
+        const lastMessage = lastRaw
+          ? typeof lastRaw === "string"
+            ? JSON.parse(lastRaw)
+            : lastRaw
+          : null;
+        return {
+          phone,
+          name: (meta && meta.name) || phone,
+          lastActivity: Number(score) || (lastMessage && lastMessage.timestamp) || 0,
+          lastMessage,
+        };
+      })
+    );
+    return results;
+  }
+
+  return Array.from(memConversations.values())
     .sort((a, b) => b.lastActivity - a.lastActivity)
     .map((c) => ({
       phone: c.phone,
@@ -86,14 +167,22 @@ function listConversations() {
     }));
 }
 
-function getMessages(phone) {
-  const convo = conversations.get(phone);
+async function getMessages(phone) {
+  if (redis) {
+    const raw = await redis.lrange(`${PREFIX}msgs:${phone}`, 0, -1);
+    return (raw || []).map((m) => (typeof m === "string" ? JSON.parse(m) : m));
+  }
+  const convo = memConversations.get(phone);
   return convo ? convo.messages : [];
 }
 
 function subscribe(listener) {
   emitter.on("message", listener);
   return () => emitter.off("message", listener);
+}
+
+function isPersistent() {
+  return Boolean(redis);
 }
 
 module.exports = {
@@ -103,4 +192,5 @@ module.exports = {
   listConversations,
   getMessages,
   subscribe,
+  isPersistent,
 };

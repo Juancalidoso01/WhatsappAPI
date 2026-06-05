@@ -165,22 +165,30 @@ async function simulateIncoming() {
 }
 
 // ---------- Real-time (SSE) with polling fallback ----------
+// Polling interval is conservative to limit requests against the shared
+// Upstash database. Polling pauses while the browser tab is hidden.
+const POLL_INTERVAL_MS = 6000;
 let pollTimer = null;
+
+async function refreshNow() {
+  await loadConversations();
+  if (state.activePhone) {
+    const res = await fetch(
+      `/api/conversations/${encodeURIComponent(state.activePhone)}/messages`
+    );
+    state.messagesCache[state.activePhone] = await res.json();
+    renderMessages(state.activePhone);
+  }
+}
 
 function startPolling() {
   if (pollTimer) return;
-  els.connection.textContent = "actualizando…";
+  els.connection.textContent = "actualizando";
   els.connection.className = "status-dot";
-  pollTimer = setInterval(async () => {
-    await loadConversations();
-    if (state.activePhone) {
-      const res = await fetch(
-        `/api/conversations/${encodeURIComponent(state.activePhone)}/messages`
-      );
-      state.messagesCache[state.activePhone] = await res.json();
-      renderMessages(state.activePhone);
-    }
-  }, 3000);
+  pollTimer = setInterval(() => {
+    if (document.hidden) return;
+    refreshNow().catch(() => {});
+  }, POLL_INTERVAL_MS);
 }
 
 function stopPolling() {
@@ -191,6 +199,14 @@ function stopPolling() {
 }
 
 function connectStream() {
+  // On serverless (non-localhost) SSE connections time out and churn
+  // function invocations, so use polling directly there.
+  const isLocal = ["localhost", "127.0.0.1"].includes(location.hostname);
+  if (!isLocal) {
+    startPolling();
+    return;
+  }
+
   let source;
   try {
     source = new EventSource("/api/stream");
@@ -207,7 +223,7 @@ function connectStream() {
   source.onerror = () => {
     els.connection.textContent = "modo sin tiempo real";
     els.connection.className = "status-dot offline";
-    // Serverless platforms may not keep SSE open; fall back to polling.
+    source.close();
     startPolling();
   };
   source.onmessage = (event) => {
@@ -215,6 +231,10 @@ function connectStream() {
     handleIncomingEvent(payload);
   };
 }
+
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden && pollTimer) refreshNow().catch(() => {});
+});
 
 function handleIncomingEvent({ phone, name, message }) {
   // Update cache for that conversation

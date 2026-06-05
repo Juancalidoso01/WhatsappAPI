@@ -7,81 +7,71 @@
 
 "use strict";
 
-const redis = require('redis');
-const config = require('./config');
+const upstash = require("./upstash");
+const redisLib = require("redis");
+const config = require("./config");
 
-// The Redis cache is optional. On environments without a reachable Redis
-// server (e.g. Vercel serverless) the cache simply becomes a no-op instead
-// of crashing the request. Connection is established lazily on first use.
+const PREFIX = "wa:cache:";
+
+// ---------- Optional classic Redis (local only) ----------
 let client;
 let connecting;
 
 function getClient() {
   if (client) return client;
 
-  client = redis.createClient({
+  client = redisLib.createClient({
     socket: {
       host: config.redisHost,
       port: config.redisPort,
-      // Don't keep retrying forever in serverless / no-redis environments.
       reconnectStrategy: false,
       connectTimeout: 2000,
-    }
+    },
   });
 
-  client.on('error', (err) => {
-    console.error('Redis Client Error:', err.message);
-  });
+  client.on("error", (err) => console.error("Redis Client Error:", err.message));
 
   connecting = client.connect().catch((err) => {
-    console.error('Redis no disponible (cache deshabilitada):', err.message);
+    console.error("Redis no disponible (cache deshabilitada):", err.message);
     client = null;
   });
 
   return client;
 }
 
-async function ready() {
+async function localReady() {
   getClient();
   if (connecting) await connecting;
   return Boolean(client && client.isOpen);
 }
 
 module.exports = class Cache {
-    static async insert(key) {
-        try {
-            if (!(await ready())) return;
-            /**
-             * As of when this was written, the redis client doesn't support
-             * setting a TTL on members of the set dataytype. Instead, we'll
-             * use the standard hash map with a dummy value to mimic one.
-            */
-            await client.set(key, "");
-
-            // Assume that most "delivered / read" webhooks will happen within
-            // 15 seconds.
-            await client.expire(key, 15);
-        } catch (err) {
-            console.error('Cache.insert error:', err.message);
-        }
+  static async insert(key) {
+    try {
+      if (upstash) {
+        await upstash.set(`${PREFIX}${key}`, "1", { ex: 15 });
+        return;
+      }
+      if (!(await localReady())) return;
+      await client.set(key, "");
+      await client.expire(key, 15);
+    } catch (err) {
+      console.error("Cache.insert error:", err.message);
     }
+  }
 
-    static async remove(key) {
-        try {
-            if (!(await ready())) return false;
-            let resp = await client.del(key);
-
-            /**
-             * Optionally, your application can measure / report the ingress latency
-             * from Cloud API webhooks via Redis's TTL.
-             * Ex.
-             *      someLoggingFunc(client.ttl(key));
-            */
-
-            return resp > 0;
-        } catch (err) {
-            console.error('Cache.remove error:', err.message);
-            return false;
-        }
+  static async remove(key) {
+    try {
+      if (upstash) {
+        const resp = await upstash.del(`${PREFIX}${key}`);
+        return resp > 0;
+      }
+      if (!(await localReady())) return false;
+      let resp = await client.del(key);
+      return resp > 0;
+    } catch (err) {
+      console.error("Cache.remove error:", err.message);
+      return false;
     }
-}
+  }
+};
