@@ -122,7 +122,11 @@ async function getConversation(phone) {
   if (redis) {
     const meta = await redis.hgetall(`${PREFIX}convo:${phone}`);
     if (!meta) return null;
-    return { phone, name: meta.name || phone, phoneNumberId: meta.phoneNumberId || null };
+    return {
+      phone: String(phone),
+      name: String(meta.name || phone),
+      phoneNumberId: meta.phoneNumberId ? String(meta.phoneNumberId) : null,
+    };
   }
   return memConversations.get(phone) || null;
 }
@@ -135,7 +139,9 @@ async function listConversations() {
     if (!phones || !phones.length) return [];
 
     const results = await Promise.all(
-      phones.map(async (phone) => {
+      phones.map(async (rawPhone) => {
+        // Upstash auto-parses all-digit members as numbers; keep phones as text.
+        const phone = String(rawPhone);
         const [meta, lastRaw, score] = await Promise.all([
           redis.hgetall(`${PREFIX}convo:${phone}`),
           redis.lindex(`${PREFIX}msgs:${phone}`, -1),
@@ -148,7 +154,7 @@ async function listConversations() {
           : null;
         return {
           phone,
-          name: (meta && meta.name) || phone,
+          name: String((meta && meta.name) || phone),
           lastActivity: Number(score) || (lastMessage && lastMessage.timestamp) || 0,
           lastMessage,
         };
