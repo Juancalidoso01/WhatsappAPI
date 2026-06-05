@@ -13,6 +13,18 @@ const GraphApi = require('./graph-api');
 const Message = require('./message');
 const Status = require('./status');
 const Cache = require('./redis');
+const Store = require('./store');
+
+function recordBotReply(phoneNumberId, recipientPhoneNumber, text) {
+  Store.addMessage({
+    phone: recipientPhoneNumber,
+    phoneNumberId,
+    direction: 'out',
+    text,
+    type: 'bot',
+    status: 'sent',
+  });
+}
 
 
 function sendTryOutDemoMessage(messageId, senderPhoneNumberId, recipientPhoneNumber, messageBody) {
@@ -96,6 +108,7 @@ module.exports = class Conversation {
 
     switch (message.type) {
       case constants.REPLY_INTERACTIVE_MEDIA_ID:
+        recordBotReply(senderPhoneNumberId, message.senderPhoneNumber, '[plantilla] grocery_delivery_utility');
         let interactiveMediaResponse = await sendInteractiveMediaMessage(
           message.id,
           senderPhoneNumberId,
@@ -104,6 +117,7 @@ module.exports = class Conversation {
         await markMessageForFollowUp(interactiveMediaResponse.messages[0].id);
         break;
       case constants.REPLY_MEDIA_CAROUSEL_ID:
+        recordBotReply(senderPhoneNumberId, message.senderPhoneNumber, '[plantilla] recipe_media_carousel');
         let mediaCarouselResponse = await sendMediaCarouselMessage(
           message.id,
           senderPhoneNumberId,
@@ -112,6 +126,7 @@ module.exports = class Conversation {
         await markMessageForFollowUp(mediaCarouselResponse.messages[0].id);
         break;
       case constants.REPLY_OFFER_ID:
+        recordBotReply(senderPhoneNumberId, message.senderPhoneNumber, '[plantilla] strawberries_limited_offer');
         let ltoResponse = await sendLimitedTimeOfferMessage(
           message.id,
           senderPhoneNumberId,
@@ -120,7 +135,8 @@ module.exports = class Conversation {
         await markMessageForFollowUp(ltoResponse.messages[0].id);
         break;
       default:
-        sendTryOutDemoMessage(
+        recordBotReply(senderPhoneNumberId, message.senderPhoneNumber, constants.APP_DEFAULT_MESSAGE);
+        await sendTryOutDemoMessage(
           message.id,
           senderPhoneNumberId,
           message.senderPhoneNumber,

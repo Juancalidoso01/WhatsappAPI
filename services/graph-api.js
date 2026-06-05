@@ -47,6 +47,21 @@ module.exports = class GraphApi {
     }
   }
 
+  static async messageWithText(messageId, senderPhoneNumberId, recipientPhoneNumber, text) {
+    const requestBody = {
+      messaging_product: "whatsapp",
+      recipient_type: "individual",
+      to: recipientPhoneNumber,
+      type: "text",
+      text: {
+        preview_url: false,
+        body: text
+      }
+    };
+
+    return this.#makeApiCall(messageId, senderPhoneNumberId, requestBody);
+  }
+
   static async messageWithInteractiveReply(messageId, senderPhoneNumberId, recipientPhoneNumber, messageText, replyCTAs) {
     const requestBody = {
       messaging_product: "whatsapp",

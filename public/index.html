@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Jasper's Market · Chat</title>
+  <link rel="stylesheet" href="/style.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+</head>
+<body>
+  <div class="app">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <header class="sidebar-header">
+        <div class="brand">
+          <span class="brand-logo">JM</span>
+          <div>
+            <h1>Jasper's Market</h1>
+            <span id="connection" class="status-dot offline">conectando…</span>
+          </div>
+        </div>
+        <button id="newChatBtn" class="icon-btn" title="Simular mensaje entrante">+</button>
+      </header>
+
+      <div class="search">
+        <input id="searchInput" type="text" placeholder="Buscar conversación…" />
+      </div>
+
+      <ul id="conversationList" class="conversation-list"></ul>
+
+      <div class="sidebar-footer">
+        <span id="modeBadge" class="badge">modo local</span>
+      </div>
+    </aside>
+
+    <!-- Chat -->
+    <main class="chat">
+      <div id="emptyState" class="empty-state">
+        <div class="empty-illustration">💬</div>
+        <h2>Selecciona una conversación</h2>
+        <p>Los mensajes que lleguen por WhatsApp aparecerán aquí en tiempo real.
+           También puedes pulsar <strong>+</strong> para simular uno y probar la interfaz.</p>
+      </div>
+
+      <section id="chatView" class="chat-view hidden">
+        <header class="chat-header">
+          <div class="avatar" id="chatAvatar">?</div>
+          <div class="chat-peer">
+            <h2 id="chatName">—</h2>
+            <span id="chatPhone" class="muted"></span>
+          </div>
+        </header>
+
+        <div id="messages" class="messages"></div>
+
+        <form id="composer" class="composer">
+          <input id="messageInput" type="text" placeholder="Escribe un mensaje…" autocomplete="off" />
+          <button type="submit" class="send-btn" title="Enviar">➤</button>
+        </form>
+      </section>
+    </main>
+  </div>
+
+  <!-- Modal: simulate incoming -->
+  <div id="modal" class="modal hidden">
+    <div class="modal-card">
+      <h3>Simular mensaje entrante</h3>
+      <p class="muted">Inyecta un mensaje como si llegara desde WhatsApp (para probar sin credenciales).</p>
+      <label>Número (teléfono)
+        <input id="simPhone" type="text" placeholder="521234567890" />
+      </label>
+      <label>Nombre (opcional)
+        <input id="simName" type="text" placeholder="Cliente de prueba" />
+      </label>
+      <label>Mensaje
+        <input id="simText" type="text" placeholder="Hola, quiero hacer un pedido" />
+      </label>
+      <div class="modal-actions">
+        <button id="modalCancel" class="btn-ghost">Cancelar</button>
+        <button id="modalSend" class="btn-primary">Inyectar</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/app.js"></script>
+</body>
+</html>
