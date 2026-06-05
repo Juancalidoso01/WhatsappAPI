@@ -11,16 +11,18 @@
 
 const { Redis } = require("@upstash/redis");
 
+// Support both the Upstash-native variable names and Vercel's "KV" naming
+// (KV_REST_API_URL / KV_REST_API_TOKEN), which the Marketplace integration
+// injects for Upstash-backed stores.
+const url =
+  process.env.UPSTASH_REDIS_REST_URL || process.env.KV_REST_API_URL;
+const token =
+  process.env.UPSTASH_REDIS_REST_TOKEN || process.env.KV_REST_API_TOKEN;
+
 let client = null;
 
-if (
-  process.env.UPSTASH_REDIS_REST_URL &&
-  process.env.UPSTASH_REDIS_REST_TOKEN
-) {
-  client = new Redis({
-    url: process.env.UPSTASH_REDIS_REST_URL,
-    token: process.env.UPSTASH_REDIS_REST_TOKEN,
-  });
+if (url && token) {
+  client = new Redis({ url, token });
 }
 
 module.exports = client;
