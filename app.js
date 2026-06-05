@@ -99,9 +99,12 @@ app.post('/webhook', webhookJson, (req, res) => {
                 id: rawMessage.id,
               })).catch(err => console.error('addMessage error:', err));
 
-              // Respond to message
-              Promise.resolve(Conversation.handleMessage(senderPhoneNumberId, rawMessage))
-                .catch(err => console.error('handleMessage error:', err));
+              // Auto-reply only when the bot is explicitly enabled. By default
+              // every conversation is handled manually from the web interface.
+              if (config.botEnabled) {
+                Promise.resolve(Conversation.handleMessage(senderPhoneNumberId, rawMessage))
+                  .catch(err => console.error('handleMessage error:', err));
+              }
             });
           }
         }
@@ -113,6 +116,127 @@ app.post('/webhook', webhookJson, (req, res) => {
 });
 
 // ----- Local web interface API -----
+
+// Expose non-sensitive runtime config to the UI
+app.get('/api/config', (req, res) => {
+  res.json({
+    brandName: config.brandName,
+    phoneNumberId: config.phoneNumberId || null,
+    hasCredentials: Boolean(config.accessToken && config.phoneNumberId),
+    templatesEnabled: Boolean(config.accessToken && config.wabaId),
+    botEnabled: config.botEnabled,
+    persistent: Store.isPersistent(),
+  });
+});
+
+// List WhatsApp message templates from the WABA
+app.get('/api/templates', async (req, res) => {
+  if (!config.accessToken || !config.wabaId) {
+    return res.status(200).json({ data: [], warning: 'Falta ACCESS_TOKEN o WABA_ID para gestionar plantillas.' });
+  }
+  try {
+    const result = await GraphApi.listTemplates(config.wabaId);
+    res.json({ data: (result && result.data) || [] });
+  } catch (err) {
+    console.error('listTemplates error:', err.message);
+    res.status(200).json({ data: [], error: String(err.message || err) });
+  }
+});
+
+// Create a new WhatsApp message template (needs Meta approval afterwards)
+app.post('/api/templates', apiJson, async (req, res) => {
+  const { name, category, language, bodyText, headerText, footerText } = req.body || {};
+  if (!name || !category || !language || !bodyText) {
+    return res.status(400).json({ error: 'Se requieren name, category, language y bodyText.' });
+  }
+  if (!config.accessToken || !config.wabaId) {
+    return res.status(400).json({ error: 'Falta ACCESS_TOKEN o WABA_ID.' });
+  }
+
+  const components = [];
+  if (headerText) components.push({ type: 'HEADER', format: 'TEXT', text: headerText });
+  components.push({ type: 'BODY', text: bodyText });
+  if (footerText) components.push({ type: 'FOOTER', text: footerText });
+
+  try {
+    const result = await GraphApi.createTemplate(config.wabaId, {
+      name: String(name).toLowerCase().replace(/[^a-z0-9_]/g, '_'),
+      category: String(category).toUpperCase(),
+      language,
+      components,
+    });
+    res.json({ ok: true, result });
+  } catch (err) {
+    console.error('createTemplate error:', err.message);
+    res.status(200).json({ ok: false, error: String(err.message || err) });
+  }
+});
+
+// Start a conversation (or message outside the 24h window) using a template
+app.post('/api/send-template', apiJson, async (req, res) => {
+  const { phone, name, template, language, components } = req.body || {};
+  if (!phone || !template) {
+    return res.status(400).json({ error: 'Se requieren "phone" y "template".' });
+  }
+  const phoneNumberId = config.phoneNumberId;
+  if (!phoneNumberId || !config.accessToken) {
+    return res.status(400).json({ error: 'Falta PHONE_NUMBER_ID o ACCESS_TOKEN.' });
+  }
+
+  const stored = await Store.addMessage({
+    phone,
+    name,
+    phoneNumberId,
+    direction: 'out',
+    text: `[plantilla] ${template}`,
+    type: 'template',
+    status: 'pending',
+  });
+
+  try {
+    await GraphApi.sendTemplate(phoneNumberId, phone, { name: template, language: language || 'es', components });
+    await Store.updateMessageStatus(phone, stored.id, 'sent');
+    res.json({ ok: true, message: stored });
+  } catch (err) {
+    await Store.updateMessageStatus(phone, stored.id, 'failed');
+    res.status(200).json({ ok: false, message: stored, error: String(err.message || err) });
+  }
+});
+
+// Send an image or document by public link
+app.post('/api/send-media', apiJson, async (req, res) => {
+  const { phone, mediaType, link, caption, filename } = req.body || {};
+  if (!phone || !link) {
+    return res.status(400).json({ error: 'Se requieren "phone" y "link".' });
+  }
+
+  const convo = await Store.getConversation(phone);
+  const phoneNumberId = (convo && convo.phoneNumberId) || config.phoneNumberId;
+
+  const stored = await Store.addMessage({
+    phone,
+    phoneNumberId,
+    direction: 'out',
+    text: caption || (mediaType === 'document' ? (filename || '[documento]') : '[imagen]'),
+    type: mediaType === 'document' ? 'document' : 'image',
+    status: 'pending',
+    media: link,
+  });
+
+  if (!phoneNumberId || !config.accessToken) {
+    await Store.updateMessageStatus(phone, stored.id, 'failed');
+    return res.status(200).json({ ok: false, message: stored, warning: 'Falta PHONE_NUMBER_ID o ACCESS_TOKEN.' });
+  }
+
+  try {
+    await GraphApi.messageWithMedia(undefined, phoneNumberId, phone, { mediaType, link, caption, filename });
+    await Store.updateMessageStatus(phone, stored.id, 'sent');
+    res.json({ ok: true, message: stored });
+  } catch (err) {
+    await Store.updateMessageStatus(phone, stored.id, 'failed');
+    res.status(200).json({ ok: false, message: stored, error: String(err.message || err) });
+  }
+});
 
 // List all conversations
 app.get('/api/conversations', async (req, res) => {

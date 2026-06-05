@@ -25,6 +25,17 @@ module.exports = Object.freeze({
   accessToken: process.env.ACCESS_TOKEN,
   verifyToken: process.env.VERIFY_TOKEN,
 
+  // WhatsApp Business identifiers
+  phoneNumberId: process.env.PHONE_NUMBER_ID,
+  wabaId: process.env.WABA_ID,
+
+  // Branding shown in the web interface
+  brandName: process.env.BRAND_NAME || "Punto Pago",
+
+  // When false, the app never auto-replies; every message is handled by a human
+  // from the web interface. Default off per product decision.
+  botEnabled: process.env.BOT_ENABLED === "true",
+
   // Server configuration
   port: process.env.PORT || 8080,
   redisHost: process.env.REDIS_HOST || "localhost",

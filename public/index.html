@@ -3,84 +3,221 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Jasper's Market · Chat</title>
-  <link rel="stylesheet" href="/style.css" />
+  <title>Punto Pago · Inbox</title>
+  <link rel="icon" href="/logo.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/style.css" />
 </head>
 <body>
   <div class="app">
-    <!-- Sidebar -->
-    <aside class="sidebar">
-      <header class="sidebar-header">
-        <div class="brand">
-          <span class="brand-logo">JM</span>
-          <div>
-            <h1>Jasper's Market</h1>
-            <span id="connection" class="status-dot offline">conectando…</span>
-          </div>
-        </div>
-        <button id="newChatBtn" class="icon-btn" title="Simular mensaje entrante">+</button>
-      </header>
+    <!-- Far-left nav rail -->
+    <nav class="rail">
+      <img src="/logo.png" alt="logo" class="rail-logo" id="railLogo" />
+      <button class="rail-btn active" data-screen="chats" title="Conversaciones" aria-label="Conversaciones">
+        <svg viewBox="0 0 24 24"><path d="M4 4h16a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1H8l-4 4V5a1 1 0 0 1 1-1z"/></svg>
+      </button>
+      <button class="rail-btn" data-screen="templates" title="Plantillas" aria-label="Plantillas">
+        <svg viewBox="0 0 24 24"><path d="M5 3h14a2 2 0 0 1 2 2v3H3V5a2 2 0 0 1 2-2zM3 10h18v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-9zm4 3v2h10v-2H7z"/></svg>
+      </button>
+      <span class="rail-spacer"></span>
+      <span id="connDot" class="conn-dot" title="Estado de conexión"></span>
+    </nav>
 
-      <div class="search">
-        <input id="searchInput" type="text" placeholder="Buscar conversación…" />
-      </div>
-
-      <ul id="conversationList" class="conversation-list"></ul>
-
-      <div class="sidebar-footer">
-        <span id="modeBadge" class="badge">modo local</span>
-      </div>
-    </aside>
-
-    <!-- Chat -->
-    <main class="chat">
-      <div id="emptyState" class="empty-state">
-        <div class="empty-illustration">💬</div>
-        <h2>Selecciona una conversación</h2>
-        <p>Los mensajes que lleguen por WhatsApp aparecerán aquí en tiempo real.
-           También puedes pulsar <strong>+</strong> para simular uno y probar la interfaz.</p>
-      </div>
-
-      <section id="chatView" class="chat-view hidden">
-        <header class="chat-header">
-          <div class="avatar" id="chatAvatar">?</div>
-          <div class="chat-peer">
-            <h2 id="chatName">—</h2>
-            <span id="chatPhone" class="muted"></span>
-          </div>
+    <!-- ============ SCREEN: CHATS ============ -->
+    <section class="screen" id="screenChats">
+      <!-- Conversation list -->
+      <aside class="list-pane">
+        <header class="pane-header">
+          <h1>Conversaciones</h1>
+          <button id="newChatBtn" class="btn-primary sm" title="Nueva conversación">
+            <svg viewBox="0 0 24 24" class="ic"><path d="M12 5v14M5 12h14"/></svg>
+            Nueva
+          </button>
         </header>
+        <div class="search">
+          <svg viewBox="0 0 24 24" class="ic-search"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg>
+          <input id="searchInput" type="text" placeholder="Buscar…" />
+        </div>
+        <ul id="conversationList" class="conversation-list"></ul>
+        <button id="simBtn" class="sim-link" title="Simular mensaje entrante (pruebas)">Simular entrante</button>
+      </aside>
 
-        <div id="messages" class="messages"></div>
+      <!-- Chat -->
+      <main class="chat-pane">
+        <div id="emptyState" class="empty-state">
+          <img src="/logo.png" alt="" class="empty-logo" />
+          <h2>Selecciona una conversación</h2>
+          <p>Los mensajes de WhatsApp aparecen aquí. Pulsa <strong>Nueva</strong> para iniciar una con una plantilla.</p>
+        </div>
 
-        <form id="composer" class="composer">
-          <input id="messageInput" type="text" placeholder="Escribe un mensaje…" autocomplete="off" />
-          <button type="submit" class="send-btn" title="Enviar">➤</button>
-        </form>
-      </section>
-    </main>
+        <section id="chatView" class="chat-view hidden">
+          <header class="chat-header">
+            <div class="avatar" id="chatAvatar">?</div>
+            <div class="chat-peer">
+              <h2 id="chatName">—</h2>
+              <span id="chatPhone" class="muted"></span>
+            </div>
+            <button id="detailToggle" class="icon-btn ghost" title="Detalles">
+              <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>
+            </button>
+          </header>
+
+          <div id="messages" class="messages"></div>
+
+          <div id="windowBanner" class="window-banner hidden"></div>
+
+          <form id="composer" class="composer">
+            <button type="button" id="attachBtn" class="icon-btn ghost" title="Adjuntar imagen o archivo">
+              <svg viewBox="0 0 24 24"><path d="M21 12.5l-8.5 8.5a5 5 0 0 1-7-7l9-9a3.5 3.5 0 0 1 5 5l-9 9a2 2 0 0 1-3-3l8-8"/></svg>
+            </button>
+            <input id="messageInput" type="text" placeholder="Escribe un mensaje…" autocomplete="off" />
+            <button type="submit" class="send-btn" title="Enviar">
+              <svg viewBox="0 0 24 24"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>
+            </button>
+          </form>
+        </section>
+      </main>
+
+      <!-- Contact detail -->
+      <aside class="detail-pane" id="detailPane">
+        <div class="detail-card">
+          <div class="avatar lg" id="detailAvatar">?</div>
+          <h3 id="detailName">—</h3>
+          <span class="muted" id="detailPhone"></span>
+        </div>
+        <div class="detail-section">
+          <span class="detail-label">Estado de ventana 24h</span>
+          <div id="detailWindow" class="window-pill">—</div>
+        </div>
+        <div class="detail-section">
+          <span class="detail-label">Acciones</span>
+          <button class="btn-ghost block" id="detailTemplateBtn">Enviar plantilla</button>
+          <button class="btn-ghost block" id="detailMediaBtn">Enviar imagen/archivo</button>
+        </div>
+      </aside>
+    </section>
+
+    <!-- ============ SCREEN: TEMPLATES ============ -->
+    <section class="screen hidden" id="screenTemplates">
+      <aside class="list-pane wide">
+        <header class="pane-header">
+          <h1>Plantillas</h1>
+          <button id="newTemplateBtn" class="btn-primary sm">
+            <svg viewBox="0 0 24 24" class="ic"><path d="M12 5v14M5 12h14"/></svg>
+            Crear
+          </button>
+        </header>
+        <ul id="templateList" class="template-list"></ul>
+      </aside>
+      <main class="chat-pane">
+        <div id="templateEmpty" class="empty-state">
+          <img src="/logo.png" alt="" class="empty-logo" />
+          <h2>Plantillas de WhatsApp</h2>
+          <p>Crea y revisa el estado de aprobación de tus plantillas. Meta debe aprobarlas antes de poder enviarlas.</p>
+        </div>
+        <section id="templateDetail" class="template-detail hidden"></section>
+      </main>
+    </section>
   </div>
 
-  <!-- Modal: simulate incoming -->
-  <div id="modal" class="modal hidden">
+  <!-- ============ MODALS ============ -->
+  <div id="modalNewChat" class="modal hidden">
     <div class="modal-card">
-      <h3>Simular mensaje entrante</h3>
-      <p class="muted">Inyecta un mensaje como si llegara desde WhatsApp (para probar sin credenciales).</p>
-      <label>Número (teléfono)
-        <input id="simPhone" type="text" placeholder="521234567890" />
+      <h3>Nueva conversación</h3>
+      <p class="muted">Para iniciar en frío, WhatsApp exige una plantilla aprobada.</p>
+      <label>Número (con código de país)
+        <input id="ncPhone" type="text" placeholder="50712345678" />
       </label>
       <label>Nombre (opcional)
-        <input id="simName" type="text" placeholder="Cliente de prueba" />
+        <input id="ncName" type="text" placeholder="Nombre del cliente" />
       </label>
-      <label>Mensaje
-        <input id="simText" type="text" placeholder="Hola, quiero hacer un pedido" />
+      <label>Plantilla
+        <select id="ncTemplate"></select>
       </label>
+      <div id="ncHint" class="hint"></div>
       <div class="modal-actions">
-        <button id="modalCancel" class="btn-ghost">Cancelar</button>
-        <button id="modalSend" class="btn-primary">Inyectar</button>
+        <button class="btn-ghost" data-close>Cancelar</button>
+        <button id="ncSend" class="btn-primary">Enviar</button>
       </div>
     </div>
   </div>
+
+  <div id="modalMedia" class="modal hidden">
+    <div class="modal-card">
+      <h3>Enviar imagen o archivo</h3>
+      <p class="muted">Pega un enlace público (https) al archivo.</p>
+      <label>Tipo
+        <select id="mdType"><option value="image">Imagen</option><option value="document">Documento</option></select>
+      </label>
+      <label>Enlace (URL)
+        <input id="mdLink" type="text" placeholder="https://…/archivo.jpg" />
+      </label>
+      <label>Texto / pie (opcional)
+        <input id="mdCaption" type="text" placeholder="Descripción opcional" />
+      </label>
+      <div class="modal-actions">
+        <button class="btn-ghost" data-close>Cancelar</button>
+        <button id="mdSend" class="btn-primary">Enviar</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="modalSim" class="modal hidden">
+    <div class="modal-card">
+      <h3>Simular mensaje entrante</h3>
+      <p class="muted">Inyecta un mensaje como si llegara desde WhatsApp (para probar).</p>
+      <label>Número <input id="simPhone" type="text" placeholder="50712345678" /></label>
+      <label>Nombre (opcional) <input id="simName" type="text" placeholder="Cliente de prueba" /></label>
+      <label>Mensaje <input id="simText" type="text" placeholder="Hola, quiero información" /></label>
+      <div class="modal-actions">
+        <button class="btn-ghost" data-close>Cancelar</button>
+        <button id="simSend" class="btn-primary">Inyectar</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="modalTemplate" class="modal hidden">
+    <div class="modal-card">
+      <h3>Crear plantilla</h3>
+      <p class="muted">Tras crearla, Meta la revisa (minutos a horas) antes de poder usarla.</p>
+      <label>Nombre (sin espacios)
+        <input id="tpName" type="text" placeholder="bienvenida_clientes" />
+      </label>
+      <div class="row">
+        <label>Categoría
+          <select id="tpCategory">
+            <option value="MARKETING">Marketing</option>
+            <option value="UTILITY">Utilidad</option>
+          </select>
+        </label>
+        <label>Idioma
+          <select id="tpLang">
+            <option value="es">Español (es)</option>
+            <option value="es_MX">Español MX (es_MX)</option>
+            <option value="en_US">Inglés (en_US)</option>
+          </select>
+        </label>
+      </div>
+      <label>Encabezado (opcional)
+        <input id="tpHeader" type="text" placeholder="Título corto" />
+      </label>
+      <label>Cuerpo del mensaje
+        <textarea id="tpBody" rows="3" placeholder="Hola, gracias por escribir a Punto Pago…"></textarea>
+      </label>
+      <label>Pie (opcional)
+        <input id="tpFooter" type="text" placeholder="Punto Pago" />
+      </label>
+      <div id="tpHint" class="hint"></div>
+      <div class="modal-actions">
+        <button class="btn-ghost" data-close>Cancelar</button>
+        <button id="tpCreate" class="btn-primary">Crear plantilla</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast hidden"></div>
 
   <script src="/app.js"></script>
 </body>

@@ -60,6 +60,59 @@ module.exports = class GraphApi {
     }
   }
 
+  // --- Media (image / document) by public link ---
+  static async messageWithMedia(messageId, senderPhoneNumberId, recipientPhoneNumber, { mediaType, link, caption, filename }) {
+    const type = mediaType === "document" ? "document" : "image";
+    const media = { link };
+    if (caption) media.caption = caption;
+    if (type === "document" && filename) media.filename = filename;
+
+    const requestBody = {
+      messaging_product: "whatsapp",
+      recipient_type: "individual",
+      to: recipientPhoneNumber,
+      type,
+      [type]: media,
+    };
+
+    return this.#makeApiCall(messageId, senderPhoneNumberId, requestBody);
+  }
+
+  // --- Generic approved-template sender (used to start conversations) ---
+  static async sendTemplate(senderPhoneNumberId, recipientPhoneNumber, { name, language = "es", components = [] }) {
+    const template = { name, language: { code: language } };
+    if (components && components.length) template.components = components;
+
+    const requestBody = {
+      messaging_product: "whatsapp",
+      recipient_type: "individual",
+      to: recipientPhoneNumber,
+      type: "template",
+      template,
+    };
+
+    return this.#makeApiCall(undefined, senderPhoneNumberId, requestBody);
+  }
+
+  // --- WhatsApp message templates management (on the WABA) ---
+  static async listTemplates(wabaId, limit = 100) {
+    const api = getApi();
+    return api.call("GET", [`${wabaId}`, "message_templates"], {
+      limit,
+      fields: "name,status,category,language,components,quality_score",
+    });
+  }
+
+  static async createTemplate(wabaId, { name, category, language, components }) {
+    const api = getApi();
+    return api.call("POST", [`${wabaId}`, "message_templates"], {
+      name,
+      category,
+      language,
+      components,
+    });
+  }
+
   static async messageWithText(messageId, senderPhoneNumberId, recipientPhoneNumber, text) {
     const requestBody = {
       messaging_product: "whatsapp",
