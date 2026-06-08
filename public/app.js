@@ -646,11 +646,6 @@ function renderWaMessagePreview(container, data) {
 async function loadTemplatePresets() {
   const res = await api("/api/templates/presets");
   state.templatePresets = (res && res.presets) || [];
-  const tpSel = $("tpPresetSelect");
-  if (tpSel) {
-    tpSel.innerHTML = `<option value="">— plantilla en blanco —</option>`
-      + state.templatePresets.map((p) => `<option value="${escapeHtml(p.key)}">${escapeHtml(p.label)}</option>`).join("");
-  }
   renderTplPresetCards();
 }
 
@@ -955,10 +950,8 @@ async function initTemplateModal(presetKey) {
   $("tpHint").className = "hint";
   const key = presetKey || "";
   if (key) {
-    if ($("tpPresetSelect")) $("tpPresetSelect").value = key;
     await loadTemplatePresetIntoModal(key);
   } else {
-    if ($("tpPresetSelect")) $("tpPresetSelect").value = "";
     if (!$("tpBody").value.trim()) {
       $("tpBody").value = "";
       renderTpVarList([]);
@@ -2885,22 +2878,6 @@ function bindEvents() {
       updatePayAuthFlowPreview();
     });
   });
-  const tpPresetSelect = $("tpPresetSelect");
-  if (tpPresetSelect) {
-    tpPresetSelect.addEventListener("change", async () => {
-      const key = tpPresetSelect.value;
-      if (key) await loadTemplatePresetIntoModal(key);
-      else {
-        $("tpName").value = "";
-        $("tpHeader").value = "";
-        $("tpBody").value = "";
-        $("tpFooter").value = "";
-        renderTpVarList([]);
-        $("tpVarsSection")?.classList.add("hidden");
-      }
-      updateTpPreview();
-    });
-  }
   const payAuthOpenTplBtn = $("payAuthOpenTplBtn");
   if (payAuthOpenTplBtn) {
     payAuthOpenTplBtn.addEventListener("click", () => openTplDraftModal("punto_pago_autorizacion_pago"));

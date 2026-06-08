@@ -462,6 +462,7 @@
               <div id="flowsList" class="flows-list muted">Cargando…</div>
             </section>
 
+            <div class="flows-detail-col">
             <section class="flows-panel flows-detail hidden" id="flowsDetailPanel">
               <div class="flows-detail-head">
                 <div>
@@ -512,6 +513,7 @@
             <section class="flows-panel flows-empty-detail" id="flowsEmptyDetail">
               <p class="muted center-msg">Selecciona un Flow para ver estadísticas, vista previa y envíos.</p>
             </section>
+            </div>
           </div>
         </section>
 
@@ -792,11 +794,6 @@
     <div class="modal-card modal-card-wide">
       <h3>Crear plantilla</h3>
           <p class="muted">Tras crearla, Meta la revisa (minutos a horas). Si usas variables (<code>{{1}}</code>, <code>{{2}}</code>…), define claves para la API y ejemplos — Meta los exige al crear la plantilla.</p>
-          <label>Borrador Punto Pago
-            <select id="tpPresetSelect">
-              <option value="">— plantilla en blanco —</option>
-            </select>
-          </label>
       <label>Nombre (sin espacios)
         <input id="tpName" type="text" placeholder="recordatorio_pago" />
       </label>
