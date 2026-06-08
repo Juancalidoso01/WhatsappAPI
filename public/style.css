@@ -258,6 +258,52 @@ input, textarea, select { font-family: inherit; }
 }
 .detail-notes:focus { outline: none; border-color: var(--brand); box-shadow: 0 0 0 2px var(--brand-50); }
 
+/* ---------- Bulk / campaigns ---------- */
+.bulk-pane { flex: 1; min-width: 0; display: flex; flex-direction: column; padding: 20px 28px; overflow-y: auto; background: var(--bg); }
+.bulk-intro { margin: 4px 0 0; font-size: 12px; max-width: 620px; }
+.line-health-cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 14px 0 18px; }
+.lh-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; }
+.lh-card .lh-label { font-size: 11px; text-transform: uppercase; letter-spacing: .5px; color: var(--muted); font-weight: 600; }
+.lh-card .lh-value { font-size: 18px; font-weight: 700; margin-top: 4px; }
+.lh-card .lh-sub { font-size: 11px; color: var(--muted); margin-top: 4px; line-height: 1.35; }
+.lh-card.quality-green .lh-value { color: var(--green); }
+.lh-card.quality-yellow .lh-value { color: #8a6300; }
+.lh-card.quality-red .lh-value { color: var(--red); }
+.bulk-grid { display: grid; grid-template-columns: 340px 1fr; gap: 16px; align-items: start; }
+.bulk-panel { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 16px 18px; }
+.bulk-panel label { display: block; margin-bottom: 12px; font-size: 12px; font-weight: 600; color: var(--muted); }
+.bulk-panel input, .bulk-panel select { width: 100%; margin-top: 6px; }
+.bulk-csv-hint { font-size: 11px; margin: 0 0 10px; }
+.bulk-csv-hint code { font-size: 11px; }
+.bulk-preview { margin: 10px 0; padding: 10px 12px; border-radius: 10px; background: var(--surface-2); font-size: 12px; line-height: 1.45; }
+.bulk-preview.warn { background: #fff6e0; color: #7a5a00; }
+.bulk-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+.bulk-campaign-list { font-size: 13px; }
+.bulk-campaign-item {
+  display: flex; justify-content: space-between; align-items: center; gap: 10px;
+  padding: 10px 0; border-bottom: 1px solid var(--border); cursor: pointer;
+}
+.bulk-campaign-item:hover { color: var(--brand-600); }
+.bulk-campaign-item:last-child { border-bottom: none; }
+.bulk-detail { margin-top: 18px; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 16px 18px; }
+.bulk-detail-head { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; align-items: flex-start; }
+.bulk-detail-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.bulk-stats { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; margin: 14px 0; }
+.bulk-stat { background: var(--surface-2); border-radius: 10px; padding: 10px; text-align: center; }
+.bulk-stat .bs-n { font-size: 18px; font-weight: 700; }
+.bulk-stat .bs-l { font-size: 10px; color: var(--muted); text-transform: uppercase; }
+.bulk-rows-table { font-size: 12px; }
+.bulk-rows-table td { max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.status-pill { font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 20px; text-transform: uppercase; }
+.status-pill.sent, .status-pill.delivered, .status-pill.read { background: #e3f8ee; color: var(--green); }
+.status-pill.pending { background: var(--surface-2); color: var(--muted); }
+.status-pill.failed, .status-pill.skipped { background: #fdecea; color: var(--red); }
+@media (max-width: 1100px) {
+  .line-health-cards { grid-template-columns: repeat(2, 1fr); }
+  .bulk-grid { grid-template-columns: 1fr; }
+  .bulk-stats { grid-template-columns: repeat(3, 1fr); }
+}
+
 /* ---------- Templates ---------- */
 .templates-pane {
   flex: 1; min-width: 0; display: flex; flex-direction: column; padding: 20px 28px;
@@ -301,6 +347,49 @@ input, textarea, select { font-family: inherit; }
 }
 .tpl-preview .tpl-h { font-weight: 700; margin-bottom: 8px; }
 .tpl-preview .tpl-f { color: var(--muted); font-size: 12px; margin-top: 10px; }
+
+/* ---------- Bulk campaigns ---------- */
+.bulk-pane { flex: 1; min-width: 0; display: flex; flex-direction: column; padding: 20px 28px; overflow-y: auto; background: var(--bg); }
+.bulk-intro { margin: 4px 0 0; font-size: 12px; max-width: 640px; }
+.line-health-cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 14px 0 18px; }
+.lh-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 14px; box-shadow: var(--shadow-sm); }
+.lh-label { font-size: 10px; text-transform: uppercase; letter-spacing: .5px; color: var(--muted); font-weight: 600; }
+.lh-value { display: block; margin-top: 6px; font-size: 18px; font-weight: 700; }
+.lh-sub { display: block; margin-top: 4px; font-size: 11px; color: var(--muted); line-height: 1.35; }
+.lh-card.green .lh-value { color: var(--green); }
+.lh-card.yellow .lh-value { color: #8a6300; }
+.lh-card.red .lh-value { color: var(--red); }
+.bulk-grid { display: grid; grid-template-columns: 340px 1fr; gap: 16px; align-items: start; }
+.bulk-panel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; }
+.bulk-panel.wide { min-width: 0; }
+.bulk-panel label { display: block; margin-bottom: 12px; font-size: 12px; font-weight: 600; color: var(--muted); }
+.bulk-panel input, .bulk-panel select { width: 100%; margin-top: 6px; }
+.bulk-csv-hint { font-size: 11px; margin: 0 0 10px; }
+.bulk-csv-hint code { font-size: 11px; }
+.bulk-preview { margin: 10px 0; padding: 10px; border-radius: 10px; background: var(--surface-2); font-size: 12px; }
+.bulk-preview.error { background: #fdecea; color: var(--red); }
+.bulk-preview.ok { background: #e3f8ee; color: #1d6b42; }
+.bulk-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+.bulk-campaign-list { font-size: 13px; }
+.bulk-camp-item { padding: 10px 12px; border-radius: 10px; border: 1px solid var(--border); margin-bottom: 8px; cursor: pointer; }
+.bulk-camp-item:hover { background: var(--surface-2); }
+.bulk-camp-item.active { border-color: var(--brand); background: var(--brand-50); }
+.bulk-detail { margin-top: 18px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; }
+.bulk-detail-head { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; align-items: flex-start; }
+.bulk-detail-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.bulk-stats { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; margin: 12px 0; }
+.bulk-stat { background: var(--surface-2); border-radius: 10px; padding: 8px 10px; text-align: center; }
+.bulk-stat .n { display: block; font-size: 18px; font-weight: 700; }
+.bulk-stat .l { font-size: 10px; color: var(--muted); text-transform: uppercase; }
+.bulk-rows-table { font-size: 12px; }
+.st-sent, .st-delivered, .st-read { color: var(--green); font-weight: 600; }
+.st-failed, .st-skipped { color: var(--red); font-weight: 600; }
+.st-pending { color: var(--amber); font-weight: 600; }
+@media (max-width: 1100px) {
+  .line-health-cards { grid-template-columns: repeat(2, 1fr); }
+  .bulk-grid { grid-template-columns: 1fr; }
+  .bulk-stats { grid-template-columns: repeat(3, 1fr); }
+}
 
 /* ---------- Billing ---------- */
 .billing-pane { flex: 1; min-width: 0; display: flex; flex-direction: column; padding: 20px 28px; overflow-y: auto; background: var(--bg); }

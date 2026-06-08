@@ -21,6 +21,9 @@
       <button class="rail-btn" data-screen="templates" title="Plantillas" aria-label="Plantillas">
         <svg viewBox="0 0 24 24" fill-rule="evenodd"><path d="M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2zm1 4v2.4h12V7H6zm0 4.4V17h5.2v-5.6H6zm7.2 0V17H18v-5.6h-4.8z"/></svg>
       </button>
+      <button class="rail-btn" data-screen="bulk" title="Cargas masivas" aria-label="Cargas masivas">
+        <svg viewBox="0 0 24 24" fill-rule="evenodd"><path d="M4 6h16v2H4V6zm0 5h10v2H4v-2zm0 5h16v2H4v-2zm12-5h4v2h-4v-2z"/></svg>
+      </button>
       <button class="rail-btn" data-screen="billing" title="Facturación" aria-label="Facturación">
         <svg viewBox="0 0 24 24" fill-rule="evenodd"><path d="M4 4h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2zm0 4v2.2h16V8H4zm2 5.4v2h6v-2H6zm9 0v2h3v-2h-3z"/></svg>
       </button>
@@ -134,6 +137,71 @@
           </button>
         </header>
         <div id="templateList" class="templates-table-wrap"></div>
+      </main>
+    </section>
+
+    <!-- ============ SCREEN: BULK ============ -->
+    <section class="screen hidden" id="screenBulk">
+      <main class="bulk-pane">
+        <header class="pane-header">
+          <div>
+            <h1>Cargas masivas</h1>
+            <p class="muted bulk-intro">Envía plantillas aprobadas a muchos contactos vía CSV. Meta limita usuarios únicos por día según la integridad de tu línea.</p>
+          </div>
+        </header>
+
+        <div id="lineHealthCards" class="line-health-cards"></div>
+
+        <div class="bulk-grid">
+          <section class="bulk-panel">
+            <h2 class="section-title">Nueva carga</h2>
+            <label>Nombre de la campaña
+              <input id="bulkName" type="text" placeholder="Promo marzo 2026" />
+            </label>
+            <label>Plantilla aprobada
+              <select id="bulkTemplate"></select>
+            </label>
+            <label>Archivo CSV
+              <input id="bulkCsv" type="file" accept=".csv,text/csv" />
+            </label>
+            <p class="bulk-csv-hint muted">Columnas: <code>telefono</code>, <code>nombre</code> (opcional) y variables extra según la plantilla.</p>
+            <button type="button" id="bulkSampleBtn" class="btn-ghost sm">Descargar CSV de ejemplo</button>
+            <div id="bulkPreview" class="bulk-preview hidden"></div>
+            <div class="bulk-actions">
+              <button type="button" id="bulkPreviewBtn" class="btn-ghost sm">Validar CSV</button>
+              <button type="button" id="bulkCreateBtn" class="btn-primary sm">Crear carga</button>
+            </div>
+          </section>
+
+          <section class="bulk-panel wide">
+            <h2 class="section-title">Cargas <span class="muted" id="bulkListHint"></span></h2>
+            <div id="bulkCampaignList" class="bulk-campaign-list muted">Cargando…</div>
+          </section>
+        </div>
+
+        <section id="bulkDetail" class="bulk-detail hidden">
+          <header class="bulk-detail-head">
+            <div>
+              <h2 id="bulkDetailTitle">—</h2>
+              <p class="muted" id="bulkDetailMeta"></p>
+            </div>
+            <div class="bulk-detail-actions">
+              <button type="button" id="bulkStartBtn" class="btn-primary sm">Iniciar</button>
+              <button type="button" id="bulkPauseBtn" class="btn-ghost sm">Pausar</button>
+              <a id="bulkExportBtn" class="btn-ghost sm" href="#" download>Exportar</a>
+              <button type="button" id="bulkCloseBtn" class="btn-ghost sm">Cerrar</button>
+            </div>
+          </header>
+          <div id="bulkStats" class="bulk-stats"></div>
+          <div class="billing-table-wrap">
+            <table class="billing-table bulk-rows-table">
+              <thead>
+                <tr><th>Teléfono</th><th>Nombre</th><th>Estado</th><th>Error</th><th>Enviado</th></tr>
+              </thead>
+              <tbody id="bulkRowsBody"></tbody>
+            </table>
+          </div>
+        </section>
       </main>
     </section>
 

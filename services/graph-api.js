@@ -121,6 +121,31 @@ module.exports = class GraphApi {
     return json;
   }
 
+  // --- Phone line health: quality rating + daily unique messaging limit ---
+  static async getPhoneLineHealth(phoneNumberId) {
+    const id = phoneNumberId || config.phoneNumberId;
+    if (!id || !config.accessToken) {
+      throw new Error("PHONE_NUMBER_ID o ACCESS_TOKEN no configurados.");
+    }
+    const fields = [
+      "display_phone_number",
+      "verified_name",
+      "quality_rating",
+      "whatsapp_business_manager_messaging_limit",
+      "messaging_limit_tier",
+      "code_verification_status",
+      "health_status",
+    ].join(",");
+    const url = `https://graph.facebook.com/v21.0/${id}?fields=${encodeURIComponent(fields)}&access_token=${config.accessToken}`;
+    const res = await fetch(url);
+    const json = await res.json();
+    if (json.error) {
+      throw new Error(json.error.error_user_msg || json.error.message || "Error al consultar la línea.");
+    }
+    json.id = json.id || id;
+    return json;
+  }
+
   // --- Billing / pricing analytics (cost & volume by country + category) ---
   static async pricingAnalytics(wabaId, accessToken, { start, end, granularity = "DAILY" }) {
     const f = `pricing_analytics.start(${start}).end(${end}).granularity(${granularity}).dimensions(PRICING_CATEGORY,PRICING_TYPE,COUNTRY)`;

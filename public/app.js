@@ -7,6 +7,10 @@ const state = {
   config: { brandName: "Punto Pago", templatesEnabled: false, hasCredentials: false },
   conversations: [],
   templates: [],
+  campaigns: [],
+  activeCampaignId: null,
+  lineHealth: null,
+  bulkPollTimer: null,
   activePhone: null,
   messages: [],
   conversationDetail: null,
@@ -26,6 +30,10 @@ const post = (url, body) =>
 const patch = (url, body) =>
   api(url, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
 const postForm = (url, formData) => api(url, { method: "POST", body: formData });
+
+function postCsv(url, formData) {
+  return fetch(url, { method: "POST", body: formData }).then((res) => res.json().catch(() => ({})));
+}
 
 function escapeHtml(s) {
   return String(s == null ? "" : s).replace(/[&<>"']/g, (c) =>
@@ -904,6 +912,243 @@ function recomputePrices() {
   $("priceTotal").textContent = fmtUsd(total);
 }
 
+/* ---------- bulk campaigns ---------- */
+const BULK_STATUS_LABELS = {
+  draft: "Borrador",
+  running: "Enviando",
+  paused: "Pausada",
+  completed: "Completada",
+  failed: "Fallida",
+};
+const ROW_STATUS_LABELS = {
+  pending: "Pendiente",
+  sent: "Enviado",
+  delivered: "Entregado",
+  read: "Leído",
+  failed: "Error",
+  skipped: "Omitido",
+};
+
+async function loadLineHealth() {
+  const res = await api("/api/line-health");
+  state.lineHealth = res.ok ? res.line : null;
+  renderLineHealth();
+  return state.lineHealth;
+}
+
+function renderLineHealth() {
+  const box = $("lineHealthCards");
+  const l = state.lineHealth;
+  if (!l) {
+    box.innerHTML = `<div class="lh-card"><span class="lh-label">Línea WhatsApp</span><span class="lh-value">—</span><span class="lh-sub">Configura ACCESS_TOKEN y PHONE_NUMBER_ID.</span></div>`;
+    return;
+  }
+  const qClass = l.qualityColor || "muted";
+  box.innerHTML = `
+    <div class="lh-card"><span class="lh-label">Número</span><span class="lh-value" style="font-size:15px">${escapeHtml(l.displayPhone || "—")}</span><span class="lh-sub">${escapeHtml(l.verifiedName || "")}</span></div>
+    <div class="lh-card ${qClass}"><span class="lh-label">Integridad (Meta)</span><span class="lh-value">${escapeHtml(l.qualityLabel)}</span><span class="lh-sub">${escapeHtml(l.qualityHint || "")}</span></div>
+    <div class="lh-card"><span class="lh-label">Límite diario</span><span class="lh-value">${escapeHtml(l.dailyUniqueLimitLabel)}</span><span class="lh-sub">Usuarios únicos / 24h · ${escapeHtml(l.messagingTier || "")}</span></div>
+    <div class="lh-card"><span class="lh-label">Estado de envío</span><span class="lh-value" style="font-size:15px">${l.canSendMessage ? "Disponible" : "Restringido"}</span><span class="lh-sub">${l.canSendMessage ? "La línea puede enviar plantillas." : "Meta restringió envíos temporales."}</span></div>`;
+}
+
+function fillBulkTemplates() {
+  const sel = $("bulkTemplate");
+  const approved = state.templates.filter((t) => (t.status || "").toLowerCase() === "approved");
+  if (!approved.length) {
+    sel.innerHTML = `<option value="">— sin plantillas aprobadas —</option>`;
+    return;
+  }
+  sel.innerHTML = approved
+    .map((t) => `<option value="${escapeHtml(t.name)}" data-lang="${escapeHtml(t.language)}">${escapeHtml(t.name)} · ${escapeHtml(t.language)}</option>`)
+    .join("");
+}
+
+async function loadCampaigns() {
+  const res = await api("/api/campaigns");
+  state.campaigns = (res && res.data) || [];
+  renderCampaignList();
+}
+
+function renderCampaignList() {
+  const box = $("bulkCampaignList");
+  $("bulkListHint").textContent = state.campaigns.length ? `(${state.campaigns.length})` : "";
+  if (!state.campaigns.length) {
+    box.innerHTML = `<p class="muted">Aún no hay cargas. Crea una con CSV.</p>`;
+    return;
+  }
+  box.innerHTML = state.campaigns
+    .map((c) => {
+      const t = c.totals || {};
+      const active = c.id === state.activeCampaignId ? " active" : "";
+      return `<div class="bulk-camp-item${active}" data-id="${escapeHtml(c.id)}">
+        <strong>${escapeHtml(c.name)}</strong>
+        <div class="muted" style="font-size:11px;margin-top:4px">
+          ${escapeHtml(c.template)} · ${escapeHtml(BULK_STATUS_LABELS[c.status] || c.status)}
+          · ${t.delivered || 0} entregados / ${t.total || 0}
+        </div>
+      </div>`;
+    })
+    .join("");
+  box.querySelectorAll(".bulk-camp-item").forEach((el) =>
+    el.addEventListener("click", () => openCampaignDetail(el.dataset.id))
+  );
+}
+
+function selectedBulkTemplate() {
+  const sel = $("bulkTemplate");
+  const opt = sel.options[sel.selectedIndex];
+  return { name: sel.value, language: opt ? opt.dataset.lang : "es" };
+}
+
+async function readBulkCsvFile() {
+  const file = $("bulkCsv").files[0];
+  if (!file) return null;
+  return file.text();
+}
+
+async function previewBulkCsv() {
+  const csvText = await readBulkCsvFile();
+  const box = $("bulkPreview");
+  const tpl = selectedBulkTemplate();
+  if (!csvText) { box.className = "bulk-preview error"; box.textContent = "Selecciona un archivo CSV."; box.classList.remove("hidden"); return; }
+  if (!tpl.name) { box.className = "bulk-preview error"; box.textContent = "Selecciona una plantilla."; box.classList.remove("hidden"); return; }
+
+  const fd = new FormData();
+  fd.append("file", $("bulkCsv").files[0]);
+  fd.append("template", tpl.name);
+  fd.append("language", tpl.language);
+  const res = await api("/api/campaigns/preview", { method: "POST", body: fd });
+
+  box.classList.remove("hidden");
+  if (!res.ok) {
+    box.className = "bulk-preview error";
+    box.textContent = res.error || (res.errors && res.errors.join(" ")) || "No se pudo validar.";
+    return;
+  }
+  let msg = `${res.rowCount} contacto(s) válidos. Variables: ${(res.varColumns || []).join(", ") || "ninguna"}.`;
+  if (res.overDailyLimit && res.line) {
+    msg += ` Atención: supera el límite diario de Meta (${res.line.dailyUniqueLimitLabel} únicos/24h).`;
+  }
+  if (res.errors && res.errors.length) msg += ` Avisos: ${res.errors.slice(0, 3).join(" ")}`;
+  box.className = "bulk-preview ok";
+  box.textContent = msg;
+}
+
+async function createBulkCampaign() {
+  const csvText = await readBulkCsvFile();
+  const tpl = selectedBulkTemplate();
+  if (!csvText || !tpl.name) { toast("CSV y plantilla requeridos.", "error"); return; }
+
+  const fd = new FormData();
+  fd.append("file", $("bulkCsv").files[0]);
+  fd.append("name", $("bulkName").value.trim() || `Carga ${tpl.name}`);
+  fd.append("template", tpl.name);
+  fd.append("language", tpl.language);
+  const res = await api("/api/campaigns", { method: "POST", body: fd });
+  if (!res.ok) { toast(res.error || "No se pudo crear la carga.", "error"); return; }
+  toast("Carga creada.", "ok");
+  await loadCampaigns();
+  openCampaignDetail(res.campaign.id);
+}
+
+function downloadBulkSampleCsv() {
+  const sample = "telefono,nombre,var1,var2\n50761234567,Juan,100.00,15 mar\n50769876543,Ana,250.00,20 mar\n";
+  const blob = new Blob([sample], { type: "text/csv;charset=utf-8" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "ejemplo_carga_whatsapp.csv";
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+async function openCampaignDetail(id) {
+  state.activeCampaignId = id;
+  $("bulkDetail").classList.remove("hidden");
+  $("bulkExportBtn").href = `/api/campaigns/${encodeURIComponent(id)}/export`;
+  renderCampaignList();
+  await refreshCampaignDetail();
+  startBulkPolling();
+}
+
+function closeCampaignDetail() {
+  state.activeCampaignId = null;
+  $("bulkDetail").classList.add("hidden");
+  stopBulkPolling();
+  renderCampaignList();
+}
+
+async function refreshCampaignDetail() {
+  const id = state.activeCampaignId;
+  if (!id) return;
+  let metaRes = await api(`/api/campaigns/${encodeURIComponent(id)}`);
+  if (!metaRes.ok) return;
+  if (metaRes.campaign.status === "running") {
+    await api(`/api/campaigns/${encodeURIComponent(id)}/tick`, { method: "POST" });
+    metaRes = await api(`/api/campaigns/${encodeURIComponent(id)}`);
+    if (!metaRes.ok) return;
+  }
+  const rowsRes = await api(`/api/campaigns/${encodeURIComponent(id)}/rows?offset=0&limit=200`);
+  const c = metaRes.campaign;
+  const t = c.totals || {};
+  $("bulkDetailTitle").textContent = c.name;
+  $("bulkDetailMeta").textContent = `${c.template} · ${c.language} · ${BULK_STATUS_LABELS[c.status] || c.status}${c.pauseReason ? " · " + c.pauseReason : ""}`;
+  $("bulkStats").innerHTML = [
+    ["total", "Total"],
+    ["pending", "Pendientes"],
+    ["sent", "Enviados"],
+    ["delivered", "Entregados"],
+    ["read", "Leídos"],
+    ["failed", "Errores"],
+  ].map(([k, label]) => `<div class="bulk-stat"><span class="n">${t[k] || 0}</span><span class="l">${label}</span></div>`).join("");
+
+  const rows = (rowsRes && rowsRes.rows) || [];
+  $("bulkRowsBody").innerHTML = rows.map((r) => `<tr>
+    <td>+${escapeHtml(r.phone)}</td>
+    <td>${escapeHtml(r.name || "—")}</td>
+    <td><span class="st-${escapeHtml(r.status)}">${escapeHtml(ROW_STATUS_LABELS[r.status] || r.status)}</span></td>
+    <td class="muted">${escapeHtml(r.error || "")}</td>
+    <td>${r.sentAt ? escapeHtml(new Date(r.sentAt).toLocaleString("es", { dateStyle: "short", timeStyle: "short" })) : "—"}</td>
+  </tr>`).join("");
+
+  if (c.status !== "running") stopBulkPolling();
+}
+
+async function startBulkCampaign() {
+  const id = state.activeCampaignId;
+  if (!id) return;
+  const res = await api(`/api/campaigns/${encodeURIComponent(id)}/start`, { method: "POST" });
+  if (!res.ok) { toast(res.error || "No se pudo iniciar.", "error"); return; }
+  toast("Carga iniciada.", "ok");
+  startBulkPolling();
+  await refreshCampaignDetail();
+  await loadCampaigns();
+}
+
+async function pauseBulkCampaign() {
+  const id = state.activeCampaignId;
+  if (!id) return;
+  await api(`/api/campaigns/${encodeURIComponent(id)}/pause`, { method: "POST" });
+  stopBulkPolling();
+  await refreshCampaignDetail();
+  await loadCampaigns();
+}
+
+function startBulkPolling() {
+  stopBulkPolling();
+  state.bulkPollTimer = setInterval(() => {
+    if (state.activeCampaignId) refreshCampaignDetail();
+  }, 4000);
+}
+function stopBulkPolling() {
+  if (state.bulkPollTimer) clearInterval(state.bulkPollTimer);
+  state.bulkPollTimer = null;
+}
+
+async function initBulkScreen() {
+  await Promise.all([loadLineHealth(), loadTemplates(), loadCampaigns()]);
+  fillBulkTemplates();
+}
+
 /* ---------- modals & nav ---------- */
 function showModal(id) { $(id).classList.remove("hidden"); }
 function closeModals() { document.querySelectorAll(".modal").forEach((m) => m.classList.add("hidden")); }
@@ -912,9 +1157,12 @@ function switchScreen(name) {
   document.querySelectorAll(".rail-btn").forEach((b) => b.classList.toggle("active", b.dataset.screen === name));
   $("screenChats").classList.toggle("hidden", name !== "chats");
   $("screenTemplates").classList.toggle("hidden", name !== "templates");
+  $("screenBulk").classList.toggle("hidden", name !== "bulk");
   $("screenBilling").classList.toggle("hidden", name !== "billing");
   if (name === "templates") { loadTemplates().then(renderTemplateList); }
+  if (name === "bulk") { initBulkScreen(); }
   if (name === "billing") { loadBilling(); renderPrices(); }
+  if (name !== "bulk") stopBulkPolling();
 }
 
 /* ---------- polling ---------- */
@@ -953,6 +1201,12 @@ function bindEvents() {
   $("simSend").addEventListener("click", simulate);
   $("billSync").addEventListener("click", loadBilling);
   $("billRange").addEventListener("change", loadBilling);
+  $("bulkPreviewBtn").addEventListener("click", previewBulkCsv);
+  $("bulkCreateBtn").addEventListener("click", createBulkCampaign);
+  $("bulkSampleBtn").addEventListener("click", downloadBulkSampleCsv);
+  $("bulkStartBtn").addEventListener("click", startBulkCampaign);
+  $("bulkPauseBtn").addEventListener("click", pauseBulkCampaign);
+  $("bulkCloseBtn").addEventListener("click", closeCampaignDetail);
   $("newTemplateBtn").addEventListener("click", () => showModal("modalTemplate"));
   $("tpCreate").addEventListener("click", createTemplate);
   $("detailTemplateBtn").addEventListener("click", () => openNewChat());

@@ -22,11 +22,21 @@ const GraphApi = require('./services/graph-api');
 const Store = require('./services/store');
 const phoneMeta = require('./services/phone-meta');
 const templateCategory = require('./services/template-category');
+const CampaignStore = require('./services/campaign-store');
+const CampaignRunner = require('./services/campaign-runner');
+const { parseCsv } = require('./services/csv-parse');
+const { parseLineHealth } = require('./services/line-health');
+const { validateRowsForTemplate } = require('./services/template-params');
 const app = express();
 
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 16 * 1024 * 1024 },
+});
+
+const csvUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 },
 });
 
 // Safety net: keep the server alive if a WhatsApp API call fails (e.g. when
@@ -103,6 +113,8 @@ app.post('/webhook', webhookJson, (req, res) => {
               const phone = String(status.recipient_id);
               Promise.resolve(Store.updateMessageStatus(phone, status.id, status.status))
                 .catch(err => console.error('updateMessageStatus error:', err));
+              Promise.resolve(CampaignStore.applyWebhookStatus(status.id, status.status))
+                .catch(err => console.error('campaign status error:', err));
 
               const metaFields = {};
               if (status.conversation) {
@@ -601,6 +613,214 @@ app.post('/api/send', apiJson, async (req, res) => {
     res
       .status(200)
       .json({ ok: false, message: stored, error: String(error.message || error) });
+  }
+});
+
+function readCsvFromRequest(req) {
+  if (req.file && req.file.buffer) return req.file.buffer.toString('utf8');
+  return (req.body && req.body.csvText) || '';
+}
+
+async function findTemplateDefinition(name, language) {
+  if (!config.wabaId) return null;
+  const result = await GraphApi.listTemplates(config.wabaId);
+  const list = (result && result.data) || [];
+  const lang = language || 'es';
+  return list.find((t) => t.name === name && t.language === lang)
+    || list.find((t) => t.name === name);
+}
+
+// Phone line integrity + daily messaging limit (Meta)
+app.get('/api/line-health', async (req, res) => {
+  if (!config.accessToken || !config.phoneNumberId) {
+    return res.json({ ok: false, error: 'Falta ACCESS_TOKEN o PHONE_NUMBER_ID.' });
+  }
+  try {
+    const raw = await GraphApi.getPhoneLineHealth(config.phoneNumberId);
+    res.json({ ok: true, line: parseLineHealth(raw) });
+  } catch (err) {
+    console.error('line-health error:', err.message);
+    res.json({ ok: false, error: String(err.message || err) });
+  }
+});
+
+function parseCampaignBody(req, res, next) {
+  if (req.is('multipart/form-data')) return csvUpload.single('file')(req, res, next);
+  return apiJson(req, res, next);
+}
+
+// Preview CSV for bulk campaign without creating it
+app.post('/api/campaigns/preview', parseCampaignBody, async (req, res) => {
+  const { template, language } = req.body || {};
+  const csvText = readCsvFromRequest(req);
+  if (!csvText.trim()) return res.status(400).json({ ok: false, error: 'Sube un archivo CSV.' });
+  if (!template) return res.status(400).json({ ok: false, error: 'Selecciona una plantilla.' });
+
+  const parsed = parseCsv(csvText);
+  if (parsed.errors.length && !parsed.rows.length) {
+    return res.json({ ok: false, errors: parsed.errors });
+  }
+
+  const tpl = await findTemplateDefinition(template, language);
+  if (!tpl) return res.json({ ok: false, error: 'Plantilla no encontrada.' });
+  if ((tpl.status || '').toLowerCase() !== 'approved') {
+    return res.json({ ok: false, error: 'La plantilla debe estar aprobada por Meta.' });
+  }
+
+  const check = validateRowsForTemplate(tpl, parsed.rows);
+  if (!check.ok) return res.json({ ok: false, error: check.error, errors: parsed.errors });
+
+  let line = null;
+  try {
+    const raw = await GraphApi.getPhoneLineHealth(config.phoneNumberId);
+    line = parseLineHealth(raw);
+  } catch (_) {}
+
+  res.json({
+    ok: true,
+    rowCount: parsed.rows.length,
+    varColumns: parsed.varColumns,
+    errors: parsed.errors,
+    requiredVars: check.requiredVars,
+    preview: parsed.rows.slice(0, 5),
+    line,
+    overDailyLimit: line && line.dailyUniqueLimit != null && parsed.rows.length > line.dailyUniqueLimit,
+  });
+});
+
+// Create bulk campaign from CSV
+app.post('/api/campaigns', parseCampaignBody, async (req, res) => {
+  const { name, template, language } = req.body || {};
+  const csvText = readCsvFromRequest(req);
+  if (!csvText.trim()) return res.status(400).json({ ok: false, error: 'Sube un archivo CSV.' });
+  if (!template) return res.status(400).json({ ok: false, error: 'Selecciona una plantilla.' });
+
+  const parsed = parseCsv(csvText);
+  if (!parsed.rows.length) {
+    return res.json({ ok: false, error: 'No hay filas válidas.', errors: parsed.errors });
+  }
+
+  const tpl = await findTemplateDefinition(template, language);
+  if (!tpl) return res.json({ ok: false, error: 'Plantilla no encontrada.' });
+  if ((tpl.status || '').toLowerCase() !== 'approved') {
+    return res.json({ ok: false, error: 'La plantilla debe estar aprobada.' });
+  }
+
+  const check = validateRowsForTemplate(tpl, parsed.rows);
+  if (!check.ok) return res.json({ ok: false, error: check.error });
+
+  try {
+    const campaign = await CampaignStore.createCampaign({
+      name: name || `Carga ${template}`,
+      template,
+      language: tpl.language || language || 'es',
+      templateCategory: tpl.category || null,
+      rows: parsed.rows,
+      varColumns: parsed.varColumns,
+    });
+    res.json({ ok: true, campaign, parseErrors: parsed.errors });
+  } catch (err) {
+    console.error('create campaign error:', err.message);
+    res.status(500).json({ ok: false, error: String(err.message || err) });
+  }
+});
+
+app.get('/api/campaigns', async (req, res) => {
+  try {
+    res.json({ ok: true, data: await CampaignStore.listCampaigns() });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: String(err.message || err), data: [] });
+  }
+});
+
+app.get('/api/campaigns/:id', async (req, res) => {
+  try {
+    const campaign = await CampaignStore.getCampaign(req.params.id);
+    if (!campaign) return res.status(404).json({ ok: false, error: 'Campaña no encontrada.' });
+    res.json({ ok: true, campaign });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: String(err.message || err) });
+  }
+});
+
+app.get('/api/campaigns/:id/rows', async (req, res) => {
+  try {
+    const offset = Math.max(0, parseInt(req.query.offset, 10) || 0);
+    const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 50, 1), 200);
+    const rows = await CampaignStore.getRows(req.params.id, { offset, limit });
+    res.json({ ok: true, rows, offset, limit });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: String(err.message || err), rows: [] });
+  }
+});
+
+app.post('/api/campaigns/:id/start', async (req, res) => {
+  const campaign = await CampaignStore.getCampaign(req.params.id);
+  if (!campaign) return res.status(404).json({ ok: false, error: 'Campaña no encontrada.' });
+  if (!config.phoneNumberId || !config.accessToken) {
+    return res.status(400).json({ ok: false, error: 'Falta PHONE_NUMBER_ID o ACCESS_TOKEN.' });
+  }
+
+  const tpl = await findTemplateDefinition(campaign.template, campaign.language);
+  if (!tpl || (tpl.status || '').toLowerCase() !== 'approved') {
+    return res.json({ ok: false, error: 'Plantilla no disponible o no aprobada.' });
+  }
+
+  await CampaignStore.setCampaignStatus(campaign.id, 'running', { pauseReason: '' });
+  const result = await CampaignRunner.processBatch({
+    campaignId: campaign.id,
+    templateDef: tpl,
+    phoneNumberId: config.phoneNumberId,
+  });
+  const updated = await CampaignStore.getCampaign(campaign.id);
+  res.json({ ok: true, campaign: updated, batch: result });
+});
+
+app.post('/api/campaigns/:id/pause', async (req, res) => {
+  const campaign = await CampaignStore.getCampaign(req.params.id);
+  if (!campaign) return res.status(404).json({ ok: false, error: 'Campaña no encontrada.' });
+  await CampaignStore.setCampaignStatus(campaign.id, 'paused', { pauseReason: 'Pausada manualmente.' });
+  res.json({ ok: true, campaign: await CampaignStore.getCampaign(campaign.id) });
+});
+
+app.post('/api/campaigns/:id/tick', async (req, res) => {
+  const campaign = await CampaignStore.getCampaign(req.params.id);
+  if (!campaign) return res.status(404).json({ ok: false, error: 'Campaña no encontrada.' });
+  if (campaign.status !== 'running') {
+    return res.json({ ok: true, campaign, batch: { done: true, reason: campaign.status } });
+  }
+
+  const tpl = await findTemplateDefinition(campaign.template, campaign.language);
+  if (!tpl) return res.json({ ok: false, error: 'Plantilla no encontrada.' });
+
+  const result = await CampaignRunner.processBatch({
+    campaignId: campaign.id,
+    templateDef: tpl,
+    phoneNumberId: config.phoneNumberId,
+  });
+  res.json({ ok: true, campaign: await CampaignStore.getCampaign(campaign.id), batch: result });
+});
+
+app.get('/api/campaigns/:id/export', async (req, res) => {
+  try {
+    const campaign = await CampaignStore.getCampaign(req.params.id);
+    if (!campaign) return res.status(404).send('Not found');
+    const rows = await CampaignStore.exportRows(req.params.id);
+    const header = 'telefono,nombre,estado,error,wamid,enviado_en,actualizado_en\n';
+    const body = rows.map((r) => [
+      r.phone,
+      (r.name || '').replace(/"/g, '""'),
+      r.status,
+      (r.error || '').replace(/"/g, '""'),
+      r.wamid || '',
+      r.sentAt ? new Date(r.sentAt).toISOString() : '',
+      r.updatedAt ? new Date(r.updatedAt).toISOString() : '',
+    ].map((c) => `"${c}"`).join(',')).join('\n');
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="carga-${campaign.id}.csv"`);
+    res.send('\uFEFF' + header + body);
+  } catch (err) {
+    res.status(500).send(String(err.message || err));
   }
 });
 
