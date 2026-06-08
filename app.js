@@ -679,6 +679,12 @@ app.post('/api/flows/payment-auth/test', apiJson, async (req, res) => {
     const screenData = await buildPaymentAuthScreenData(txn);
     const normPhone = String(phone).replace(/\D/g, '');
 
+    let flowStatus = 'DRAFT';
+    try {
+      const flowMeta = await GraphApi.getFlow(flowId, 'id,status');
+      flowStatus = String(flowMeta.status || 'DRAFT').toUpperCase();
+    } catch (_) {}
+
     const approvedTpl = await templatePresets.resolveApprovedPaymentAuthTemplate(GraphApi, config.wabaId);
     let response;
     let sendMode = 'interactive_draft';
@@ -709,10 +715,10 @@ app.post('/api/flows/payment-auth/test', apiJson, async (req, res) => {
           flowAction: 'navigate',
           screen: 'AUTH',
           initialData: screenData,
-          mode: 'draft',
+          mode: flowStatus === 'DRAFT' ? 'draft' : undefined,
         }
       );
-      sendMode = 'interactive_draft';
+      sendMode = flowStatus === 'DRAFT' ? 'interactive_draft' : 'interactive_published';
     }
 
     await FlowStore.recordSend({
