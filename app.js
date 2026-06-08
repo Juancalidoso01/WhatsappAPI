@@ -42,6 +42,7 @@ const PaymentAuthStore = require('./services/payment-auth-store');
 const templatePresets = require('./services/template-presets');
 const flowPerformance = require('./services/flow-performance');
 const CardImageStore = require('./services/card-image-store');
+const flowUseCases = require('./services/flow-use-cases');
 const redis = require('./services/upstash');
 
 const PAYMENT_AUTH_FLOW_KEY = 'wa:flow:payment_auth_id';
@@ -461,6 +462,19 @@ app.get('/api/flows/capability', async (req, res) => {
 
 app.get('/api/flows/samples', (req, res) => {
   res.json({ ok: true, samples: flowSamples.listSamples() });
+});
+
+app.get('/api/flows/use-cases', (req, res) => {
+  const cases = flowUseCases.listUseCases();
+  const samples = flowSamples.listSamples();
+  const byKey = Object.fromEntries(samples.map((s) => [s.key, s]));
+  res.json({
+    ok: true,
+    useCases: cases.map((u) => ({
+      ...u,
+      templates: u.sampleKeys.map((k) => byKey[k]).filter(Boolean),
+    })),
+  });
 });
 
 app.get('/api/flows/builder/schema', (req, res) => {

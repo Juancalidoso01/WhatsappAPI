@@ -17,6 +17,8 @@ const state = {
   flowCapability: null,
   activeFlowId: null,
   flowSamples: [],
+  flowUseCases: [],
+  activeUseCaseId: null,
   templatePresets: [],
   activeTemplatePreset: "punto_pago_autorizacion_pago",
   flowsTab: "probar",
@@ -757,6 +759,7 @@ function setFlowsTab(tab) {
     const el = $(id);
     if (el) el.classList.toggle("hidden", key !== tab);
   });
+  if (tab === "crear" && !state.activeUseCaseId) showFlowCreateStep("categories");
   if (tab === "mis") {
     const hasFlow = Boolean(state.activeFlowId);
     if ($("flowsDetailPanel")) $("flowsDetailPanel").classList.toggle("hidden", !hasFlow);
@@ -2321,24 +2324,107 @@ async function loadFlowCapability() {
 async function loadFlowSamples() {
   const res = await api("/api/flows/samples");
   state.flowSamples = (res && res.samples) || [];
-  renderFlowSampleCards();
 }
 
-function renderFlowSampleCards() {
-  const box = $("flowSampleCards");
+const FLOW_USE_CASE_ICONS = {
+  cart: '<svg viewBox="0 0 24 24"><circle cx="9" cy="20" r="1"/><circle cx="17" cy="20" r="1"/><path d="M2 2h2l2.4 12.4a2 2 0 0 0 2 1.6h7.2a2 2 0 0 0 2-1.6L21 7H6"/></svg>',
+  calendar: '<svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 11h18"/></svg>',
+  support: '<svg viewBox="0 0 24 24"><path d="M4 14a8 8 0 0 1 16 0"/><path d="M5 14v2a2 2 0 0 0 2 2h1"/><path d="M17 18h1a2 2 0 0 0 2-2v-2"/></svg>',
+  payment: '<svg viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/></svg>',
+  kyc: '<svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 20a8 8 0 0 1 16 0"/><path d="M16 11l2 2 4-4"/></svg>',
+  megaphone: '<svg viewBox="0 0 24 24"><path d="M3 10v4l7 3V7L3 10z"/><path d="M14 8v8a3 3 0 0 0 3 3"/><path d="M17 5a5 5 0 0 1 0 14"/></svg>',
+  truck: '<svg viewBox="0 0 24 24"><path d="M3 6h11v9H3z"/><path d="M14 9h4l3 4v2h-7V9z"/><circle cx="7" cy="18" r="2"/><circle cx="18" cy="18" r="2"/></svg>',
+  briefcase: '<svg viewBox="0 0 24 24"><rect x="3" y="7" width="18" height="13" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>',
+};
+
+function flowUseCaseIconHtml(key, large) {
+  const svg = FLOW_USE_CASE_ICONS[key] || FLOW_USE_CASE_ICONS.cart;
+  return `<span class="flow-use-case-icon${large ? " lg" : ""}">${svg}</span>`;
+}
+
+async function loadFlowUseCases() {
+  const res = await api("/api/flows/use-cases");
+  state.flowUseCases = (res && res.useCases) || [];
+  renderFlowUseCaseGrid();
+}
+
+function renderFlowUseCaseGrid() {
+  const box = $("flowUseCaseGrid");
   if (!box) return;
-  if (!state.flowSamples.length) {
-    box.innerHTML = `<p class="muted sm">No hay ejemplos disponibles.</p>`;
+  if (!state.flowUseCases.length) {
+    box.innerHTML = `<p class="muted">No hay categorías disponibles.</p>`;
     return;
   }
-  box.innerHTML = state.flowSamples.map((s) => `
-    <button type="button" class="flow-sample-card" data-sample="${escapeHtml(s.key)}" title="${escapeHtml(s.description || "")}">
-      <strong>${escapeHtml(s.name || s.key)}</strong>
-      <span>${escapeHtml(s.description || "")}${s.dynamic ? " · Datos en vivo" : ""}</span>
-    </button>`).join("");
-  box.querySelectorAll(".flow-sample-card").forEach((btn) =>
-    btn.addEventListener("click", () => createFlowSampleKey(btn.dataset.sample))
+  box.innerHTML = state.flowUseCases.map((u) => {
+    const soon = u.status === "soon";
+    const badge = soon
+      ? `<span class="flow-use-case-badge soon">Próximamente</span>`
+      : `<span class="flow-use-case-badge ok">${u.templateCount} plantilla${u.templateCount === 1 ? "" : "s"}</span>`;
+    return `<button type="button" class="flow-use-case-row${soon ? " soon" : ""}" data-use-case="${escapeHtml(u.id)}" ${soon ? "" : ""}>
+      ${flowUseCaseIconHtml(u.icon)}
+      <span class="flow-use-case-copy">
+        <strong>${escapeHtml(u.label)}</strong>
+        <span>${escapeHtml(u.description)}</span>
+      </span>
+      ${badge}
+    </button>`;
+  }).join("");
+  box.querySelectorAll(".flow-use-case-row:not(.soon)").forEach((btn) =>
+    btn.addEventListener("click", () => openFlowUseCase(btn.dataset.useCase))
   );
+  box.querySelectorAll(".flow-use-case-row.soon").forEach((btn) =>
+    btn.addEventListener("click", () => openFlowUseCase(btn.dataset.useCase))
+  );
+}
+
+function showFlowCreateStep(step) {
+  const categories = $("flowCreateCategories");
+  const detail = $("flowCreateCategoryDetail");
+  if (categories) categories.classList.toggle("hidden", step !== "categories");
+  if (detail) detail.classList.toggle("hidden", step !== "detail");
+}
+
+function openFlowUseCase(id) {
+  const u = state.flowUseCases.find((x) => x.id === id);
+  if (!u) return;
+  state.activeUseCaseId = id;
+  if ($("flowCategoryTitle")) $("flowCategoryTitle").textContent = u.label;
+  if ($("flowCategoryDesc")) $("flowCategoryDesc").textContent = u.description;
+  const iconEl = $("flowCategoryIcon");
+  if (iconEl) iconEl.innerHTML = FLOW_USE_CASE_ICONS[u.icon] || FLOW_USE_CASE_ICONS.cart;
+
+  const tplBox = $("flowCategoryTemplates");
+  if (tplBox) {
+    if (u.status === "soon" || !u.templates || !u.templates.length) {
+      tplBox.innerHTML = `
+        <div class="flow-category-soon">
+          <p><strong>Próximamente en Punto Pago</strong></p>
+          <p class="muted sm">Estamos preparando plantillas para este caso de uso. Mientras tanto, contáctanos si necesitas implementarlo con prioridad.</p>
+        </div>`;
+    } else {
+      tplBox.innerHTML = u.templates.map((t) => `
+        <article class="flow-template-card${u.featured && t.key === "payment_auth" ? " featured" : ""}">
+          <h3>${escapeHtml(t.name || t.key)}</h3>
+          <p>${escapeHtml(t.description || "")}</p>
+          <div class="flows-actions">
+            <button type="button" class="btn-primary sm flow-create-sample" data-sample="${escapeHtml(t.key)}">Crear borrador en Meta</button>
+            ${t.key === "payment_auth" ? `<button type="button" class="btn-ghost sm flow-go-probar">Probar en WhatsApp</button>` : ""}
+          </div>
+        </article>`).join("");
+      tplBox.querySelectorAll(".flow-create-sample").forEach((btn) =>
+        btn.addEventListener("click", () => createFlowSampleKey(btn.dataset.sample))
+      );
+      tplBox.querySelectorAll(".flow-go-probar").forEach((btn) =>
+        btn.addEventListener("click", () => setFlowsTab("probar"))
+      );
+    }
+  }
+  showFlowCreateStep("detail");
+}
+
+function backToFlowCategories() {
+  state.activeUseCaseId = null;
+  showFlowCreateStep("categories");
 }
 
 async function loadFlowEndpointSetup() {

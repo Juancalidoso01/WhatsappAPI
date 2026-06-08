@@ -510,46 +510,56 @@
 
         <!-- Tab: Crear -->
         <section class="flows-tab-panel hidden" id="flowsPanelCrear">
-          <section class="flows-panel">
-            <h2 class="section-title">Empezar desde un ejemplo</h2>
-            <p class="muted sm">Plantillas prearmadas que puedes crear en Meta con un clic.</p>
-            <div id="flowSampleCards" class="flow-sample-cards"></div>
+          <section class="flows-panel" id="flowCreateCategories">
+            <h2 class="section-title">Casos de uso con alto impacto</h2>
+            <p class="muted sm">Elige una categoría para crear tu Flow. Generamos un borrador en Meta y tú lo revisas antes de publicar.</p>
+            <div id="flowUseCaseGrid" class="flow-use-case-grid">Cargando categorías…</div>
           </section>
 
-          <section class="flows-panel flows-builder" id="flowsBuilderPanel">
-            <div class="flows-builder-head">
-              <h2 class="section-title">Constructor visual</h2>
-              <p class="muted sm">Arma pantallas y campos sin código. Se guarda como borrador en Meta.</p>
-            </div>
-
-            <div class="flows-form-grid fb-meta">
-              <label>Nombre interno
-                <input id="fbName" type="text" placeholder="encuesta_nps_marzo" maxlength="80" />
-              </label>
-              <label>Categoría
-                <select id="fbCategory"></select>
-              </label>
-              <label>Texto del botón
-                <input id="fbCta" type="text" placeholder="Abrir" value="Abrir" />
-              </label>
-            </div>
-
-            <div class="fb-screens-head">
-              <h3 class="fb-subtitle">Pantallas</h3>
-              <div class="fb-screen-add">
-                <button type="button" id="fbAddForm" class="btn-ghost sm">+ Formulario</button>
-                <button type="button" id="fbAddMessage" class="btn-ghost sm">+ Mensaje</button>
-                <button type="button" id="fbAddConfirm" class="btn-ghost sm">+ Confirmación</button>
+          <section class="flows-panel hidden" id="flowCreateCategoryDetail">
+            <button type="button" id="flowCreateBack" class="btn-ghost sm flow-create-back">← Todas las categorías</button>
+            <div class="flow-category-head">
+              <span id="flowCategoryIcon" class="flow-use-case-icon lg" aria-hidden="true"></span>
+              <div>
+                <h2 class="section-title" id="flowCategoryTitle">—</h2>
+                <p class="muted sm" id="flowCategoryDesc"></p>
               </div>
             </div>
-            <div id="fbScreens" class="fb-screens"></div>
 
-            <div class="flows-builder-foot">
-              <div id="fbPreview" class="fb-preview muted sm"></div>
-              <div class="flows-actions">
-                <button type="button" id="fbCreateBtn" class="btn-primary sm">Crear borrador en Meta</button>
-              </div>
-            </div>
+            <div id="flowCategoryTemplates" class="flow-category-templates"></div>
+
+            <details class="flows-builder-advanced" id="flowsBuilderAdvanced">
+              <summary>Personalizar desde cero (avanzado)</summary>
+              <section class="flows-builder" id="flowsBuilderPanel">
+                <p class="muted sm">Solo si necesitas armar pantallas a medida. La mayoría de equipos usan las plantillas de arriba.</p>
+                <div class="flows-form-grid fb-meta">
+                  <label>Nombre interno
+                    <input id="fbName" type="text" placeholder="encuesta_nps_marzo" maxlength="80" />
+                  </label>
+                  <label>Categoría Meta
+                    <select id="fbCategory"></select>
+                  </label>
+                  <label>Texto del botón
+                    <input id="fbCta" type="text" placeholder="Abrir" value="Abrir" />
+                  </label>
+                </div>
+                <div class="fb-screens-head">
+                  <h3 class="fb-subtitle">Pantallas</h3>
+                  <div class="fb-screen-add">
+                    <button type="button" id="fbAddForm" class="btn-ghost sm">+ Formulario</button>
+                    <button type="button" id="fbAddMessage" class="btn-ghost sm">+ Mensaje</button>
+                    <button type="button" id="fbAddConfirm" class="btn-ghost sm">+ Confirmación</button>
+                  </div>
+                </div>
+                <div id="fbScreens" class="fb-screens"></div>
+                <div class="flows-builder-foot">
+                  <div id="fbPreview" class="fb-preview muted sm"></div>
+                  <div class="flows-actions">
+                    <button type="button" id="fbCreateBtn" class="btn-primary sm">Crear borrador en Meta</button>
+                  </div>
+                </div>
+              </section>
+            </details>
           </section>
         </section>
 
