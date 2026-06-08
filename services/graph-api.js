@@ -137,18 +137,36 @@ module.exports = class GraphApi {
   static async listTemplates(wabaId, pageSize = 100) {
     const api = getApi();
     const fields = "name,status,category,correct_category,language,components,quality_score";
+    const seen = new Set();
     const all = [];
     let after = null;
+    let pages = 0;
 
-    do {
+    while (pages < 50) {
       const params = { limit: pageSize, fields };
       if (after) params.after = after;
-      const page = await api.call("GET", [`${wabaId}`, "message_templates"], params);
-      all.push(...((page && page.data) || []));
+
+      let page;
+      try {
+        page = await api.call("GET", [`${wabaId}`, "message_templates"], params);
+      } catch (err) {
+        if (all.length) break;
+        const fallbackFields = "name,status,category,language,components,quality_score";
+        page = await api.call("GET", [`${wabaId}`, "message_templates"], { ...params, fields: fallbackFields });
+      }
+
+      ((page && page.data) || []).forEach((tpl) => {
+        const key = `${tpl.name}|${tpl.language}`;
+        if (seen.has(key)) return;
+        seen.add(key);
+        all.push(tpl);
+      });
+
       const next = page && page.paging && page.paging.cursors && page.paging.cursors.after;
       if (!next || next === after || !page.paging || !page.paging.next) break;
       after = next;
-    } while (all.length < 500);
+      pages++;
+    }
 
     return { data: all };
   }

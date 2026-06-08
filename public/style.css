@@ -265,6 +265,7 @@ input, textarea, select { font-family: inherit; }
 }
 .templates-pane .pane-header { align-items: flex-start; margin-bottom: 8px; }
 .templates-intro { margin: 4px 0 0; font-size: 12px; max-width: 520px; }
+.templates-count { margin: 0 0 4px; font-size: 12px; }
 .templates-grid { display: grid; gap: 14px; margin-top: 12px; }
 .tpl-card {
   background: var(--surface); border: 1px solid var(--border); border-radius: 14px;

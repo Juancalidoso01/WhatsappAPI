@@ -426,8 +426,12 @@ function catTagHtml(cat, label) {
 function categoryComment(t) {
   const info = t.categoryInfo;
   if (!info) return "";
-  if (info.hint) return info.hint;
-  if (info.billingLabel) return `Se factura como ${info.billingLabel}.`;
+  const userTracked = t.localMeta && t.localMeta.syncedFrom === "user";
+  if (userTracked && info.hint) return info.hint;
+  if (info.correct && info.current && info.correct !== info.current) {
+    return info.hint || `WhatsApp sugiere cambiar a ${info.correctLabel}.`;
+  }
+  if (info.billingLabel) return `Facturación: ${info.billingLabel}.`;
   return "";
 }
 
@@ -471,7 +475,9 @@ function renderTemplateList() {
     list.innerHTML = `<p class="muted center-msg">No hay plantillas. Pulsa “Crear”.</p>`;
     return;
   }
-  list.innerHTML = state.templates.map((t, i) => renderTemplateCard(t, i)).join("");
+  const count = state.templates.length;
+  list.innerHTML = `<p class="templates-count muted">${count} plantilla${count === 1 ? "" : "s"} en tu cuenta</p>`
+    + state.templates.map((t, i) => renderTemplateCard(t, i)).join("");
   list.querySelectorAll(".tpl-send-btn").forEach((btn) =>
     btn.addEventListener("click", (e) => {
       e.stopPropagation();

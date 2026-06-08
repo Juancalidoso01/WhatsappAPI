@@ -208,12 +208,15 @@ app.get('/api/templates', async (req, res) => {
   try {
     const result = await GraphApi.listTemplates(config.wabaId);
     const raw = (result && result.data) || [];
-    const { synced, metaMap } = await backfillTemplateMeta(raw);
-    const data = await enrichTemplatesList(raw, metaMap);
-    res.json({ data, summary: templateCategory.summarizeTemplates(data), synced });
+    const data = await enrichTemplatesList(raw);
+    res.json({
+      data,
+      total: data.length,
+      summary: templateCategory.summarizeTemplates(data),
+    });
   } catch (err) {
     console.error('listTemplates error:', err.message);
-    res.status(200).json({ data: [], summary: { total: 0 }, error: String(err.message || err) });
+    res.status(200).json({ data: [], total: 0, summary: { total: 0 }, error: String(err.message || err) });
   }
 });
 
@@ -325,8 +328,7 @@ app.get('/api/billing', async (req, res) => {
     try {
       const tplResult = await GraphApi.listTemplates(config.wabaId);
       const rawTpl = (tplResult && tplResult.data) || [];
-      const { metaMap } = await backfillTemplateMeta(rawTpl);
-      const enriched = await enrichTemplatesList(rawTpl, metaMap);
+      const enriched = await enrichTemplatesList(rawTpl);
       templateSummary = templateCategory.summarizeTemplates(enriched);
     } catch (tplErr) {
       console.error('billing template summary error:', tplErr.message);
