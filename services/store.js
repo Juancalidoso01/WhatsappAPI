@@ -46,7 +46,10 @@ function memGetOrCreate(phone, name, phoneNumberId) {
 }
 
 // ---------- Helpers ----------
-function buildMessage({ direction, text, type = "text", status = null, id = null, media = null, mediaId = null }) {
+function buildMessage({
+  direction, text, type = "text", status = null, id = null,
+  media = null, mediaId = null, voice = null,
+}) {
   const message = {
     id: id || `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     direction,
@@ -57,6 +60,7 @@ function buildMessage({ direction, text, type = "text", status = null, id = null
   };
   if (media) message.media = media;
   if (mediaId) message.mediaId = mediaId;
+  if (voice != null) message.voice = voice;
   return message;
 }
 
@@ -72,8 +76,9 @@ async function addMessage({
   id = null,
   media = null,
   mediaId = null,
+  voice = null,
 }) {
-  const message = buildMessage({ direction, text, type, status, id, media, mediaId });
+  const message = buildMessage({ direction, text, type, status, id, media, mediaId, voice });
 
   if (redis) {
     const convoKey = `${PREFIX}convo:${phone}`;
@@ -98,9 +103,36 @@ async function addMessage({
   return message;
 }
 
+async function updateMessageId(phone, localId, waId) {
+  if (!localId || !waId || localId === waId) return;
+
+  if (redis) {
+    const key = `${PREFIX}msgs:${String(phone)}`;
+    const raw = await redis.lrange(key, 0, -1);
+    for (let i = 0; i < raw.length; i++) {
+      const msg = typeof raw[i] === "string" ? JSON.parse(raw[i]) : raw[i];
+      if (msg.id === localId) {
+        msg.id = waId;
+        await redis.lset(key, i, JSON.stringify(msg));
+        emitter.emit("message", { phone: String(phone), name: String(phone), message: msg });
+        return;
+      }
+    }
+    return;
+  }
+
+  const convo = memConversations.get(String(phone));
+  if (!convo) return;
+  const message = convo.messages.find((m) => m.id === localId);
+  if (message) {
+    message.id = waId;
+    emitter.emit("message", { phone: convo.phone, name: convo.name, message });
+  }
+}
+
 async function updateMessageStatus(phone, messageId, status) {
   if (redis) {
-    const key = `${PREFIX}msgs:${phone}`;
+    const key = `${PREFIX}msgs:${String(phone)}`;
     const raw = await redis.lrange(key, 0, -1);
     for (let i = 0; i < raw.length; i++) {
       const msg = typeof raw[i] === "string" ? JSON.parse(raw[i]) : raw[i];
@@ -198,6 +230,7 @@ function isPersistent() {
 
 module.exports = {
   addMessage,
+  updateMessageId,
   updateMessageStatus,
   getConversation,
   listConversations,

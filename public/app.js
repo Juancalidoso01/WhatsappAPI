@@ -154,6 +154,13 @@ function mediaSrc(m) {
   return null;
 }
 
+function formatDuration(seconds) {
+  const s = Math.max(0, Math.round(Number(seconds) || 0));
+  const m = Math.floor(s / 60);
+  const r = s % 60;
+  return `${m}:${String(r).padStart(2, "0")}`;
+}
+
 function renderMedia(m) {
   const src = mediaSrc(m);
   if (!src) return "";
@@ -161,7 +168,11 @@ function renderMedia(m) {
     return `<img src="${escapeHtml(src)}" alt="" loading="lazy" />`;
   }
   if (m.type === "audio") {
-    return `<audio controls preload="metadata" src="${escapeHtml(src)}"></audio>`;
+    const label = m.voice ? "Nota de voz" : "Audio";
+    return `<div class="audio-wrap">
+      <span class="audio-kind">${escapeHtml(label)} <span class="audio-duration" data-audio-dur>--:--</span></span>
+      <audio controls preload="metadata" src="${escapeHtml(src)}"></audio>
+    </div>`;
   }
   if (m.type === "video") {
     return `<video controls preload="metadata" src="${escapeHtml(src)}"></video>`;
@@ -199,8 +210,24 @@ function updateMediaPreview() {
   box.innerHTML = `<span class="muted">${escapeHtml(file.name)} · ${Math.max(1, Math.round(file.size / 1024))} KB</span>`;
 }
 
+const STATUS_LABELS = {
+  pending: "Enviando…",
+  sent: "Enviado",
+  delivered: "Entregado",
+  read: "Leído",
+  failed: "Error al enviar",
+};
+
 function statusTick(m) {
-  if (m.direction !== "out") return "";
+  if (m.direction === "in") {
+    let label = "Recibido";
+    if (m.type === "audio") label = m.voice ? "Nota de voz recibida" : "Audio recibido";
+    else if (m.type === "image") label = "Imagen recibida";
+    else if (m.type === "video") label = "Video recibido";
+    else if (m.type === "document") label = "Documento recibido";
+    return `<span class="recv-badge" title="${escapeHtml(label)}">${escapeHtml(label)}</span>`;
+  }
+  const label = STATUS_LABELS[m.status] || "";
   const map = {
     pending: '<span class="tick"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span>',
     sent: '<span class="tick"><svg viewBox="0 0 24 24"><path d="M4 12l5 5L20 6"/></svg></span>',
@@ -208,7 +235,23 @@ function statusTick(m) {
     read: '<span class="tick read"><svg viewBox="0 0 24 24"><path d="M1 13l4 4L15 7M9 13l4 4L23 7"/></svg></span>',
     failed: '<span class="tick failed"><svg viewBox="0 0 24 24"><path d="M12 8v4m0 4h.01"/><circle cx="12" cy="12" r="9"/></svg></span>',
   };
-  return map[m.status] || "";
+  const icon = map[m.status] || "";
+  if (!icon) return "";
+  return `<span class="tick-wrap" title="${escapeHtml(label)}">${icon}<span class="tick-label">${escapeHtml(label)}</span></span>`;
+}
+
+function bindAudioDurations() {
+  document.querySelectorAll(".audio-wrap audio").forEach((el) => {
+    const badge = el.closest(".audio-wrap")?.querySelector("[data-audio-dur]");
+    if (!badge) return;
+    const update = () => {
+      if (!el.duration || !Number.isFinite(el.duration)) return;
+      badge.textContent = formatDuration(el.duration);
+    };
+    el.addEventListener("loadedmetadata", update);
+    el.addEventListener("durationchange", update);
+    update();
+  });
 }
 
 function renderMessages() {
@@ -228,6 +271,7 @@ function renderMessages() {
     })
     .join("");
   box.scrollTop = box.scrollHeight;
+  bindAudioDurations();
 }
 
 function lastInboundTs() {

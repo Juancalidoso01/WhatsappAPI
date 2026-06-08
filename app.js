@@ -85,7 +85,7 @@ app.post('/webhook', webhookJson, (req, res) => {
 
           if (value.statuses) {
             value.statuses.forEach(status => {
-              Promise.resolve(Store.updateMessageStatus(status.recipient_id, status.id, status.status))
+              Promise.resolve(Store.updateMessageStatus(String(status.recipient_id), status.id, status.status))
                 .catch(err => console.error('updateMessageStatus error:', err));
               // Handle message status updates
               Promise.resolve(Conversation.handleStatus(senderPhoneNumberId, status))
@@ -230,8 +230,8 @@ app.post('/api/send-template', apiJson, async (req, res) => {
   });
 
   try {
-    await GraphApi.sendTemplate(phoneNumberId, phone, { name: template, language: language || 'es', components });
-    await Store.updateMessageStatus(phone, stored.id, 'sent');
+    const response = await GraphApi.sendTemplate(phoneNumberId, phone, { name: template, language: language || 'es', components });
+    await finalizeOutbound(phone, stored, response);
     res.json({ ok: true, message: stored });
   } catch (err) {
     await Store.updateMessageStatus(phone, stored.id, 'failed');
@@ -294,7 +294,7 @@ app.post('/api/send-media', parseSendMediaBody, async (req, res) => {
       mediaId,
     });
 
-    await GraphApi.messageWithMedia(undefined, phoneNumberId, phone, {
+    const response = await GraphApi.messageWithMedia(undefined, phoneNumberId, phone, {
       mediaType: waType,
       link: file ? undefined : link,
       mediaId,
@@ -302,8 +302,7 @@ app.post('/api/send-media', parseSendMediaBody, async (req, res) => {
       filename,
     });
 
-    await Store.updateMessageStatus(phone, stored.id, 'sent');
-    stored.status = 'sent';
+    await finalizeOutbound(phone, stored, response);
     res.json({ ok: true, message: stored });
   } catch (err) {
     if (stored) {
@@ -394,8 +393,8 @@ app.post('/api/send', apiJson, async (req, res) => {
   }
 
   try {
-    await GraphApi.messageWithText(undefined, phoneNumberId, phone, text);
-    await Store.updateMessageStatus(phone, stored.id, 'sent');
+    const response = await GraphApi.messageWithText(undefined, phoneNumberId, phone, text);
+    await finalizeOutbound(phone, stored, response);
     res.json({ ok: true, message: stored });
   } catch (error) {
     await Store.updateMessageStatus(phone, stored.id, 'failed');
@@ -478,7 +477,22 @@ function verifyRequestSignature(req, res, buf) {
   }
 }
 
+function waMessageId(response) {
+  return response && response.messages && response.messages[0] && response.messages[0].id;
+}
+
+async function finalizeOutbound(phone, stored, response) {
+  const waId = waMessageId(response);
+  if (waId) await Store.updateMessageId(phone, stored.id, waId);
+  const id = waId || stored.id;
+  await Store.updateMessageStatus(phone, id, 'sent');
+  stored.id = id;
+  stored.status = 'sent';
+  return stored;
+}
+
 async function mirrorIncomingMessage(rawMessage, contactNames, senderPhoneNumberId) {
+  const audio = rawMessage.type === 'audio' ? rawMessage.audio : null;
   return Store.addMessage({
     phone: rawMessage.from,
     name: contactNames[rawMessage.from],
@@ -488,6 +502,8 @@ async function mirrorIncomingMessage(rawMessage, contactNames, senderPhoneNumber
     type: rawMessage.type,
     id: rawMessage.id,
     mediaId: extractMediaId(rawMessage),
+    voice: audio ? Boolean(audio.voice) : null,
+    status: 'received',
   });
 }
 
