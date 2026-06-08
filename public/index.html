@@ -372,6 +372,16 @@
 
         <div id="flowsCapability" class="flows-capability muted">Comprobando compatibilidad…</div>
 
+        <section class="flows-panel flows-endpoint" id="flowsEndpointPanel">
+          <h2 class="section-title">Endpoint dinámico (data_exchange)</h2>
+          <p class="muted sm">Flows con lógica en servidor (cotización, catálogo, etc.). Requiere URL pública HTTPS.</p>
+          <div class="flows-endpoint-row">
+            <code id="flowEndpointUri" class="flows-endpoint-url">—</code>
+            <button type="button" id="flowEndpointSetupBtn" class="btn-primary sm">Registrar clave en Meta</button>
+          </div>
+          <p id="flowEndpointHint" class="muted sm"></p>
+        </section>
+
         <div class="flows-grid">
           <section class="flows-panel">
             <h2 class="section-title">Crear Flow de ejemplo</h2>
@@ -452,6 +462,14 @@
         </div>
 
         <div id="billTplAlert" class="billing-alert hidden"></div>
+
+        <h2 class="section-title">WhatsApp Flows <span class="muted">· métricas internas</span></h2>
+        <div class="billing-cards flows-stats">
+          <div class="bill-card"><span class="bc-label">Flows enviados</span><span class="bc-value" id="bcFlowSends">—</span></div>
+          <div class="bill-card"><span class="bc-label">Respuestas completadas</span><span class="bc-value" id="bcFlowResponses">—</span></div>
+          <div class="bill-card"><span class="bc-label">Llamadas al endpoint</span><span class="bc-value" id="bcFlowEndpoint">—</span></div>
+        </div>
+        <p class="billing-note" id="billFlowNote">Los Flows dentro de la ventana de 24 h se facturan como mensaje de servicio (gratis). Si abres con plantilla, aplica la categoría de esa plantilla.</p>
 
         <h2 class="section-title">Lo gastado <span class="muted">· datos reales de tu cuenta (categoría asignada por Meta)</span></h2>
         <div class="billing-table-wrap">

@@ -315,6 +315,20 @@ module.exports = class GraphApi {
     return json;
   }
 
+  static async uploadFlowPublicKey(phoneNumberId, publicKeyPem) {
+    const url = `https://graph.facebook.com/v21.0/${phoneNumberId}/whatsapp_business_encryption?access_token=${config.accessToken}`;
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ business_public_key: publicKeyPem }),
+    });
+    const json = await res.json();
+    if (json.error) {
+      throw new Error(json.error.error_user_msg || json.error.message || "Error al registrar clave pública.");
+    }
+    return json;
+  }
+
   static async sendFlowMessage(senderPhoneNumberId, recipientPhoneNumber, {
     flowId,
     flowToken,
@@ -325,18 +339,23 @@ module.exports = class GraphApi {
     mode,
     headerText,
     footerText,
+    flowAction,
   }) {
     const parameters = {
       flow_message_version: "3",
       flow_token: flowToken || `ptp_${Date.now()}`,
       flow_id: String(flowId),
       flow_cta: cta || "Abrir",
-      flow_action: "navigate",
-      flow_action_payload: {
+    };
+    if (flowAction === "data_exchange") {
+      parameters.flow_action = "data_exchange";
+    } else {
+      parameters.flow_action = "navigate";
+      parameters.flow_action_payload = {
         screen: screen || "WELCOME_SCREEN",
         data: initialData || {},
-      },
-    };
+      };
+    }
     if (mode === "draft") parameters.mode = "draft";
 
     const interactive = {

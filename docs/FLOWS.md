@@ -10,16 +10,18 @@
 | Listar y previsualizar Flows | ✅ Sí |
 | Enviar Flow en **borrador** (`mode: draft`) | ✅ Sí, en ventana 24 h |
 | Enviar Flow **publicado** en chat activo | ✅ Normalmente sí |
+| Flow dinámico con **endpoint** (`data_exchange`) | ✅ Sí, con `PUBLIC_BASE_URL` |
 | Plantilla masiva con botón FLOW | ⚠️ Requiere Flow publicado + plantilla aprobada |
 | Sin error **139000 Integrity** | ⚠️ A veces falla si el negocio/nombre no está verificado |
 
 ### Recomendación para probar hoy
 
-1. Abre **Flows** en el rail del portal.
-2. Crea el sample **punto_pago_hello** (se publica automáticamente).
-3. Inicia conversación con el número de prueba (mensaje entrante o simular entrante).
-4. Envía el Flow al teléfono desde la pantalla Flows (ventana 24 h activa).
-5. Completa el formulario en el teléfono → la respuesta aparece en **Respuestas recibidas**.
+1. Configura `PUBLIC_BASE_URL` (ej. `https://whatsapp-api-ten-tau.vercel.app`).
+2. Abre **Flows** → **Registrar clave en Meta**.
+3. Crea el sample **punto_pago_cotizacion** (Flow dinámico con endpoint).
+4. Inicia conversación con el número de prueba (ventana 24 h).
+5. Envía el Flow → elige producto y monto → el endpoint calcula la cuota.
+6. Confirma → la respuesta aparece en **Respuestas recibidas**.
 
 Si Meta responde `139000 Blocked by Integrity`, completa la verificación del negocio en [Meta Business Suite](https://business.facebook.com/) y usa Flow en **borrador** mientras tanto.
 
@@ -29,17 +31,34 @@ Si Meta responde `139000 Blocked by Integrity`, completa la verificación del ne
 |--------|------|-------------|
 | GET | `/api/flows/capability` | Compatibilidad y notas |
 | GET | `/api/flows` | Listar Flows del WABA |
-| POST | `/api/flows` | Crear sample `hello` o `lead` |
+| POST | `/api/flows` | Crear sample `hello`, `lead` o `quote` |
 | POST | `/api/flows/:id/send` | Enviar a un teléfono |
 | POST | `/api/flows/:id/publish` | Publicar borrador |
 | GET | `/api/flows/responses` | Respuestas del webhook |
+| POST | `/api/flows/endpoint` | Endpoint cifrado para Meta (`data_exchange`) |
+| GET | `/api/flows/endpoint/setup` | Estado del endpoint y claves |
+| POST | `/api/flows/endpoint/setup` | Subir clave pública a Meta |
+
+## Endpoint dinámico
+
+Meta envía peticiones cifradas (RSA-OAEP + AES-128-GCM) a `POST /api/flows/endpoint`. Punto Pago:
+
+1. Descifra la petición con la clave privada.
+2. Ejecuta la lógica (`ping`, `INIT`, `data_exchange`).
+3. Responde cifrado en base64 (text/plain).
+
+El sample **quote** implementa una cotización simple: producto + monto → cuota estimada a 12 meses.
+
+## Facturación
+
+En la pantalla **Facturación** verás métricas internas de Flows:
+
+- **Flows enviados** — contador al enviar desde Punto Pago
+- **Respuestas completadas** — cuando el usuario confirma el Flow
+- **Llamadas al endpoint** — pings e intercambios `data_exchange`
+
+Los Flows enviados **dentro de la ventana de 24 h** son mensajes interactivos de **servicio (gratis)**. Si abres la conversación con plantilla, se factura como la categoría de esa plantilla.
 
 ## Webhook
 
 Al completar un Flow, Meta envía `interactive.type = nfm_reply` con `response_json`. Punto Pago lo guarda y lo muestra en el módulo Flows.
-
-## Fase 2 (pendiente)
-
-- Endpoint `data_exchange` cifrado para Flows dinámicos
-- Plantillas con botón FLOW desde el modal de crear plantilla
-- Integración API para disparar Flows desde CRM

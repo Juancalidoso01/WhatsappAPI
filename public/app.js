@@ -987,8 +987,9 @@ async function loadBilling() {
   if (!res.ok) {
     tbody.innerHTML = `<tr><td colspan="4" class="muted center">No se pudo cargar.</td></tr>`;
     note.textContent = res.error || "";
-    ["bcCost", "bcVolume", "bcMkt", "bcUtil", "bcAuth"].forEach((id) => ($(id).textContent = "—"));
+    ["bcCost", "bcVolume", "bcMkt", "bcUtil", "bcAuth", "bcFlowSends", "bcFlowResponses", "bcFlowEndpoint"].forEach((id) => ($(id).textContent = "—"));
     $("billTplAlert").classList.add("hidden");
+    if ($("billFlowNote")) $("billFlowNote").textContent = "";
     return;
   }
 
@@ -999,6 +1000,12 @@ async function loadBilling() {
   $("bcMkt").textContent = fmtCost(byCat.MARKETING || 0);
   $("bcUtil").textContent = fmtCost(byCat.UTILITY || 0);
   $("bcAuth").textContent = fmtCost((byCat.AUTHENTICATION || 0) + (byCat.AUTHENTICATION_INTERNATIONAL || 0));
+
+  const fs = res.flowStats || {};
+  if ($("bcFlowSends")) $("bcFlowSends").textContent = fmtNum(fs.sends);
+  if ($("bcFlowResponses")) $("bcFlowResponses").textContent = fmtNum(fs.responses);
+  if ($("bcFlowEndpoint")) $("bcFlowEndpoint").textContent = fmtNum(fs.endpointCalls);
+  if ($("billFlowNote") && res.flowBillingNote) $("billFlowNote").textContent = res.flowBillingNote;
 
   const alert = $("billTplAlert");
   const ts = res.templateSummary || {};
@@ -1616,7 +1623,32 @@ function updateFlowSampleDesc() {
   const sel = $("flowSampleSelect");
   const key = sel ? sel.value : "hello";
   const s = state.flowSamples.find((x) => x.key === key);
-  if ($("flowSampleDesc")) $("flowSampleDesc").textContent = s ? s.description : "";
+  if ($("flowSampleDesc")) {
+    $("flowSampleDesc").textContent = s
+      ? `${s.description}${s.dynamic ? " Requiere endpoint dinámico configurado." : ""}`
+      : "";
+  }
+}
+
+async function loadFlowEndpointSetup() {
+  const res = await api("/api/flows/endpoint/setup");
+  const uriEl = $("flowEndpointUri");
+  const hint = $("flowEndpointHint");
+  if (!uriEl) return;
+  if (res.ok && res.endpointUri) {
+    uriEl.textContent = res.endpointUri;
+    hint.textContent = `Clave: ${res.keySource || "—"}. Pulsa “Registrar clave en Meta” antes de crear el sample quote.`;
+  } else {
+    uriEl.textContent = "Configura PUBLIC_BASE_URL en el servidor";
+    hint.textContent = "Sin URL pública no se puede usar data_exchange.";
+  }
+}
+
+async function setupFlowEndpoint() {
+  const res = await post("/api/flows/endpoint/setup", {});
+  if (!res.ok) { toast(res.error || "No se pudo registrar la clave.", "error"); return; }
+  toast(res.message || "Clave registrada.", "ok");
+  await loadFlowEndpointSetup();
 }
 
 async function loadFlows() {
@@ -1656,6 +1688,7 @@ async function selectFlow(id) {
   $("flowsSendName").textContent = f ? f.name : id;
 
   const detail = await api(`/api/flows/${encodeURIComponent(id)}`);
+  state.activeFlowDetail = detail.ok ? detail.flow : null;
   if (detail.ok && detail.flow && detail.flow.preview && detail.flow.preview.preview_url) {
     const a = $("flowPreviewLink");
     a.href = detail.flow.preview.preview_url;
@@ -1667,9 +1700,21 @@ async function selectFlow(id) {
 
 async function createFlowSample() {
   const sample = $("flowSampleSelect").value || "hello";
+  const s = state.flowSamples.find((x) => x.key === sample);
+  if (s && s.dynamic) {
+    const setup = await api("/api/flows/endpoint/setup");
+    if (!setup.endpointUri) {
+      toast("Configura PUBLIC_BASE_URL antes de crear un Flow dinámico.", "error");
+      return;
+    }
+  }
   const res = await post("/api/flows", { sample });
   if (!res.ok) { toast(res.error || "No se pudo crear el Flow.", "error"); return; }
-  toast("Flow creado en Meta.", "ok");
+  if (res.validation_errors && res.validation_errors.length) {
+    toast(res.validation_errors[0].message || res.error || "Flow JSON inválido.", "error");
+    return;
+  }
+  toast(res.endpointUri ? "Flow dinámico creado con endpoint." : "Flow creado en Meta.", "ok");
   await loadFlows();
   if (res.flow && res.flow.id) {
     if (res.defaultScreen) $("flowSendScreen").value = res.defaultScreen;
@@ -1683,11 +1728,13 @@ async function sendActiveFlow() {
   if (!id) { toast("Selecciona un Flow.", "error"); return; }
   const phone = $("flowSendPhone").value.trim();
   if (!phone) { toast("Ingresa un teléfono.", "error"); return; }
+  const isDynamic = state.activeFlowDetail && state.activeFlowDetail.endpoint_uri;
   const res = await post(`/api/flows/${encodeURIComponent(id)}/send`, {
     phone,
     bodyText: $("flowSendBody").value.trim(),
     cta: $("flowSendCta").value.trim(),
     screen: $("flowSendScreen").value.trim(),
+    flowAction: isDynamic ? "data_exchange" : undefined,
   });
   if (!res.ok) {
     toast(res.hint || res.error || "No se pudo enviar.", "error");
@@ -1722,7 +1769,7 @@ async function loadFlowResponses() {
 }
 
 async function initFlowsScreen() {
-  await Promise.all([loadFlowCapability(), loadFlowSamples(), loadFlows(), loadFlowResponses()]);
+  await Promise.all([loadFlowCapability(), loadFlowSamples(), loadFlowEndpointSetup(), loadFlows(), loadFlowResponses()]);
 }
 
 /* ---------- modals & nav ---------- */
@@ -1835,6 +1882,7 @@ function bindEvents() {
   $("flowSendBtn").addEventListener("click", sendActiveFlow);
   $("flowPublishBtn").addEventListener("click", publishActiveFlow);
   $("flowRefreshResponses").addEventListener("click", loadFlowResponses);
+  if ($("flowEndpointSetupBtn")) $("flowEndpointSetupBtn").addEventListener("click", setupFlowEndpoint);
   $("flowSampleSelect").addEventListener("change", updateFlowSampleDesc);
   $("detailTemplateBtn").addEventListener("click", () => openNewChat());
   $("detailToggle").addEventListener("click", () => $("detailPane").classList.toggle("collapsed"));

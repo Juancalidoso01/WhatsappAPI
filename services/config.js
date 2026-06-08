@@ -35,6 +35,14 @@ module.exports = Object.freeze({
   // Branding shown in the web interface
   brandName: process.env.BRAND_NAME || "Punto Pago",
 
+  // Public HTTPS base URL (required for WhatsApp Flow endpoint_uri)
+  publicBaseUrl: (() => {
+    const raw = process.env.PUBLIC_BASE_URL || process.env.VERCEL_URL || "";
+    if (!raw) return null;
+    const trimmed = String(raw).replace(/\/$/, "");
+    return trimmed.startsWith("http") ? trimmed : `https://${trimmed}`;
+  })(),
+
   // When false, the app never auto-replies; every message is handled by a human
   // from the web interface. Default off per product decision.
   botEnabled: process.env.BOT_ENABLED === "true",

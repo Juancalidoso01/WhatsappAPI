@@ -34,6 +34,9 @@ const reports = require('./services/reports');
 const templateBuilder = require('./services/template-builder');
 const FlowStore = require('./services/flow-store');
 const flowSamples = require('./services/flow-samples');
+const FlowKeys = require('./services/flow-keys');
+const { decryptRequest, encryptResponse, FlowEndpointException } = require('./services/flow-encryption');
+const { handleFlowRequest } = require('./services/flow-endpoint-handler');
 const app = express();
 
 const upload = multer({
@@ -193,6 +196,7 @@ app.get('/api/config', async (req, res) => {
     hasCredentials: Boolean(config.accessToken && config.phoneNumberId),
     templatesEnabled: Boolean(config.accessToken && config.wabaId),
     flowsEnabled: Boolean(config.accessToken && config.wabaId && config.phoneNumberId),
+    flowEndpointUri: config.publicBaseUrl ? `${config.publicBaseUrl}/api/flows/endpoint` : null,
     botEnabled: config.botEnabled,
     persistent: Store.isPersistent(),
     workspace: {
@@ -322,6 +326,62 @@ app.get('/api/reports/summary', async (req, res) => {
 });
 
 // ----- WhatsApp Flows -----
+
+async function ensureFlowEndpointReady() {
+  const base = config.publicBaseUrl;
+  if (!base) {
+    throw new Error('Configura PUBLIC_BASE_URL con la URL pública HTTPS de esta app (ej. https://tu-app.vercel.app).');
+  }
+  if (!config.phoneNumberId || !config.accessToken) {
+    throw new Error('Falta PHONE_NUMBER_ID o ACCESS_TOKEN para registrar la clave del endpoint.');
+  }
+  const { publicKey } = await FlowKeys.getKeyPair();
+  await GraphApi.uploadFlowPublicKey(config.phoneNumberId, publicKey);
+  return `${base}/api/flows/endpoint`;
+}
+
+app.post('/api/flows/endpoint', apiJson, async (req, res) => {
+  try {
+    const { privateKey } = await FlowKeys.getKeyPair();
+    const { decryptedBody, aesKeyBuffer, initialVectorBuffer } = decryptRequest(req.body, privateKey);
+    const responseBody = await handleFlowRequest(decryptedBody);
+    return res.status(200).type('text/plain').send(encryptResponse(responseBody, aesKeyBuffer, initialVectorBuffer));
+  } catch (err) {
+    if (err instanceof FlowEndpointException) {
+      return res.sendStatus(err.statusCode);
+    }
+    console.error('flow endpoint error:', err.message || err);
+    return res.sendStatus(500);
+  }
+});
+
+app.get('/api/flows/endpoint/setup', async (req, res) => {
+  try {
+    const keys = await FlowKeys.getKeyPair();
+    res.json({
+      ok: true,
+      endpointUri: config.publicBaseUrl ? `${config.publicBaseUrl}/api/flows/endpoint` : null,
+      hasPublicBaseUrl: Boolean(config.publicBaseUrl),
+      keySource: keys.source,
+      publicKeyRegistered: Boolean(config.phoneNumberId && config.accessToken),
+    });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: String(err.message || err) });
+  }
+});
+
+app.post('/api/flows/endpoint/setup', async (req, res) => {
+  if (!config.phoneNumberId || !config.accessToken) {
+    return res.status(400).json({ ok: false, error: 'Falta PHONE_NUMBER_ID o ACCESS_TOKEN.' });
+  }
+  try {
+    const endpointUri = await ensureFlowEndpointReady();
+    res.json({ ok: true, endpointUri, message: 'Clave pública registrada en Meta.' });
+  } catch (err) {
+    res.status(200).json({ ok: false, error: String(err.message || err) });
+  }
+});
+
 app.get('/api/flows/capability', async (req, res) => {
   const base = {
     ok: false,
@@ -356,7 +416,9 @@ app.get('/api/flows/capability', async (req, res) => {
     'Número de prueba Meta: puedes crear Flows y probarlos en borrador (mode draft) dentro de la ventana de 24 h.',
     'Enviar Flows publicados masivamente requiere WABA verificada y nombre de display aprobado.',
     'Si ves error 139000 (Integrity), completa verificación de negocio en Meta Business.',
-    'Flow dinámico con endpoint propio requiere URL pública + cifrado (fase 2).',
+    config.publicBaseUrl
+      ? `Endpoint dinámico disponible en ${config.publicBaseUrl}/api/flows/endpoint (sample quote).`
+      : 'Para Flows dinámicos configura PUBLIC_BASE_URL y registra la clave en la pantalla Flows.',
   );
 
   res.json(base);
@@ -407,7 +469,16 @@ app.post('/api/flows', apiJson, async (req, res) => {
     return res.status(400).json({ ok: false, error: 'Falta ACCESS_TOKEN o WABA_ID.' });
   }
   const tpl = flowSamples.getSample(sample || 'hello');
-  if (!tpl) return res.status(400).json({ ok: false, error: 'Sample no válido (hello | lead).' });
+  if (!tpl) return res.status(400).json({ ok: false, error: 'Sample no válido (hello | lead | quote).' });
+
+  let endpointUri;
+  if (tpl.dynamic) {
+    try {
+      endpointUri = await ensureFlowEndpointReady();
+    } catch (err) {
+      return res.json({ ok: false, error: String(err.message || err) });
+    }
+  }
 
   try {
     const result = await GraphApi.createFlow(config.wabaId, {
@@ -415,13 +486,26 @@ app.post('/api/flows', apiJson, async (req, res) => {
       categories: tpl.categories,
       flowJson: tpl.flow_json,
       publish: publish != null ? Boolean(publish) : tpl.publish,
+      endpointUri,
     });
+    const validationErrors = result.validation_errors || [];
+    if (validationErrors.length) {
+      const first = validationErrors[0];
+      return res.status(200).json({
+        ok: false,
+        error: first.message || first.error || 'Flow JSON inválido.',
+        validation_errors: validationErrors,
+        flow: result,
+      });
+    }
     res.status(201).json({
       ok: true,
       flow: result,
       sample: sample || 'hello',
       defaultScreen: tpl.defaultScreen,
       defaultCta: tpl.defaultCta,
+      flowAction: tpl.flowAction || 'navigate',
+      endpointUri: endpointUri || null,
     });
   } catch (err) {
     console.error('createFlow error:', err.message);
@@ -440,7 +524,7 @@ app.post('/api/flows/:id/publish', async (req, res) => {
 });
 
 app.post('/api/flows/:id/send', apiJson, async (req, res) => {
-  const { phone, bodyText, cta, screen, flowToken, mode } = req.body || {};
+  const { phone, bodyText, cta, screen, flowToken, mode, flowAction } = req.body || {};
   if (!phone) return res.status(400).json({ ok: false, error: 'Se requiere "phone".' });
   if (!config.phoneNumberId || !config.accessToken) {
     return res.status(400).json({ ok: false, error: 'Falta PHONE_NUMBER_ID o ACCESS_TOKEN.' });
@@ -448,24 +532,33 @@ app.post('/api/flows/:id/send', apiJson, async (req, res) => {
 
   let flowMeta;
   try {
-    flowMeta = await GraphApi.getFlow(req.params.id, 'id,name,status');
+    flowMeta = await GraphApi.getFlow(req.params.id, 'id,name,status,endpoint_uri');
   } catch (err) {
     return res.json({ ok: false, error: String(err.message || err) });
   }
 
   const sendMode = mode || (String(flowMeta.status).toUpperCase() === 'DRAFT' ? 'draft' : 'published');
+  const token = flowToken || `ptp_${req.params.id}_${Date.now()}`;
+  const action = flowAction || (flowMeta.endpoint_uri ? 'data_exchange' : 'navigate');
 
   try {
     const response = await GraphApi.sendFlowMessage(config.phoneNumberId, String(phone).replace(/\D/g, ''), {
       flowId: req.params.id,
-      flowToken: flowToken || `ptp_${req.params.id}_${Date.now()}`,
+      flowToken: token,
       cta,
       bodyText,
       screen,
       mode: sendMode === 'draft' ? 'draft' : undefined,
+      flowAction: action,
     });
     const wamid = waMessageId(response);
     const normPhone = String(phone).replace(/\D/g, '');
+    await FlowStore.recordSend({
+      phone: normPhone,
+      flowId: req.params.id,
+      flowToken: token,
+      mode: sendMode,
+    });
     const stored = await Store.addMessage({
       phone: normPhone,
       phoneNumberId: config.phoneNumberId,
@@ -475,7 +568,7 @@ app.post('/api/flows/:id/send', apiJson, async (req, res) => {
       status: 'sent',
       id: wamid,
     });
-    res.json({ ok: true, message: stored, response, mode: sendMode });
+    res.json({ ok: true, message: stored, response, mode: sendMode, flowAction: action });
   } catch (err) {
     const msg = String(err.message || err);
     const integrity = msg.includes('139000') || /integrity/i.test(msg);
@@ -710,6 +803,13 @@ app.get('/api/billing', async (req, res) => {
       console.error('billing template summary error:', tplErr.message);
     }
 
+    let flowStats = { sends: 0, responses: 0, endpointCalls: 0 };
+    try {
+      flowStats = await FlowStore.getStats();
+    } catch (flowErr) {
+      console.error('billing flow stats error:', flowErr.message);
+    }
+
     res.json({
       ok: true,
       days,
@@ -718,6 +818,11 @@ app.get('/api/billing', async (req, res) => {
       rows,
       totals: { cost: totalCost, volume: totalVolume, byCategory },
       templateSummary,
+      flowStats,
+      flowBillingNote:
+        'Los Flows enviados dentro de la ventana de 24 h son mensajes interactivos de servicio (gratis en Meta). '
+        + 'Si abres la conversación con plantilla, se factura como la categoría de esa plantilla. '
+        + 'Las métricas de Flows abajo son contadores internos de Punto Pago.',
     });
   } catch (err) {
     console.error('billing error:', err.message);

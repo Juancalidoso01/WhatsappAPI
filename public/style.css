@@ -635,7 +635,10 @@ input, textarea, select { font-family: inherit; }
 .flows-responses { font-size: 12px; max-height: 280px; overflow-y: auto; }
 .flow-resp-item { padding: 10px; border-bottom: 1px solid var(--border); }
 .flow-resp-item pre { margin: 6px 0 0; font-size: 11px; white-space: pre-wrap; word-break: break-word; }
-@media (max-width: 768px) { .flows-grid { grid-template-columns: 1fr; } }
+.flows-endpoint-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 8px; }
+.flows-endpoint-url { flex: 1; min-width: 200px; font-size: 11px; padding: 8px 10px; background: var(--surface-2); border-radius: 8px; word-break: break-all; }
+.billing-cards.flows-stats { grid-template-columns: repeat(3, 1fr); margin-top: 8px; }
+@media (max-width: 768px) { .billing-cards.flows-stats { grid-template-columns: 1fr; } }
 
 /* ---------- Toast ---------- */
 .toast {
