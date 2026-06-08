@@ -376,7 +376,7 @@
         <header class="pane-header flows-header">
           <div>
             <h1>Flows</h1>
-            <p class="muted flows-intro">Formularios interactivos dentro del chat. Aquí ves los Flows que ya creaste; usa «Agregar flujo» para armar uno nuevo.</p>
+            <p class="muted flows-intro">Formularios interactivos en el chat. Créalos con el editor visual; nosotros los traducimos al formato Meta.</p>
           </div>
         </header>
 
@@ -517,59 +517,78 @@
           </div>
         </section>
 
-        <!-- Panel: Crear (desde + Agregar flujo) -->
+        <!-- Panel: Crear (estudio visual tipo carrusel) -->
         <section class="flows-tab-panel hidden" id="flowsPanelCrear">
           <button type="button" id="flowCreateCancel" class="btn-ghost sm flow-create-back">← Volver a mis Flows</button>
-          <section class="flows-panel" id="flowCreateCategories">
-            <h2 class="section-title">Casos de uso con alto impacto</h2>
-            <p class="muted sm">Elige una categoría para crear tu Flow. Generamos un borrador en Meta y tú lo revisas antes de publicar.</p>
-            <div id="flowUseCaseGrid" class="flow-use-case-grid">Cargando categorías…</div>
-          </section>
 
-          <section class="flows-panel hidden" id="flowCreateCategoryDetail">
-            <button type="button" id="flowCreateBack" class="btn-ghost sm flow-create-back">← Todas las categorías</button>
-            <div class="flow-category-head">
-              <span id="flowCategoryIcon" class="flow-use-case-icon lg" aria-hidden="true"></span>
+          <section class="flows-panel flow-studio" id="flowStudioPanel">
+            <header class="flow-studio-top">
               <div>
-                <h2 class="section-title" id="flowCategoryTitle">—</h2>
-                <p class="muted sm" id="flowCategoryDesc"></p>
+                <h2 class="section-title">Crea tu Flow</h2>
+                <p class="muted sm">Arma las pantallas como un carrusel. Nosotros lo traducimos al formato que Meta exige.</p>
               </div>
+              <div class="flow-studio-top-actions">
+                <button type="button" id="fsPickerToggle" class="btn-ghost sm">Plantillas Punto Pago</button>
+                <button type="button" id="fsCreateBtn" class="btn-primary sm">Crear borrador en Meta</button>
+              </div>
+            </header>
+
+            <div id="flowCreatePicker" class="flow-create-picker hidden">
+              <p class="muted sm">Atajos listos para casos frecuentes (autorización de pago, encuestas, etc.)</p>
+              <div id="flowUseCaseGrid" class="flow-use-case-grid">Cargando…</div>
             </div>
 
-            <div id="flowCategoryTemplates" class="flow-category-templates"></div>
+            <div class="flow-studio-body">
+              <aside class="flow-studio-sidebar">
+                <h3 class="fs-sidebar-title">General</h3>
+                <label>Nombre interno
+                  <input id="fsName" type="text" placeholder="encuesta_bienvenida" maxlength="80" />
+                </label>
+                <label>Categoría Meta
+                  <select id="fsCategory"></select>
+                </label>
 
-            <details class="flows-builder-advanced" id="flowsBuilderAdvanced">
-              <summary>Personalizar desde cero (avanzado)</summary>
-              <section class="flows-builder" id="flowsBuilderPanel">
-                <p class="muted sm">Solo si necesitas armar pantallas a medida. La mayoría de equipos usan las plantillas de arriba.</p>
-                <div class="flows-form-grid fb-meta">
-                  <label>Nombre interno
-                    <input id="fbName" type="text" placeholder="encuesta_nps_marzo" maxlength="80" />
-                  </label>
-                  <label>Categoría Meta
-                    <select id="fbCategory"></select>
-                  </label>
-                  <label>Texto del botón
-                    <input id="fbCta" type="text" placeholder="Abrir" value="Abrir" />
-                  </label>
+                <h3 class="fs-sidebar-title">Mensaje en el chat</h3>
+                <p class="muted sm">Lo que verá el cliente antes de abrir el formulario (para la plantilla en Meta).</p>
+                <label>Texto del mensaje
+                  <textarea id="fsChatBody" rows="3" placeholder="Hola, completa este formulario para continuar."></textarea>
+                </label>
+                <label>Texto del botón
+                  <input id="fsCta" type="text" value="Abrir formulario" />
+                </label>
+
+                <h3 class="fs-sidebar-title">Esta pantalla</h3>
+                <div class="fs-layout-grid" id="fsLayoutGrid"></div>
+                <label>Título
+                  <input id="fsHeading" type="text" placeholder="Título claro y breve" />
+                </label>
+                <label>Texto
+                  <textarea id="fsBody" rows="4" placeholder="Explica en pocas líneas qué debe hacer la persona."></textarea>
+                </label>
+                <div id="fsFieldsBox" class="fs-fields-box hidden">
+                  <span class="fs-sidebar-title">Campos del formulario</span>
+                  <div id="fsFieldsList"></div>
+                  <button type="button" id="fsAddField" class="btn-ghost sm">+ Agregar campo</button>
                 </div>
-                <div class="fb-screens-head">
-                  <h3 class="fb-subtitle">Pantallas</h3>
-                  <div class="fb-screen-add">
-                    <button type="button" id="fbAddForm" class="btn-ghost sm">+ Formulario</button>
-                    <button type="button" id="fbAddMessage" class="btn-ghost sm">+ Mensaje</button>
-                    <button type="button" id="fbAddConfirm" class="btn-ghost sm">+ Confirmación</button>
-                  </div>
+                <label>Botón de la pantalla
+                  <input id="fsButton" type="text" value="Continuar" />
+                </label>
+                <fieldset class="fs-action-fieldset">
+                  <legend class="muted sm">Al tocar el botón</legend>
+                  <label class="fs-radio"><input type="radio" name="fsAction" value="next" checked /> Ir a la siguiente pantalla</label>
+                  <label class="fs-radio"><input type="radio" name="fsAction" value="complete" /> Terminar (última pantalla)</label>
+                </fieldset>
+              </aside>
+
+              <div class="flow-studio-canvas">
+                <div class="fs-strip-head">
+                  <button type="button" class="fs-view-btn active" data-fs-view="all">Todas las pantallas</button>
+                  <button type="button" class="fs-view-btn" data-fs-view="one">Editar una</button>
                 </div>
-                <div id="fbScreens" class="fb-screens"></div>
-                <div class="flows-builder-foot">
-                  <div id="fbPreview" class="fb-preview muted sm"></div>
-                  <div class="flows-actions">
-                    <button type="button" id="fbCreateBtn" class="btn-primary sm">Crear borrador en Meta</button>
-                  </div>
-                </div>
-              </section>
-            </details>
+                <div id="fsScreenStrip" class="fs-screen-strip"></div>
+                <div id="fsPreviewRow" class="fs-preview-row"></div>
+              </div>
+            </div>
           </section>
         </section>
 

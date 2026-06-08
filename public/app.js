@@ -776,12 +776,12 @@ function openFlowCreate() {
     $(id)?.classList.add("hidden");
   });
   $("flowsPanelCrear")?.classList.remove("hidden");
-  showFlowCreateStep("categories");
+  $("flowCreatePicker")?.classList.add("hidden");
+  initFlowStudio();
 }
 
 function closeFlowCreate() {
   state.activeUseCaseId = null;
-  showFlowCreateStep("categories");
   setFlowsTab("mis");
 }
 
@@ -1999,306 +1999,393 @@ async function loadFlowDetail(id) {
   $("flowsEmptyDetail").classList.add("hidden");
 }
 
-const fbState = {
+const fsState = {
   schema: null,
-  screens: [
-    {
-      type: "form",
-      title: "Formulario",
-      introHeading: "",
-      introBody: "",
-      footerLabel: "Enviar",
-      fields: [{ type: "text", label: "Nombre", required: true }],
-    },
-    {
-      type: "confirm",
-      title: "Gracias",
-      heading: "¡Listo!",
-      body: "Recibimos tu respuesta.",
-      footerLabel: "Cerrar",
-    },
-  ],
+  viewMode: "all",
+  activeIndex: 0,
+  screens: [],
 };
 
-const FB_SCREEN_LABELS = { form: "Formulario", message: "Mensaje", confirm: "Confirmación" };
+const FS_LAYOUTS = [
+  { id: "message", label: "Título y texto" },
+  { id: "form", label: "Formulario" },
+  { id: "confirm", label: "Pantalla final" },
+];
 
-async function initFlowBuilder() {
-  if (!fbState.schema) {
+function defaultFsScreens() {
+  return [
+    {
+      layout: "message",
+      title: "Paso 1",
+      heading: "Título claro",
+      body: "Usa texto breve. Explica qué debe hacer la persona en esta pantalla.",
+      buttonLabel: "Continuar",
+      buttonAction: "next",
+      fields: [],
+    },
+    {
+      layout: "message",
+      title: "Paso 2",
+      heading: "Más detalle",
+      body: "Puedes agregar imágenes o pasos extra en pantallas siguientes.",
+      buttonLabel: "Continuar",
+      buttonAction: "next",
+      fields: [],
+    },
+    {
+      layout: "confirm",
+      title: "Gracias",
+      heading: "¡Listo!",
+      body: "Recibimos tu respuesta. Te contactaremos pronto.",
+      buttonLabel: "Cerrar",
+      buttonAction: "complete",
+      fields: [],
+    },
+  ];
+}
+
+async function initFlowStudio() {
+  if (!fsState.schema) {
     const res = await api("/api/flows/builder/schema");
-    fbState.schema = (res && res.schema) || { fieldTypes: [], categories: [] };
-    const catSel = $("fbCategory");
+    fsState.schema = (res && res.schema) || { fieldTypes: [], categories: [], limits: { maxScreens: 8 } };
+    const catSel = $("fsCategory");
     if (catSel) {
-      catSel.innerHTML = (fbState.schema.categories || [])
+      catSel.innerHTML = (fsState.schema.categories || [])
         .map((c) => `<option value="${escapeHtml(c.id)}">${escapeHtml(c.label)}</option>`)
         .join("");
     }
   }
-  renderFbScreens();
-  updateFbPreview();
+  if (!fsState.screens.length) fsState.screens = defaultFsScreens();
+  fsState.activeIndex = 0;
+  fsState.viewMode = "all";
+  if ($("fsName") && !$("fsName").value) $("fsName").value = "";
+  if ($("fsChatBody") && !$("fsChatBody").value.trim()) {
+    $("fsChatBody").value = "Hola, completa este formulario para continuar.";
+  }
+  renderFlowStudio();
 }
 
-function fbFieldTypeOptions(selected) {
-  return (fbState.schema?.fieldTypes || [
+function fsActiveScreen() {
+  return fsState.screens[fsState.activeIndex] || fsState.screens[0];
+}
+
+function syncFsFromSidebar() {
+  const scr = fsActiveScreen();
+  if (!scr) return;
+  if ($("fsHeading")) scr.heading = $("fsHeading").value;
+  if ($("fsBody")) scr.body = $("fsBody").value;
+  if ($("fsButton")) scr.buttonLabel = $("fsButton").value;
+  const action = document.querySelector('input[name="fsAction"]:checked');
+  if (action) scr.buttonAction = action.value;
+  scr.title = scr.heading.slice(0, 40) || scr.title || `Paso ${fsState.activeIndex + 1}`;
+}
+
+function loadFsSidebarFromScreen() {
+  const scr = fsActiveScreen();
+  if (!scr) return;
+  if ($("fsHeading")) $("fsHeading").value = scr.heading || "";
+  if ($("fsBody")) $("fsBody").value = scr.body || "";
+  if ($("fsButton")) $("fsButton").value = scr.buttonLabel || "Continuar";
+  document.querySelectorAll('input[name="fsAction"]').forEach((r) => {
+    r.checked = r.value === (scr.buttonAction || "next");
+  });
+  document.querySelectorAll(".fs-layout-btn").forEach((b) =>
+    b.classList.toggle("active", b.dataset.layout === scr.layout)
+  );
+  const fieldsBox = $("fsFieldsBox");
+  if (fieldsBox) fieldsBox.classList.toggle("hidden", scr.layout !== "form");
+  renderFsFieldsList();
+}
+
+function renderFsLayoutGrid() {
+  const box = $("fsLayoutGrid");
+  if (!box) return;
+  const scr = fsActiveScreen();
+  box.innerHTML = FS_LAYOUTS.map((l) =>
+    `<button type="button" class="fs-layout-btn${scr && scr.layout === l.id ? " active" : ""}" data-layout="${l.id}">
+      <span class="fs-layout-icon"></span>${escapeHtml(l.label)}
+    </button>`
+  ).join("");
+  box.querySelectorAll(".fs-layout-btn").forEach((btn) =>
+    btn.addEventListener("click", () => {
+      syncFsFromSidebar();
+      const s = fsActiveScreen();
+      if (!s) return;
+      s.layout = btn.dataset.layout;
+      if (s.layout === "form" && !(s.fields || []).length) {
+        s.fields = [{ type: "text", label: "Nombre", required: true }];
+      }
+      if (s.layout === "confirm") {
+        s.buttonAction = "complete";
+        s.buttonLabel = s.buttonLabel || "Cerrar";
+      }
+      loadFsSidebarFromScreen();
+      renderFlowStudio();
+    })
+  );
+}
+
+function fsFieldTypeOptions(selected) {
+  return (fsState.schema?.fieldTypes || [
     { id: "text", label: "Texto" },
-    { id: "select", label: "Opciones" },
+    { id: "email", label: "Correo" },
     { id: "rating", label: "1–5" },
   ]).map((t) => `<option value="${escapeHtml(t.id)}"${t.id === selected ? " selected" : ""}>${escapeHtml(t.label)}</option>`).join("");
 }
 
-function renderFbScreens() {
-  const box = $("fbScreens");
-  if (!box) return;
-  box.innerHTML = fbState.screens.map((scr, si) => {
-    const typeLabel = FB_SCREEN_LABELS[scr.type] || scr.type;
-    let body = "";
-
-    if (scr.type === "form") {
-      const fields = (scr.fields || []).map((f, fi) => `
-        <div class="fb-field-row" data-si="${si}" data-fi="${fi}">
-          <select class="fb-f-type">${fbFieldTypeOptions(f.type)}</select>
-          <input class="fb-f-label" type="text" placeholder="Etiqueta del campo" value="${escapeHtml(f.label || "")}" />
-          <label class="fb-req"><input type="checkbox" class="fb-f-req" ${f.required ? "checked" : ""} /> Oblig.</label>
-          <button type="button" class="btn-ghost sm fb-f-remove" title="Quitar">×</button>
-          ${f.type === "select" ? `<div class="fb-options"><span class="muted">Opciones (una por línea)</span><textarea class="fb-f-opts">${escapeHtml((f.options || []).join("\n"))}</textarea></div>` : ""}
-        </div>`).join("");
-      body = `
-        <div class="fb-message-fields">
-          <input class="fb-intro-h" type="text" placeholder="Título introductorio (opcional)" value="${escapeHtml(scr.introHeading || "")}" />
-          <input class="fb-intro-b" type="text" placeholder="Texto introductorio (opcional)" value="${escapeHtml(scr.introBody || "")}" />
-        </div>
-        <div class="fb-field-list">${fields}</div>
-        <button type="button" class="btn-ghost sm fb-add-field" data-si="${si}">+ Campo</button>
-        <label class="sm" style="margin-top:10px;display:block">Botón
-          <input class="fb-footer" type="text" value="${escapeHtml(scr.footerLabel || "Continuar")}" />
-        </label>`;
-    } else if (scr.type === "message") {
-      body = `
-        <div class="fb-message-fields">
-          <input class="fb-heading" type="text" placeholder="Título" value="${escapeHtml(scr.heading || "")}" />
-          <input class="fb-body" type="text" placeholder="Mensaje" value="${escapeHtml(scr.body || "")}" />
-          <input class="fb-link-url" type="url" placeholder="Link (opcional, ej. tienda de apps)" value="${escapeHtml(scr.linkUrl || "")}" />
-          <input class="fb-link-label" type="text" placeholder="Texto del link" value="${escapeHtml(scr.linkLabel || "")}" />
-          <label class="sm">Botón
-            <input class="fb-footer" type="text" value="${escapeHtml(scr.footerLabel || "Continuar")}" />
-          </label>
-        </div>`;
-    } else {
-      body = `
-        <div class="fb-message-fields">
-          <input class="fb-heading" type="text" placeholder="Título" value="${escapeHtml(scr.heading || "")}" />
-          <input class="fb-body" type="text" placeholder="Mensaje de agradecimiento" value="${escapeHtml(scr.body || "")}" />
-          <label class="sm">Botón final
-            <input class="fb-footer" type="text" value="${escapeHtml(scr.footerLabel || "Cerrar")}" />
-          </label>
-        </div>`;
-    }
-
-    return `
-      <div class="fb-screen" data-si="${si}">
-        <div class="fb-screen-head">
-          <span class="fb-screen-type">${escapeHtml(typeLabel)}</span>
-          <input class="fb-title" type="text" value="${escapeHtml(scr.title || "")}" placeholder="Título de pantalla" />
-          <div class="fb-screen-actions">
-            <button type="button" class="btn-ghost sm fb-up" data-si="${si}" title="Subir" ${si === 0 ? "disabled" : ""}>↑</button>
-            <button type="button" class="btn-ghost sm fb-down" data-si="${si}" title="Bajar" ${si === fbState.screens.length - 1 ? "disabled" : ""}>↓</button>
-            <button type="button" class="btn-ghost sm fb-del-screen" data-si="${si}" title="Eliminar">×</button>
-          </div>
-        </div>
-        ${body}
-      </div>`;
-  }).join("");
-
-  box.querySelectorAll(".fb-f-type").forEach((sel) => {
-    sel.addEventListener("change", () => { syncFbFromDom(); renderFbScreens(); updateFbPreview(); });
-  });
-  box.querySelectorAll("input, textarea, select").forEach((el) => {
-    if (el.classList.contains("fb-f-type")) return;
-    el.addEventListener("input", () => { syncFbFromDom(); updateFbPreview(); });
-    el.addEventListener("change", () => { syncFbFromDom(); updateFbPreview(); });
-  });
-  box.querySelectorAll(".fb-add-field").forEach((btn) => {
+function renderFsFieldsList() {
+  const box = $("fsFieldsList");
+  const scr = fsActiveScreen();
+  if (!box || !scr || scr.layout !== "form") return;
+  scr.fields = scr.fields || [];
+  box.innerHTML = scr.fields.map((f, fi) => `
+    <div class="fs-field-row" data-fi="${fi}">
+      <input type="text" class="fs-f-label" placeholder="Etiqueta" value="${escapeHtml(f.label || "")}" />
+      <select class="fs-f-type">${fsFieldTypeOptions(f.type)}</select>
+      <button type="button" class="btn-ghost sm fs-f-remove">×</button>
+    </div>`).join("");
+  box.querySelectorAll(".fs-f-label, .fs-f-type").forEach((el) =>
+    el.addEventListener("input", syncFsFieldsFromDom)
+  );
+  box.querySelectorAll(".fs-f-type").forEach((el) =>
+    el.addEventListener("change", syncFsFieldsFromDom)
+  );
+  box.querySelectorAll(".fs-f-remove").forEach((btn) => {
     btn.addEventListener("click", () => {
-      syncFbFromDom();
-      const si = Number(btn.dataset.si);
-      fbState.screens[si].fields = fbState.screens[si].fields || [];
-      fbState.screens[si].fields.push({ type: "text", label: "", required: false });
-      renderFbScreens();
-      updateFbPreview();
-    });
-  });
-  box.querySelectorAll(".fb-f-remove").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      syncFbFromDom();
-      const row = btn.closest(".fb-field-row");
-      const si = Number(row.dataset.si);
-      const fi = Number(row.dataset.fi);
-      fbState.screens[si].fields.splice(fi, 1);
-      renderFbScreens();
-      updateFbPreview();
-    });
-  });
-  box.querySelectorAll(".fb-up").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      syncFbFromDom();
-      const i = Number(btn.dataset.si);
-      if (i <= 0) return;
-      [fbState.screens[i - 1], fbState.screens[i]] = [fbState.screens[i], fbState.screens[i - 1]];
-      renderFbScreens();
-      updateFbPreview();
-    });
-  });
-  box.querySelectorAll(".fb-down").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      syncFbFromDom();
-      const i = Number(btn.dataset.si);
-      if (i >= fbState.screens.length - 1) return;
-      [fbState.screens[i + 1], fbState.screens[i]] = [fbState.screens[i], fbState.screens[i + 1]];
-      renderFbScreens();
-      updateFbPreview();
-    });
-  });
-  box.querySelectorAll(".fb-del-screen").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      syncFbFromDom();
-      const i = Number(btn.dataset.si);
-      if (fbState.screens.length <= 1) { toast("Debe quedar al menos una pantalla.", "error"); return; }
-      fbState.screens.splice(i, 1);
-      renderFbScreens();
-      updateFbPreview();
+      syncFsFieldsFromDom();
+      const fi = Number(btn.closest(".fs-field-row").dataset.fi);
+      scr.fields.splice(fi, 1);
+      renderFsFieldsList();
+      renderFlowStudio();
     });
   });
 }
 
-function syncFbFromDom() {
-  const box = $("fbScreens");
-  if (!box) return;
-  box.querySelectorAll(".fb-screen").forEach((el) => {
-    const si = Number(el.dataset.si);
-    const scr = fbState.screens[si];
-    if (!scr) return;
-    scr.title = (el.querySelector(".fb-title") || {}).value || scr.title;
-    if (scr.type === "form") {
-      scr.introHeading = (el.querySelector(".fb-intro-h") || {}).value || "";
-      scr.introBody = (el.querySelector(".fb-intro-b") || {}).value || "";
-      scr.footerLabel = (el.querySelector(".fb-footer") || {}).value || "Enviar";
-      scr.fields = [];
-      el.querySelectorAll(".fb-field-row").forEach((row) => {
-        const type = (row.querySelector(".fb-f-type") || {}).value || "text";
-        const label = (row.querySelector(".fb-f-label") || {}).value || "";
-        const required = (row.querySelector(".fb-f-req") || {}).checked;
-        const field = { type, label, required };
-        if (type === "select") {
-          const raw = (row.querySelector(".fb-f-opts") || {}).value || "";
-          field.options = raw.split("\n").map((s) => s.trim()).filter(Boolean);
-        }
-        scr.fields.push(field);
+function syncFsFieldsFromDom() {
+  const scr = fsActiveScreen();
+  const box = $("fsFieldsList");
+  if (!scr || !box || scr.layout !== "form") return;
+  scr.fields = [];
+  box.querySelectorAll(".fs-field-row").forEach((row) => {
+    scr.fields.push({
+      type: (row.querySelector(".fs-f-type") || {}).value || "text",
+      label: (row.querySelector(".fs-f-label") || {}).value || "",
+      required: true,
+    });
+  });
+}
+
+function renderFsPhonePreview(scr, index, editing) {
+  const isLast = index === fsState.screens.length - 1;
+  const btnLabel = scr.buttonLabel || (isLast ? "Cerrar" : "Continuar");
+  let bodyHtml = "";
+  if (scr.layout === "form" && (scr.fields || []).length) {
+    bodyHtml = (scr.fields || []).map((f) =>
+      `<p style="margin:8px 0;padding:10px;border:1px solid #e9edef;border-radius:8px;font-size:12px;color:#667781">${escapeHtml(f.label || "Campo")}</p>`
+    ).join("");
+  }
+  return `
+    <div class="fs-phone-wrap${editing ? " editing" : ""}" data-fs-i="${index}">
+      <div class="flow-phone fs-phone-mini">
+        <div class="flow-phone-nav">
+          <span class="flow-phone-cancel">✕</span>
+          <span class="flow-phone-title">${escapeHtml(scr.title || `Paso ${index + 1}`)}</span>
+          <span class="flow-phone-menu">⋯</span>
+        </div>
+        <div class="flow-phone-body">
+          <h3>${escapeHtml(scr.heading || "Título")}</h3>
+          <p>${escapeHtml(scr.body || "Texto de la pantalla…")}</p>
+          ${bodyHtml}
+        </div>
+        <div class="flow-phone-footer">
+          <button type="button">${escapeHtml(btnLabel)}</button>
+        </div>
+      </div>
+      <div class="fs-phone-dots">${fsState.screens.map((_, i) =>
+        `<span class="${i === index ? "on" : ""}"></span>`
+      ).join("")}</div>
+    </div>`;
+}
+
+function renderFlowStudio() {
+  renderFsLayoutGrid();
+  loadFsSidebarFromScreen();
+
+  const strip = $("fsScreenStrip");
+  const row = $("fsPreviewRow");
+  if (!strip || !row) return;
+
+  const max = fsState.schema?.limits?.maxScreens || 8;
+  strip.innerHTML = fsState.screens.map((scr, i) =>
+    `<button type="button" class="fs-thumb${i === fsState.activeIndex ? " active" : ""}" data-fs-i="${i}" title="${escapeHtml(scr.title || "")}">
+      <div class="fs-thumb-inner">${escapeHtml((scr.heading || scr.title || "Pantalla").slice(0, 24))}</div>
+    </button>`
+  ).join("")
+    + (fsState.screens.length < max
+      ? `<button type="button" class="fs-thumb-add" id="fsAddScreen" title="Agregar pantalla">+</button>`
+      : "");
+
+  strip.querySelectorAll(".fs-thumb").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      syncFsFromSidebar();
+      syncFsFieldsFromDom();
+      fsState.activeIndex = Number(btn.dataset.fsI);
+      fsState.viewMode = "one";
+      document.querySelectorAll(".fs-view-btn").forEach((b) =>
+        b.classList.toggle("active", b.dataset.fsView === "one")
+      );
+      renderFlowStudio();
+    });
+  });
+  const addBtn = $("fsAddScreen");
+  if (addBtn) addBtn.addEventListener("click", fsAddScreen);
+
+  row.className = "fs-preview-row" + (fsState.viewMode === "one" ? " single" : "");
+  if (fsState.viewMode === "one") {
+    row.innerHTML = renderFsPhonePreview(fsActiveScreen(), fsState.activeIndex, true);
+  } else {
+    row.innerHTML = fsState.screens.map((scr, i) =>
+      renderFsPhonePreview(scr, i, i === fsState.activeIndex)
+    ).join("")
+      + (fsState.screens.length < max
+        ? `<button type="button" class="fs-thumb-add" style="width:240px;height:320px;font-size:32px" id="fsAddScreenRow">+</button>`
+        : "");
+    row.querySelectorAll(".fs-phone-wrap").forEach((el) => {
+      el.addEventListener("click", () => {
+        syncFsFromSidebar();
+        fsState.activeIndex = Number(el.dataset.fsI);
+        fsState.viewMode = "one";
+        document.querySelectorAll(".fs-view-btn").forEach((b) =>
+          b.classList.toggle("active", b.dataset.fsView === "one")
+        );
+        renderFlowStudio();
       });
-    } else if (scr.type === "message") {
-      scr.heading = (el.querySelector(".fb-heading") || {}).value || "";
-      scr.body = (el.querySelector(".fb-body") || {}).value || "";
-      scr.linkUrl = (el.querySelector(".fb-link-url") || {}).value || "";
-      scr.linkLabel = (el.querySelector(".fb-link-label") || {}).value || "";
-      scr.footerLabel = (el.querySelector(".fb-footer") || {}).value || "Continuar";
-    } else {
-      scr.heading = (el.querySelector(".fb-heading") || {}).value || "";
-      scr.body = (el.querySelector(".fb-body") || {}).value || "";
-      scr.footerLabel = (el.querySelector(".fb-footer") || {}).value || "Cerrar";
-    }
-  });
+    });
+    const addRow = $("fsAddScreenRow");
+    if (addRow) addRow.addEventListener("click", fsAddScreen);
+  }
 }
 
-function collectFbDefinition() {
-  syncFbFromDom();
+function fsAddScreen() {
+  syncFsFromSidebar();
+  syncFsFieldsFromDom();
+  const max = fsState.schema?.limits?.maxScreens || 8;
+  if (fsState.screens.length >= max) {
+    toast(`Máximo ${max} pantallas.`, "error");
+    return;
+  }
+  const confirmIdx = fsState.screens.findIndex((s) => s.layout === "confirm");
+  const insertAt = confirmIdx >= 0 ? confirmIdx : fsState.screens.length;
+  fsState.screens.splice(insertAt, 0, {
+    layout: "message",
+    title: `Paso ${insertAt + 1}`,
+    heading: "Nueva pantalla",
+    body: "Describe aquí el contenido.",
+    buttonLabel: "Continuar",
+    buttonAction: "next",
+    fields: [],
+  });
+  fsState.activeIndex = insertAt;
+  renderFlowStudio();
+}
+
+function fsRemoveScreen(index) {
+  if (fsState.screens.length <= 1) {
+    toast("Debe quedar al menos una pantalla.", "error");
+    return;
+  }
+  fsState.screens.splice(index, 1);
+  if (fsState.activeIndex >= fsState.screens.length) {
+    fsState.activeIndex = fsState.screens.length - 1;
+  }
+  renderFlowStudio();
+}
+
+function collectFsDefinition() {
+  syncFsFromSidebar();
+  syncFsFieldsFromDom();
+  const screens = fsState.screens.map((s, i) => {
+    const isLast = i === fsState.screens.length - 1;
+    if (s.layout === "form") {
+      return {
+        type: "form",
+        title: s.title || `Paso ${i + 1}`,
+        introHeading: s.heading,
+        introBody: s.body,
+        footerLabel: s.buttonLabel || "Enviar",
+        fields: (s.fields && s.fields.length)
+          ? s.fields.map((f) => ({ ...f }))
+          : [{ type: "text", label: "Respuesta", required: true }],
+      };
+    }
+    if (s.layout === "confirm" || (isLast && s.buttonAction === "complete")) {
+      return {
+        type: "confirm",
+        title: s.title || "Gracias",
+        heading: s.heading,
+        body: s.body,
+        footerLabel: s.buttonLabel || "Cerrar",
+      };
+    }
+    return {
+      type: "message",
+      title: s.title || `Paso ${i + 1}`,
+      heading: s.heading,
+      body: s.body,
+      footerLabel: s.buttonLabel || (isLast ? "Cerrar" : "Continuar"),
+    };
+  });
+  const hasConfirm = screens.some((s) => s.type === "confirm");
+  if (!hasConfirm && screens.length) {
+    const last = screens[screens.length - 1];
+    if (last.type === "message") last.footerLabel = last.footerLabel || "Cerrar";
+  }
   return {
-    name: ($("fbName") || {}).value.trim(),
-    category: ($("fbCategory") || {}).value || "OTHER",
-    cta: ($("fbCta") || {}).value.trim() || "Abrir",
+    name: ($("fsName") || {}).value.trim(),
+    category: ($("fsCategory") || {}).value || "OTHER",
+    cta: ($("fsCta") || {}).value.trim() || "Abrir formulario",
+    chatBody: ($("fsChatBody") || {}).value.trim(),
     publish: false,
-    screens: fbState.screens.map((s) => ({ ...s, fields: s.fields ? s.fields.map((f) => ({ ...f })) : undefined })),
+    screens,
   };
 }
 
-function updateFbPreview() {
-  const box = $("fbPreview");
-  if (!box) return;
-  syncFbFromDom();
-  const lines = fbState.screens.map((scr, i) => {
-    const t = FB_SCREEN_LABELS[scr.type] || scr.type;
-    if (scr.type === "form") {
-      const fs = (scr.fields || []).map((f) => `  · ${f.label || "(sin etiqueta)"}${f.required ? " *" : ""}`).join("\n");
-      return `${i + 1}. ${t}: ${scr.title || "—"}\n${fs || "  (sin campos)"}`;
-    }
-    if (scr.type === "message") {
-      return `${i + 1}. ${t}: ${scr.title || "—"}\n  ${scr.heading || ""} ${scr.body || ""}${scr.linkUrl ? `\n  Link: ${scr.linkUrl}` : ""}`;
-    }
-    return `${i + 1}. ${t}: ${scr.title || "—"}\n  ${scr.heading || ""} ${scr.body || ""}`;
-  });
-  box.textContent = lines.join("\n\n") || "Agrega pantallas para ver la vista previa.";
-}
-
-function fbAddScreen(type) {
-  syncFbFromDom();
-  const limits = fbState.schema?.limits || { maxScreens: 8 };
-  if (fbState.screens.length >= limits.maxScreens) {
-    toast(`Máximo ${limits.maxScreens} pantallas.`, "error");
+async function createFlowFromStudio() {
+  const def = collectFsDefinition();
+  if (!def.name) {
+    toast("Ingresa un nombre interno para el Flow.", "error");
+    $("fsName")?.focus();
     return;
   }
-  if (type === "form") {
-    fbState.screens.push({
-      type: "form",
-      title: "Nuevo formulario",
-      introHeading: "",
-      introBody: "",
-      footerLabel: "Continuar",
-      fields: [{ type: "text", label: "Campo", required: false }],
-    });
-  } else if (type === "message") {
-    fbState.screens.push({
-      type: "message",
-      title: "Mensaje",
-      heading: "",
-      body: "",
-      linkUrl: "",
-      linkLabel: "",
-      footerLabel: "Continuar",
-    });
-  } else {
-    const hasConfirm = fbState.screens.some((s) => s.type === "confirm");
-    if (hasConfirm) {
-      const idx = fbState.screens.findIndex((s) => s.type === "confirm");
-      fbState.screens[idx] = {
-        type: "confirm",
-        title: "Gracias",
-        heading: "¡Listo!",
-        body: "Recibimos tu respuesta.",
-        footerLabel: "Cerrar",
-      };
-    } else {
-      fbState.screens.push({
-        type: "confirm",
-        title: "Gracias",
-        heading: "¡Listo!",
-        body: "Recibimos tu respuesta.",
-        footerLabel: "Cerrar",
-      });
-    }
-  }
-  renderFbScreens();
-  updateFbPreview();
-}
-
-async function createFlowFromBuilder() {
-  const def = collectFbDefinition();
-  if (!def.name) { toast("Ingresa un nombre interno para el Flow.", "error"); return; }
   const res = await post("/api/flows/build", def);
   if (!res.ok) { toast(res.error || "No se pudo crear el Flow.", "error"); return; }
-  toast("Flow creado en borrador.", "ok");
+  toast("Flow creado en Meta. Ahora puedes solicitar la plantilla del mensaje.", "ok");
   await loadFlows();
+  closeFlowCreate();
   if (res.flow && res.flow.id) {
     if (res.defaultScreen) $("flowSendScreen").value = res.defaultScreen;
     if (res.defaultCta) $("flowSendCta").value = res.defaultCta;
     selectFlow(res.flow.id);
+    openTemplateFromFlow(def);
   }
+}
+
+function openTemplateFromFlow(def) {
+  const slug = def.name.replace(/[^a-z0-9_]/gi, "_").slice(0, 40);
+  initTemplateModal().then(() => {
+    if ($("tpName")) $("tpName").value = `${slug}_mensaje`;
+    if ($("tpBody")) $("tpBody").value = def.chatBody || "Completa el formulario para continuar.";
+    if ($("tpFooter")) $("tpFooter").value = "Punto Pago";
+    renderTpVarList([]);
+    $("tpVarsSection")?.classList.add("hidden");
+    updateTpPreview();
+    showModal("modalTemplate");
+    toast("Revisa el mensaje y créalo en Meta para vincularlo al Flow.", "ok");
+  });
+}
+
+async function initFlowBuilder() {
+  await initFlowStudio();
 }
 
 async function loadPaymentAuthPanel() {
@@ -2397,79 +2484,33 @@ function renderFlowUseCaseGrid() {
   const box = $("flowUseCaseGrid");
   if (!box) return;
   if (!state.flowUseCases.length) {
-    box.innerHTML = `<p class="muted">No hay categorías disponibles.</p>`;
+    box.innerHTML = `<p class="muted">No hay plantillas disponibles.</p>`;
     return;
   }
-  box.innerHTML = state.flowUseCases.map((u) => {
-    const soon = u.status === "soon";
-    const badge = soon
-      ? `<span class="flow-use-case-badge soon">Próximamente</span>`
-      : `<span class="flow-use-case-badge ok">${u.templateCount} plantilla${u.templateCount === 1 ? "" : "s"}</span>`;
-    return `<button type="button" class="flow-use-case-row${soon ? " soon" : ""}" data-use-case="${escapeHtml(u.id)}" ${soon ? "" : ""}>
-      ${flowUseCaseIconHtml(u.icon)}
-      <span class="flow-use-case-copy">
-        <strong>${escapeHtml(u.label)}</strong>
-        <span>${escapeHtml(u.description)}</span>
-      </span>
-      ${badge}
-    </button>`;
-  }).join("");
-  box.querySelectorAll(".flow-use-case-row:not(.soon)").forEach((btn) =>
-    btn.addEventListener("click", () => openFlowUseCase(btn.dataset.useCase))
-  );
-  box.querySelectorAll(".flow-use-case-row.soon").forEach((btn) =>
-    btn.addEventListener("click", () => openFlowUseCase(btn.dataset.useCase))
-  );
-}
-
-function showFlowCreateStep(step) {
-  const categories = $("flowCreateCategories");
-  const detail = $("flowCreateCategoryDetail");
-  if (categories) categories.classList.toggle("hidden", step !== "categories");
-  if (detail) detail.classList.toggle("hidden", step !== "detail");
-}
-
-function openFlowUseCase(id) {
-  const u = state.flowUseCases.find((x) => x.id === id);
-  if (!u) return;
-  state.activeUseCaseId = id;
-  if ($("flowCategoryTitle")) $("flowCategoryTitle").textContent = u.label;
-  if ($("flowCategoryDesc")) $("flowCategoryDesc").textContent = u.description;
-  const iconEl = $("flowCategoryIcon");
-  if (iconEl) iconEl.innerHTML = FLOW_USE_CASE_ICONS[u.icon] || FLOW_USE_CASE_ICONS.cart;
-
-  const tplBox = $("flowCategoryTemplates");
-  if (tplBox) {
-    if (u.status === "soon" || !u.templates || !u.templates.length) {
-      tplBox.innerHTML = `
-        <div class="flow-category-soon">
-          <p><strong>Próximamente en Punto Pago</strong></p>
-          <p class="muted sm">Estamos preparando plantillas para este caso de uso. Mientras tanto, contáctanos si necesitas implementarlo con prioridad.</p>
-        </div>`;
-    } else {
-      tplBox.innerHTML = u.templates.map((t) => `
-        <article class="flow-template-card${u.featured && t.key === "payment_auth" ? " featured" : ""}">
+  const cards = [];
+  state.flowUseCases.forEach((u) => {
+    if (u.status === "soon" || !u.templates || !u.templates.length) return;
+    u.templates.forEach((t) => {
+      cards.push(`
+        <article class="flow-template-card${t.key === "payment_auth" ? " featured" : ""}">
           <h3>${escapeHtml(t.name || t.key)}</h3>
-          <p>${escapeHtml(t.description || "")}</p>
+          <p class="muted sm">${escapeHtml(u.label)} · ${escapeHtml(t.description || "")}</p>
           <div class="flows-actions">
-            <button type="button" class="btn-primary sm flow-create-sample" data-sample="${escapeHtml(t.key)}">Crear borrador en Meta</button>
-            ${t.key === "payment_auth" ? `<button type="button" class="btn-ghost sm flow-go-probar">Probar en WhatsApp</button>` : ""}
+            <button type="button" class="btn-primary sm flow-create-sample" data-sample="${escapeHtml(t.key)}">Crear en Meta</button>
+            ${t.key === "payment_auth" ? `<button type="button" class="btn-ghost sm flow-go-probar">Probar</button>` : ""}
           </div>
-        </article>`).join("");
-      tplBox.querySelectorAll(".flow-create-sample").forEach((btn) =>
-        btn.addEventListener("click", () => createFlowSampleKey(btn.dataset.sample))
-      );
-      tplBox.querySelectorAll(".flow-go-probar").forEach((btn) =>
-        btn.addEventListener("click", () => openFlowProbar())
-      );
-    }
-  }
-  showFlowCreateStep("detail");
-}
-
-function backToFlowCategories() {
-  state.activeUseCaseId = null;
-  showFlowCreateStep("categories");
+        </article>`);
+    });
+  });
+  box.innerHTML = cards.length
+    ? cards.join("")
+    : `<p class="muted">Plantillas en camino. Usa el editor visual de arriba.</p>`;
+  box.querySelectorAll(".flow-create-sample").forEach((btn) =>
+    btn.addEventListener("click", () => createFlowSampleKey(btn.dataset.sample))
+  );
+  box.querySelectorAll(".flow-go-probar").forEach((btn) =>
+    btn.addEventListener("click", () => openFlowProbar())
+  );
 }
 
 async function loadFlowEndpointSetup() {
@@ -2902,8 +2943,41 @@ function bindEvents() {
   );
   const flowsConfigBtn = $("flowsConfigBtn");
   if (flowsConfigBtn) flowsConfigBtn.addEventListener("click", openFlowsConfigModal);
-  const flowCreateBack = $("flowCreateBack");
-  if (flowCreateBack) flowCreateBack.addEventListener("click", backToFlowCategories);
+  const fsCreateBtn = $("fsCreateBtn");
+  if (fsCreateBtn) fsCreateBtn.addEventListener("click", createFlowFromStudio);
+  const fsPickerToggle = $("fsPickerToggle");
+  if (fsPickerToggle) {
+    fsPickerToggle.addEventListener("click", () => $("flowCreatePicker")?.classList.toggle("hidden"));
+  }
+  document.querySelectorAll(".fs-view-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      syncFsFromSidebar();
+      fsState.viewMode = btn.dataset.fsView || "all";
+      document.querySelectorAll(".fs-view-btn").forEach((b) =>
+        b.classList.toggle("active", b.dataset.fsView === fsState.viewMode)
+      );
+      renderFlowStudio();
+    });
+  });
+  ["fsHeading", "fsBody", "fsButton"].forEach((id) => {
+    const el = $(id);
+    if (el) el.addEventListener("input", () => { syncFsFromSidebar(); renderFlowStudio(); });
+  });
+  document.querySelectorAll('input[name="fsAction"]').forEach((el) =>
+    el.addEventListener("change", () => { syncFsFromSidebar(); renderFlowStudio(); })
+  );
+  const fsAddField = $("fsAddField");
+  if (fsAddField) {
+    fsAddField.addEventListener("click", () => {
+      syncFsFieldsFromDom();
+      const scr = fsActiveScreen();
+      if (!scr || scr.layout !== "form") return;
+      scr.fields = scr.fields || [];
+      scr.fields.push({ type: "text", label: "", required: true });
+      renderFsFieldsList();
+      renderFlowStudio();
+    });
+  }
   ["payAuthCustomerName", "payAuthMerchant", "payAuthAmount", "payAuthCard4"].forEach((id) => {
     const el = $(id);
     if (el) el.addEventListener("input", () => { updatePayAuthPreview(); updatePayAuthFlowPreview(); });
@@ -2952,10 +3026,6 @@ function bindEvents() {
   $("flowPublishBtn")?.addEventListener("click", publishActiveFlow);
   $("flowRefreshResponses")?.addEventListener("click", loadFlowActivity);
   if ($("flowEndpointSetupBtn")) $("flowEndpointSetupBtn").addEventListener("click", setupFlowEndpoint);
-  if ($("fbAddForm")) $("fbAddForm").addEventListener("click", () => fbAddScreen("form"));
-  if ($("fbAddMessage")) $("fbAddMessage").addEventListener("click", () => fbAddScreen("message"));
-  if ($("fbAddConfirm")) $("fbAddConfirm").addEventListener("click", () => fbAddScreen("confirm"));
-  if ($("fbCreateBtn")) $("fbCreateBtn").addEventListener("click", createFlowFromBuilder);
   if ($("payAuthSendBtn")) $("payAuthSendBtn").addEventListener("click", sendPaymentAuthTest);
   $("detailTemplateBtn").addEventListener("click", () => openNewChat());
   $("detailToggle").addEventListener("click", () => $("detailPane").classList.toggle("collapsed"));
