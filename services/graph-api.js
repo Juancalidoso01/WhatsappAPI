@@ -121,6 +121,56 @@ module.exports = class GraphApi {
     return json;
   }
 
+  // --- WhatsApp Business profile (what clients see) ---
+  static async getBusinessProfile(phoneNumberId) {
+    const id = phoneNumberId || config.phoneNumberId;
+    if (!id || !config.accessToken) {
+      throw new Error("PHONE_NUMBER_ID o ACCESS_TOKEN no configurados.");
+    }
+    const fields = [
+      "about",
+      "address",
+      "description",
+      "email",
+      "profile_picture_url",
+      "websites",
+      "vertical",
+    ].join(",");
+    const url = `https://graph.facebook.com/v21.0/${id}/whatsapp_business_profile?fields=${encodeURIComponent(fields)}&access_token=${config.accessToken}`;
+    const res = await fetch(url);
+    const json = await res.json();
+    if (json.error) {
+      throw new Error(json.error.error_user_msg || json.error.message || "Error al leer perfil de WhatsApp.");
+    }
+    return json.data && json.data[0] ? json.data[0] : json;
+  }
+
+  static async updateBusinessProfile(phoneNumberId, { about, description, email, websites, address, vertical }) {
+    const id = phoneNumberId || config.phoneNumberId;
+    if (!id || !config.accessToken) {
+      throw new Error("PHONE_NUMBER_ID o ACCESS_TOKEN no configurados.");
+    }
+    const body = { messaging_product: "whatsapp" };
+    if (about != null) body.about = String(about).slice(0, 139);
+    if (description != null) body.description = String(description).slice(0, 512);
+    if (email != null) body.email = String(email);
+    if (address != null) body.address = String(address);
+    if (vertical != null) body.vertical = String(vertical);
+    if (Array.isArray(websites)) body.websites = websites.map(String).slice(0, 2);
+
+    const url = `https://graph.facebook.com/v21.0/${id}/whatsapp_business_profile?access_token=${config.accessToken}`;
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const json = await res.json();
+    if (json.error) {
+      throw new Error(json.error.error_user_msg || json.error.message || "Error al actualizar perfil.");
+    }
+    return json;
+  }
+
   // --- Phone line health: quality rating + daily unique messaging limit ---
   static async getPhoneLineHealth(phoneNumberId) {
     const id = phoneNumberId || config.phoneNumberId;

@@ -31,7 +31,26 @@
         <svg viewBox="0 0 24 24" fill-rule="evenodd"><path d="M4 4h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2zm0 4v2.2h16V8H4zm2 5.4v2h6v-2H6zm9 0v2h3v-2h-3z"/></svg>
       </button>
       <span class="rail-spacer"></span>
-      <span id="connDot" class="conn-dot" title="Estado de conexión"></span>
+      <div class="workspace-hub-wrap">
+        <button type="button" id="workspaceHubBtn" class="workspace-hub-btn" title="Espacio de trabajo" aria-label="Espacio de trabajo" aria-expanded="false">
+          <span id="connDot" class="conn-dot"></span>
+        </button>
+        <div id="workspaceFlyout" class="workspace-flyout hidden" role="menu">
+          <header class="ws-flyout-head">
+            <img id="wsFlyoutAvatar" src="/logo.png" alt="" class="ws-flyout-avatar" />
+            <div class="ws-flyout-meta">
+              <strong id="wsFlyoutName">Punto Pago</strong>
+              <span class="muted" id="wsFlyoutStatus">Espacio de trabajo</span>
+            </div>
+          </header>
+          <button type="button" class="ws-flyout-item" data-ws-tab="profile" role="menuitem">Perfil WhatsApp</button>
+          <button type="button" class="ws-flyout-item" data-ws-tab="workspace" role="menuitem">Espacio de trabajo</button>
+          <button type="button" class="ws-flyout-item" data-ws-tab="reports" role="menuitem">Informes</button>
+          <button type="button" class="ws-flyout-item ws-flyout-soon" data-ws-tab="language" role="menuitem" disabled>
+            Idioma del portal <span class="ws-badge">Próximamente</span>
+          </button>
+        </div>
+      </div>
     </nav>
 
     <!-- ============ SCREEN: CHATS ============ -->
@@ -216,6 +235,127 @@
 
     <!-- ============ SCREEN: INTEGRATION API ============ -->
     <section class="screen hidden" id="screenIntegration"></section>
+
+    <!-- ============ SCREEN: WORKSPACE ============ -->
+    <section class="screen hidden" id="screenWorkspace">
+      <main class="workspace-pane">
+        <header class="pane-header">
+          <div>
+            <h1 id="wsPageTitle">Espacio de trabajo</h1>
+            <p class="muted ws-intro">Configura tu perfil de WhatsApp, el espacio y consulta informes básicos.</p>
+          </div>
+        </header>
+
+        <nav class="ws-tabs" id="wsTabs">
+          <button type="button" class="ws-tab active" data-ws-tab="profile">Perfil WhatsApp</button>
+          <button type="button" class="ws-tab" data-ws-tab="workspace">Espacio</button>
+          <button type="button" class="ws-tab" data-ws-tab="reports">Informes</button>
+          <button type="button" class="ws-tab ws-tab-soon" data-ws-tab="language" disabled>Idioma <span class="ws-badge">Próximamente</span></button>
+        </nav>
+
+        <!-- Tab: Perfil WhatsApp -->
+        <section class="ws-panel" id="wsPanelProfile">
+          <div class="ws-grid">
+            <div class="ws-card">
+              <h2>Foto que ven tus clientes</h2>
+              <p class="muted">Imagen del perfil de WhatsApp Business (lo que aparece en el chat).</p>
+              <div class="ws-photo-row">
+                <img id="wsWaPhoto" src="/logo.png" alt="Perfil WhatsApp" class="ws-photo-preview" />
+                <div>
+                  <p id="wsWaPhotoHint" class="muted">Conecta ACCESS_TOKEN para ver la foto actual desde Meta.</p>
+                  <p class="muted sm">Para cambiar la foto en WhatsApp usa Meta Business Manager o la app de WhatsApp Business. Aquí la ves en tiempo real.</p>
+                </div>
+              </div>
+            </div>
+            <div class="ws-card">
+              <h2>Foto del portal</h2>
+              <p class="muted">Avatar de tu espacio de trabajo en este panel (no cambia el perfil de WhatsApp automáticamente).</p>
+              <div class="ws-photo-row">
+                <img id="wsPortalPhoto" src="/logo.png" alt="Avatar portal" class="ws-photo-preview" />
+                <div class="ws-photo-actions">
+                  <label class="btn-ghost sm ws-upload-label">
+                    Subir imagen
+                    <input id="wsPhotoInput" type="file" accept="image/jpeg,image/png,image/webp" hidden />
+                  </label>
+                  <button type="button" id="wsPhotoRemove" class="btn-ghost sm">Quitar</button>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="ws-card">
+            <h2>Perfil público de WhatsApp</h2>
+            <div class="ws-form-grid">
+              <label>Acerca de (about)
+                <input id="wsAbout" type="text" maxlength="139" placeholder="Ej. Atención al cliente Lun–Vie 8am–6pm" />
+              </label>
+              <label>Descripción
+                <textarea id="wsDescription" rows="3" maxlength="512" placeholder="Breve descripción del negocio"></textarea>
+              </label>
+              <label>Correo
+                <input id="wsEmail" type="email" placeholder="contacto@empresa.com" />
+              </label>
+              <label>Sitio web
+                <input id="wsWebsite" type="url" placeholder="https://www.empresa.com" />
+              </label>
+            </div>
+            <label class="ws-check">
+              <input id="wsSyncWhatsapp" type="checkbox" checked />
+              Sincronizar texto con perfil de WhatsApp (Meta)
+            </label>
+            <div class="ws-actions">
+              <button type="button" id="wsSaveProfile" class="btn-primary sm">Guardar perfil</button>
+            </div>
+          </div>
+        </section>
+
+        <!-- Tab: Espacio de trabajo -->
+        <section class="ws-panel hidden" id="wsPanelWorkspace">
+          <div class="ws-card">
+            <h2>Identidad del espacio</h2>
+            <div class="ws-form-grid">
+              <label>Nombre del espacio de trabajo
+                <input id="wsWorkspaceName" type="text" placeholder="Punto Pago · Cobranza" />
+              </label>
+              <label>Nombre para mostrar
+                <input id="wsDisplayName" type="text" placeholder="Punto Pago" />
+              </label>
+            </div>
+            <p class="muted sm">El nombre para mostrar aparece en el título del portal y en el menú del punto verde.</p>
+            <div class="ws-actions">
+              <button type="button" id="wsSaveWorkspace" class="btn-primary sm">Guardar espacio</button>
+            </div>
+          </div>
+          <div class="ws-card muted">
+            <h2>Estado del sistema</h2>
+            <ul id="wsSystemStatus" class="ws-status-list"></ul>
+          </div>
+        </section>
+
+        <!-- Tab: Informes -->
+        <section class="ws-panel hidden" id="wsPanelReports">
+          <p class="muted">Resumen operativo básico. Luego ampliaremos gráficos y exportación.</p>
+          <div id="wsReportsGrid" class="ws-reports-grid muted">Cargando informes…</div>
+          <div class="ws-actions">
+            <button type="button" id="wsRefreshReports" class="btn-ghost sm">Actualizar</button>
+            <button type="button" class="btn-ghost sm" data-screen-jump="billing">Ver facturación</button>
+          </div>
+        </section>
+
+        <!-- Tab: Idioma (placeholder) -->
+        <section class="ws-panel hidden" id="wsPanelLanguage">
+          <div class="ws-card ws-soon-card">
+            <h2>Idioma del portal</h2>
+            <p class="muted">Próximamente podrás elegir el idioma de la interfaz (español, inglés, etc.) sin afectar el idioma de las plantillas de WhatsApp.</p>
+            <label>Idioma preferido (vista previa)
+              <select id="wsPortalLang" disabled>
+                <option value="es" selected>Español</option>
+                <option value="en">English</option>
+              </select>
+            </label>
+          </div>
+        </section>
+      </main>
+    </section>
 
     <!-- ============ SCREEN: BILLING ============ -->
     <section class="screen hidden" id="screenBilling">

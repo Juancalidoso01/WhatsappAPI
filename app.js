@@ -29,6 +29,8 @@ const { parseLineHealth } = require('./services/line-health');
 const { validateRowsForTemplate, extractEventVariables } = require('./services/template-params');
 const campaignMetrics = require('./services/campaign-metrics');
 const { requireIntegrationKey } = require('./services/api-auth');
+const WorkspaceStore = require('./services/workspace-store');
+const reports = require('./services/reports');
 const app = express();
 
 const upload = multer({
@@ -39,6 +41,11 @@ const upload = multer({
 const csvUpload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 5 * 1024 * 1024 },
+});
+
+const avatarUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 512 * 1024 },
 });
 
 // Safety net: keep the server alive if a WhatsApp API call fails (e.g. when
@@ -167,7 +174,8 @@ app.post('/webhook', webhookJson, (req, res) => {
 // ----- Local web interface API -----
 
 // Expose non-sensitive runtime config to the UI
-app.get('/api/config', (req, res) => {
+app.get('/api/config', async (req, res) => {
+  const workspace = await WorkspaceStore.getWorkspace(config.brandName);
   res.json({
     brandName: config.brandName,
     phoneNumberId: config.phoneNumberId || null,
@@ -175,7 +183,130 @@ app.get('/api/config', (req, res) => {
     templatesEnabled: Boolean(config.accessToken && config.wabaId),
     botEnabled: config.botEnabled,
     persistent: Store.isPersistent(),
+    workspace: {
+      displayName: workspace.displayName,
+      workspaceName: workspace.workspaceName,
+      hasProfilePhoto: workspace.hasProfilePhoto,
+      portalLanguage: workspace.portalLanguage,
+    },
   });
+});
+
+// ----- Workspace (settings, profile, reports hub) -----
+
+app.get('/api/workspace', async (req, res) => {
+  try {
+    const workspace = await WorkspaceStore.getWorkspace(config.brandName);
+    let whatsapp = null;
+    let line = null;
+    if (config.accessToken && config.phoneNumberId) {
+      try {
+        whatsapp = await GraphApi.getBusinessProfile(config.phoneNumberId);
+      } catch (err) {
+        whatsapp = { error: String(err.message || err) };
+      }
+      try {
+        line = parseLineHealth(await GraphApi.getPhoneLineHealth(config.phoneNumberId));
+      } catch (_) {}
+    }
+    res.json({
+      ok: true,
+      workspace: {
+        ...workspace,
+        avatarUrl: workspace.hasProfilePhoto ? '/api/workspace/avatar' : null,
+      },
+      whatsapp,
+      line,
+      portalLanguageEnabled: false,
+    });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: String(err.message || err) });
+  }
+});
+
+app.patch('/api/workspace', apiJson, async (req, res) => {
+  try {
+    const body = req.body || {};
+    const workspace = await WorkspaceStore.updateWorkspace(body, config.brandName);
+    let whatsappSync = null;
+
+    if (body.syncWhatsapp && config.accessToken && config.phoneNumberId) {
+      try {
+        await GraphApi.updateBusinessProfile(config.phoneNumberId, {
+          about: workspace.about,
+          description: workspace.description,
+          email: workspace.email,
+          websites: workspace.websites,
+        });
+        whatsappSync = { ok: true };
+      } catch (err) {
+        whatsappSync = { ok: false, error: String(err.message || err) };
+      }
+    }
+
+    res.json({
+      ok: true,
+      workspace: {
+        ...workspace,
+        avatarUrl: workspace.hasProfilePhoto ? '/api/workspace/avatar' : null,
+      },
+      whatsappSync,
+    });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: String(err.message || err) });
+  }
+});
+
+app.post('/api/workspace/profile-photo', (req, res) => {
+  avatarUpload.single('photo')(req, res, async (err) => {
+    if (err) return res.status(400).json({ ok: false, error: String(err.message || err) });
+    if (!req.file || !req.file.buffer) {
+      return res.status(400).json({ ok: false, error: 'Sube una imagen (JPG o PNG).' });
+    }
+    const mime = req.file.mimetype || 'image/jpeg';
+    if (!/^image\/(jpeg|png|webp)$/i.test(mime)) {
+      return res.status(400).json({ ok: false, error: 'Formato no soportado. Usa JPG, PNG o WebP.' });
+    }
+    try {
+      await WorkspaceStore.setProfilePhoto(req.file.buffer, mime);
+      res.json({ ok: true, avatarUrl: '/api/workspace/avatar' });
+    } catch (e) {
+      res.status(500).json({ ok: false, error: String(e.message || e) });
+    }
+  });
+});
+
+app.delete('/api/workspace/profile-photo', async (req, res) => {
+  try {
+    await WorkspaceStore.removeProfilePhoto();
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: String(err.message || err) });
+  }
+});
+
+app.get('/api/workspace/avatar', async (req, res) => {
+  const photo = await WorkspaceStore.getProfilePhoto();
+  if (!photo) return res.redirect('/logo.png');
+  const buf = Buffer.from(photo.data, 'base64');
+  res.set('Cache-Control', 'private, max-age=300');
+  res.type(photo.mime).send(buf);
+});
+
+app.get('/api/reports/summary', async (req, res) => {
+  try {
+    let templates = [];
+    if (config.accessToken && config.wabaId) {
+      try {
+        const result = await GraphApi.listTemplates(config.wabaId);
+        templates = (result && result.data) || [];
+      } catch (_) {}
+    }
+    const summary = await reports.buildSummary({ templates });
+    res.json({ ok: true, summary });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: String(err.message || err) });
+  }
 });
 
 async function backfillTemplateMeta(templates) {

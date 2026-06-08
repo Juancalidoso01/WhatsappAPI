@@ -11,6 +11,8 @@ const state = {
   activeCampaignId: null,
   lineHealth: null,
   bulkPollTimer: null,
+  workspace: null,
+  workspaceTab: "profile",
   activePhone: null,
   messages: [],
   conversationDetail: null,
@@ -67,6 +69,7 @@ async function init() {
   } catch (_) {}
   applyBranding();
   bindEvents();
+  loadWorkspace().catch(() => {});
   await loadConversations();
   startPolling();
   document.addEventListener("visibilitychange", () => {
@@ -76,10 +79,33 @@ async function init() {
 }
 
 function applyBranding() {
-  const name = state.config.brandName || "Punto Pago";
+  const ws = state.config.workspace || {};
+  const name = ws.displayName || state.config.brandName || "Punto Pago";
   document.title = name + " · Inbox";
-  $("connDot").className = "conn-dot " + (state.config.persistent ? "online" : "offline");
-  $("connDot").title = state.config.persistent ? "Persistencia activa" : "Modo memoria";
+  const dot = $("connDot");
+  if (dot) {
+    dot.className = "conn-dot " + (state.config.persistent ? "online" : "offline");
+    dot.title = state.config.persistent ? "Persistencia activa" : "Modo memoria";
+  }
+  updateWorkspaceHubPreview(name, ws.hasProfilePhoto);
+}
+
+function avatarSrc(hasPhoto) {
+  return hasPhoto ? `/api/workspace/avatar?t=${Date.now()}` : "/logo.png";
+}
+
+function updateWorkspaceHubPreview(name, hasPhoto) {
+  const av = $("wsFlyoutAvatar");
+  const portal = $("wsPortalPhoto");
+  const railLogo = $("railLogo");
+  const src = avatarSrc(hasPhoto);
+  if ($("wsFlyoutName")) $("wsFlyoutName").textContent = name;
+  if ($("wsFlyoutStatus")) {
+    $("wsFlyoutStatus").textContent = state.config.persistent ? "En línea · datos persistentes" : "Modo memoria";
+  }
+  if (av) av.src = src;
+  if (portal) portal.src = src;
+  if (railLogo && hasPhoto) railLogo.src = src;
 }
 
 /* ---------- conversations ---------- */
@@ -1213,6 +1239,162 @@ async function initIntegrationScreen() {
   }
 }
 
+/* ---------- workspace hub ---------- */
+function toggleWorkspaceFlyout(force) {
+  const fly = $("workspaceFlyout");
+  const btn = $("workspaceHubBtn");
+  if (!fly || !btn) return;
+  const open = force != null ? force : fly.classList.contains("hidden");
+  fly.classList.toggle("hidden", !open);
+  btn.setAttribute("aria-expanded", open ? "true" : "false");
+}
+
+function openWorkspaceTab(tab) {
+  state.workspaceTab = tab;
+  toggleWorkspaceFlyout(false);
+  switchScreen("workspace");
+  setWorkspaceTab(tab);
+}
+
+function setWorkspaceTab(tab) {
+  state.workspaceTab = tab;
+  document.querySelectorAll(".ws-tab").forEach((b) => {
+    b.classList.toggle("active", b.dataset.wsTab === tab);
+  });
+  ["profile", "workspace", "reports", "language"].forEach((id) => {
+    const panel = $("wsPanel" + id.charAt(0).toUpperCase() + id.slice(1));
+    if (panel) panel.classList.toggle("hidden", id !== tab);
+  });
+  const titles = {
+    profile: "Perfil WhatsApp",
+    workspace: "Espacio de trabajo",
+    reports: "Informes",
+    language: "Idioma del portal",
+  };
+  if ($("wsPageTitle")) $("wsPageTitle").textContent = titles[tab] || "Espacio de trabajo";
+}
+
+async function loadWorkspace() {
+  const res = await api("/api/workspace");
+  if (!res.ok) return;
+  state.workspace = res;
+  fillWorkspaceForms(res);
+  updateWorkspaceHubPreview(
+    res.workspace.displayName || res.workspace.workspaceName,
+    res.workspace.hasProfilePhoto
+  );
+}
+
+function fillWorkspaceForms(res) {
+  const w = res.workspace || {};
+  const wa = res.whatsapp || {};
+  if ($("wsAbout")) $("wsAbout").value = w.about || wa.about || "";
+  if ($("wsDescription")) $("wsDescription").value = w.description || wa.description || "";
+  if ($("wsEmail")) $("wsEmail").value = w.email || wa.email || "";
+  if ($("wsWebsite")) $("wsWebsite").value = (w.websites && w.websites[0]) || (wa.websites && wa.websites[0]) || "";
+  if ($("wsWorkspaceName")) $("wsWorkspaceName").value = w.workspaceName || "";
+  if ($("wsDisplayName")) $("wsDisplayName").value = w.displayName || "";
+  if ($("wsPortalPhoto")) $("wsPortalPhoto").src = w.avatarUrl ? avatarSrc(true) : "/logo.png";
+  if ($("wsWaPhoto")) {
+    if (wa.profile_picture_url) {
+      $("wsWaPhoto").src = wa.profile_picture_url;
+      if ($("wsWaPhotoHint")) $("wsWaPhotoHint").textContent = "Foto actual sincronizada desde Meta.";
+    } else if (wa.error) {
+      if ($("wsWaPhotoHint")) $("wsWaPhotoHint").textContent = wa.error;
+    }
+  }
+  const status = $("wsSystemStatus");
+  if (status) {
+    const line = res.line;
+    status.innerHTML = [
+      `<li>Persistencia: ${state.config.persistent ? "Redis activo" : "Memoria local"}</li>`,
+      `<li>WhatsApp API: ${state.config.hasCredentials ? "Conectada" : "Sin credenciales"}</li>`,
+      line ? `<li>Línea: ${escapeHtml(line.displayPhone || "—")} · ${escapeHtml(line.qualityLabel || "")}</li>` : "",
+      `<li>Última actualización: ${w.updatedAt ? new Date(w.updatedAt).toLocaleString("es") : "—"}</li>`,
+    ].filter(Boolean).join("");
+  }
+}
+
+async function saveWorkspaceProfile() {
+  const body = {
+    about: $("wsAbout").value.trim(),
+    description: $("wsDescription").value.trim(),
+    email: $("wsEmail").value.trim(),
+    websites: $("wsWebsite").value.trim() ? [$("wsWebsite").value.trim()] : [],
+    syncWhatsapp: $("wsSyncWhatsapp").checked,
+  };
+  const res = await patch("/api/workspace", body);
+  if (!res.ok) { toast(res.error || "No se pudo guardar.", "error"); return; }
+  if (res.whatsappSync && !res.whatsappSync.ok) {
+    toast("Guardado localmente. Meta: " + (res.whatsappSync.error || "no sincronizó"), "error");
+  } else {
+    toast("Perfil guardado.", "ok");
+  }
+  await loadWorkspace();
+  state.config = await api("/api/config");
+  applyBranding();
+}
+
+async function saveWorkspaceSettings() {
+  const res = await patch("/api/workspace", {
+    workspaceName: $("wsWorkspaceName").value.trim(),
+    displayName: $("wsDisplayName").value.trim(),
+  });
+  if (!res.ok) { toast(res.error || "No se pudo guardar.", "error"); return; }
+  toast("Espacio actualizado.", "ok");
+  state.config = await api("/api/config");
+  applyBranding();
+  await loadWorkspace();
+}
+
+async function uploadWorkspacePhoto(file) {
+  if (!file) return;
+  const fd = new FormData();
+  fd.append("photo", file);
+  const res = await postForm("/api/workspace/profile-photo", fd);
+  if (!res.ok) { toast(res.error || "No se pudo subir la imagen.", "error"); return; }
+  toast("Foto del portal actualizada.", "ok");
+  state.config = await api("/api/config");
+  applyBranding();
+  await loadWorkspace();
+}
+
+async function removeWorkspacePhoto() {
+  const res = await api("/api/workspace/profile-photo", { method: "DELETE" });
+  if (!res.ok) { toast(res.error || "No se pudo quitar.", "error"); return; }
+  toast("Foto quitada.", "ok");
+  state.config = await api("/api/config");
+  applyBranding();
+  await loadWorkspace();
+}
+
+async function loadWorkspaceReports() {
+  const box = $("wsReportsGrid");
+  if (box) box.textContent = "Cargando informes…";
+  const res = await api("/api/reports/summary");
+  if (!res.ok || !box) return;
+  const s = res.summary;
+  const cards = [
+    [s.conversations.total, "Conversaciones"],
+    [s.conversations.active24h, "Activas 24h"],
+    [s.messages.inbound, "Msjs entrantes"],
+    [s.messages.outbound, "Msjs salientes"],
+    [s.campaigns.total, "Cargas masivas"],
+    [s.campaigns.delivered, "Entregados (cargas)"],
+    [s.templates.approved, "Plantillas aprobadas"],
+    [s.templates.pending, "Plantillas en revisión"],
+  ];
+  box.className = "ws-reports-grid";
+  box.innerHTML = cards.map(([n, l]) =>
+    `<div class="ws-report-card"><span class="n">${n}</span><span class="l">${escapeHtml(l)}</span></div>`
+  ).join("");
+}
+
+async function initWorkspaceScreen() {
+  setWorkspaceTab(state.workspaceTab || "profile");
+  await Promise.all([loadWorkspace(), loadWorkspaceReports()]);
+}
+
 /* ---------- modals & nav ---------- */
 function showModal(id) { $(id).classList.remove("hidden"); }
 function closeModals() { document.querySelectorAll(".modal").forEach((m) => m.classList.add("hidden")); }
@@ -1223,12 +1405,15 @@ function switchScreen(name) {
   $("screenTemplates").classList.toggle("hidden", name !== "templates");
   $("screenBulk").classList.toggle("hidden", name !== "bulk");
   $("screenIntegration").classList.toggle("hidden", name !== "integration");
+  $("screenWorkspace").classList.toggle("hidden", name !== "workspace");
   $("screenBilling").classList.toggle("hidden", name !== "billing");
   if (name === "templates") { loadTemplates().then(renderTemplateList); }
   if (name === "bulk") { initBulkScreen(); }
   if (name === "integration") { initIntegrationScreen(); }
+  if (name === "workspace") { initWorkspaceScreen(); }
   if (name === "billing") { loadBilling(); renderPrices(); }
   if (name !== "bulk") stopBulkPolling();
+  if (name !== "workspace") toggleWorkspaceFlyout(false);
 }
 
 /* ---------- polling ---------- */
@@ -1275,6 +1460,33 @@ function bindEvents() {
   $("bulkCloseBtn").addEventListener("click", closeCampaignDetail);
   const bulkGoInt = $("bulkGoIntegration");
   if (bulkGoInt) bulkGoInt.addEventListener("click", () => switchScreen("integration"));
+
+  $("workspaceHubBtn").addEventListener("click", (e) => {
+    e.stopPropagation();
+    toggleWorkspaceFlyout();
+  });
+  document.querySelectorAll(".ws-flyout-item:not(:disabled)").forEach((btn) =>
+    btn.addEventListener("click", () => openWorkspaceTab(btn.dataset.wsTab))
+  );
+  document.querySelectorAll(".ws-tab:not(:disabled)").forEach((btn) =>
+    btn.addEventListener("click", () => setWorkspaceTab(btn.dataset.wsTab))
+  );
+  $("wsSaveProfile").addEventListener("click", saveWorkspaceProfile);
+  $("wsSaveWorkspace").addEventListener("click", saveWorkspaceSettings);
+  $("wsRefreshReports").addEventListener("click", loadWorkspaceReports);
+  $("wsPhotoInput").addEventListener("change", (e) => {
+    const f = e.target.files && e.target.files[0];
+    if (f) uploadWorkspacePhoto(f);
+    e.target.value = "";
+  });
+  $("wsPhotoRemove").addEventListener("click", removeWorkspacePhoto);
+  document.querySelectorAll("[data-screen-jump]").forEach((btn) =>
+    btn.addEventListener("click", () => switchScreen(btn.dataset.screenJump))
+  );
+  document.addEventListener("click", (e) => {
+    const wrap = document.querySelector(".workspace-hub-wrap");
+    if (wrap && !wrap.contains(e.target)) toggleWorkspaceFlyout(false);
+  });
   $("newTemplateBtn").addEventListener("click", () => showModal("modalTemplate"));
   $("tpCreate").addEventListener("click", createTemplate);
   $("detailTemplateBtn").addEventListener("click", () => openNewChat());
