@@ -559,6 +559,161 @@ function bodyOf(t) {
   const c = (t.components || []).find((x) => x.type === "BODY");
   return c ? c.text : "";
 }
+
+/* ---------- create template (placeholders + emojis) ---------- */
+const tpState = { limits: { header: 60, body: 1024, footer: 60 }, emojis: [], vars: [] };
+
+function tpGraphemeLen(text) {
+  const s = String(text || "");
+  if (typeof Intl !== "undefined" && Intl.Segmenter) {
+    return [...new Intl.Segmenter("es", { granularity: "grapheme" }).segment(s)].length;
+  }
+  return [...s].length;
+}
+
+function tpExtractPlaceholders(text) {
+  const m = String(text || "").match(/\{\{\s*(\d+)\s*\}\}/g);
+  if (!m) return [];
+  return [...new Set(m.map((x) => Number(x.replace(/\D/g, ""))))].sort((a, b) => a - b);
+}
+
+function tpDefaultVars() {
+  return [
+    { key: "nombre", example: "Juan" },
+    { key: "monto", example: "100.00" },
+    { key: "fecha", example: "15/03/2026" },
+  ];
+}
+
+function collectTpVariables() {
+  const rows = $("tpVarList").querySelectorAll(".tp-var-row");
+  return Array.from(rows).map((row, i) => ({
+    key: (row.querySelector(".tp-var-key") || {}).value.trim(),
+    example: (row.querySelector(".tp-var-ex") || {}).value.trim(),
+    index: i + 1,
+  }));
+}
+
+function renderTpVarList(vars) {
+  const list = $("tpVarList");
+  if (!list) return;
+  const items = vars && vars.length ? vars : [{ key: "", example: "" }];
+  list.innerHTML = items.map((v, i) => `
+    <div class="tp-var-row" data-i="${i}">
+      <span class="tp-var-n">{{${i + 1}}}</span>
+      <input class="tp-var-key" type="text" placeholder="clave_api" value="${escapeHtml(v.key || "")}" />
+      <input class="tp-var-ex" type="text" placeholder="ejemplo Meta" value="${escapeHtml(v.example || "")}" />
+      <button type="button" class="btn-ghost sm tp-insert" title="Insertar {{${i + 1}}} en el cuerpo">{{${i + 1}}}</button>
+      <button type="button" class="btn-ghost sm tp-remove" title="Quitar">×</button>
+    </div>`).join("");
+
+  list.querySelectorAll(".tp-insert").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const i = Number(btn.closest(".tp-var-row").dataset.i) + 1;
+      insertTpPlaceholder("tpBody", `{{${i}}}`);
+    });
+  });
+  list.querySelectorAll(".tp-remove").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const rows = collectTpVariables().filter((_, idx) => idx !== Number(btn.closest(".tp-var-row").dataset.i));
+      renderTpVarList(rows.length ? rows : [{ key: "", example: "" }]);
+      updateTpPreview();
+    });
+  });
+  list.querySelectorAll("input").forEach((inp) => inp.addEventListener("input", updateTpPreview));
+}
+
+function insertTpPlaceholder(fieldId, token) {
+  const el = $(fieldId);
+  if (!el) return;
+  const start = el.selectionStart != null ? el.selectionStart : el.value.length;
+  const end = el.selectionEnd != null ? el.selectionEnd : el.value.length;
+  const before = el.value.slice(0, start);
+  const after = el.value.slice(end);
+  el.value = before + token + after;
+  el.focus();
+  const pos = start + token.length;
+  if (el.setSelectionRange) el.setSelectionRange(pos, pos);
+  updateTpFieldCounts();
+  updateTpPreview();
+}
+
+function insertTpEmoji(fieldId, emoji) {
+  insertTpPlaceholder(fieldId, emoji);
+}
+
+function updateTpFieldCounts() {
+  const fields = [
+    ["tpHeader", "tpHeaderCount", "header"],
+    ["tpBody", "tpBodyCount", "body"],
+    ["tpFooter", "tpFooterCount", "footer"],
+  ];
+  fields.forEach(([id, countId, kind]) => {
+    const el = $(id);
+    const box = $(countId);
+    if (!el || !box) return;
+    const len = tpGraphemeLen(el.value);
+    const max = tpState.limits[kind] || 1024;
+    box.textContent = `${len} / ${max} caracteres`;
+    box.className = "field-count muted" + (len > max ? " over" : len > max * 0.9 ? " warn" : "");
+  });
+}
+
+function updateTpPreview() {
+  const preview = $("tpPreview");
+  if (!preview) return;
+  const vars = collectTpVariables().filter((v) => v.key || v.example);
+  const body = $("tpBody").value;
+  const header = $("tpHeader").value.trim();
+  const footer = $("tpFooter").value.trim();
+  const ph = tpExtractPlaceholders(body);
+  const headerPh = tpExtractPlaceholders(header);
+  const lines = [];
+  if (header) lines.push("【Encabezado】 " + header);
+  lines.push("【Cuerpo】 " + (body || "—"));
+  if (footer) lines.push("【Pie】 " + footer);
+  if (ph.length) {
+    lines.push("");
+    lines.push("Placeholders en cuerpo: " + ph.map((n) => `{{${n}}}`).join(", "));
+    vars.forEach((v, i) => {
+      if (v.key) lines.push(`  {{${i + 1}}} → API: ${v.key}${v.example ? ` (ej: ${v.example})` : ""}`);
+    });
+  }
+  if (headerPh.length) lines.push("Encabezado con {{1}} — usa el primer ejemplo de variable si aplica.");
+  const seqOk = ph.every((n, i) => n === i + 1);
+  if (ph.length && !seqOk) lines.push("⚠ Los placeholders del cuerpo deben ser {{1}}, {{2}}… en orden.");
+  preview.textContent = lines.join("\n");
+  updateTpFieldCounts();
+}
+
+function renderTpEmojiBar() {
+  const bar = $("tpEmojiBar");
+  if (!bar) return;
+  const emojis = tpState.emojis.length ? tpState.emojis : ["👋", "✅", "📅", "💰", "🔔", "📱", "⏰", "🎉"];
+  bar.innerHTML = emojis.map((e) =>
+    `<button type="button" class="tp-emoji-btn" data-emoji="${escapeHtml(e)}" title="Insertar en cuerpo">${e}</button>`
+  ).join("");
+  bar.querySelectorAll(".tp-emoji-btn").forEach((btn) =>
+    btn.addEventListener("click", () => insertTpEmoji("tpBody", btn.dataset.emoji))
+  );
+}
+
+async function initTemplateModal() {
+  const meta = await api("/api/templates/create-meta");
+  if (meta.ok) {
+    tpState.limits = meta.limits || tpState.limits;
+    tpState.emojis = meta.emojis || [];
+  }
+  $("tpHint").textContent = "";
+  $("tpHint").className = "hint";
+  if (!$("tpBody").value.trim()) {
+    $("tpBody").value = "Hola {{1}}, tu saldo pendiente es {{2}}. Vence el {{3}}. 📅";
+  }
+  renderTpVarList(tpDefaultVars());
+  renderTpEmojiBar();
+  updateTpPreview();
+}
+
 async function createTemplate() {
   const payload = {
     name: $("tpName").value.trim(),
@@ -567,6 +722,7 @@ async function createTemplate() {
     headerText: $("tpHeader").value.trim(),
     bodyText: $("tpBody").value.trim(),
     footerText: $("tpFooter").value.trim(),
+    variables: collectTpVariables(),
   };
   const hint = $("tpHint");
   if (!payload.name || !payload.bodyText) {
@@ -574,12 +730,34 @@ async function createTemplate() {
     hint.textContent = "Nombre y cuerpo son obligatorios.";
     return;
   }
+
+  const ph = tpExtractPlaceholders(payload.bodyText);
+  if (ph.length) {
+    const missing = payload.variables.filter((v, i) => ph.includes(i + 1) && (!v.key || !v.example));
+    if (missing.length) {
+      hint.className = "hint error";
+      hint.textContent = "Cada placeholder necesita clave API y ejemplo para Meta.";
+      return;
+    }
+    if (!ph.every((n, i) => n === i + 1)) {
+      hint.className = "hint error";
+      hint.textContent = "Usa placeholders consecutivos: {{1}}, {{2}}, {{3}}…";
+      return;
+    }
+  }
+
   hint.className = "hint";
   hint.textContent = "Creando…";
   const res = await post("/api/templates", payload);
   if (res.ok) {
     closeModals();
-    toast("Plantilla creada como " + (res.requestedCategory || payload.category).toLowerCase() + ". Meta puede asignar otra categoría al aprobarla.", "ok");
+    const keys = (res.eventVariableKeys || []).join(", ");
+    toast(
+      "Plantilla enviada a Meta."
+      + (keys ? " Variables API: " + keys + "." : "")
+      + " Espera la aprobación.",
+      "ok"
+    );
     await loadTemplates();
     renderTemplateList();
   } else {
@@ -1487,8 +1665,18 @@ function bindEvents() {
     const wrap = document.querySelector(".workspace-hub-wrap");
     if (wrap && !wrap.contains(e.target)) toggleWorkspaceFlyout(false);
   });
-  $("newTemplateBtn").addEventListener("click", () => showModal("modalTemplate"));
+  $("newTemplateBtn").addEventListener("click", () => { initTemplateModal(); showModal("modalTemplate"); });
   $("tpCreate").addEventListener("click", createTemplate);
+  $("tpAddVar").addEventListener("click", () => {
+    const vars = collectTpVariables();
+    vars.push({ key: "", example: "" });
+    renderTpVarList(vars);
+    updateTpPreview();
+  });
+  ["tpHeader", "tpBody", "tpFooter"].forEach((id) => {
+    const el = $(id);
+    if (el) el.addEventListener("input", updateTpPreview);
+  });
   $("detailTemplateBtn").addEventListener("click", () => openNewChat());
   $("detailToggle").addEventListener("click", () => $("detailPane").classList.toggle("collapsed"));
   $("detailNotes").addEventListener("blur", saveNotes);

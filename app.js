@@ -31,6 +31,7 @@ const campaignMetrics = require('./services/campaign-metrics');
 const { requireIntegrationKey } = require('./services/api-auth');
 const WorkspaceStore = require('./services/workspace-store');
 const reports = require('./services/reports');
+const templateBuilder = require('./services/template-builder');
 const app = express();
 
 const upload = multer({
@@ -430,9 +431,19 @@ app.post('/api/templates/sync-categories', async (req, res) => {
   }
 });
 
+// Emoji list + template field limits (for create-template UI)
+app.get('/api/templates/create-meta', (req, res) => {
+  res.json({
+    ok: true,
+    emojis: templateBuilder.COMMON_EMOJIS,
+    limits: templateBuilder.LIMITS,
+    placeholderHelp: "Usa {{1}}, {{2}}… en el texto. Cada variable necesita clave API y ejemplo para Meta.",
+  });
+});
+
 // Create a new WhatsApp message template (needs Meta approval afterwards)
 app.post('/api/templates', apiJson, async (req, res) => {
-  const { name, category, language, bodyText, headerText, footerText } = req.body || {};
+  const { name, category, language, bodyText, headerText, footerText, variables } = req.body || {};
   if (!name || !category || !language || !bodyText) {
     return res.status(400).json({ error: 'Se requieren name, category, language y bodyText.' });
   }
@@ -440,10 +451,15 @@ app.post('/api/templates', apiJson, async (req, res) => {
     return res.status(400).json({ error: 'Falta ACCESS_TOKEN o WABA_ID.' });
   }
 
-  const components = [];
-  if (headerText) components.push({ type: 'HEADER', format: 'TEXT', text: headerText });
-  components.push({ type: 'BODY', text: bodyText });
-  if (footerText) components.push({ type: 'FOOTER', text: footerText });
+  const built = templateBuilder.buildComponents({
+    headerText: headerText || '',
+    bodyText,
+    footerText: footerText || '',
+    variables: variables || [],
+  });
+  if (!built.ok) {
+    return res.status(400).json({ ok: false, error: built.errors.join(' ') });
+  }
 
   const tplName = String(name).toLowerCase().replace(/[^a-z0-9_]/g, '_');
   const tplCategory = String(category).toUpperCase();
@@ -453,13 +469,21 @@ app.post('/api/templates', apiJson, async (req, res) => {
       name: tplName,
       category: tplCategory,
       language,
-      components,
+      components: built.components,
     });
     await Store.setTemplateRequestedCategory(tplName, language, tplCategory, {
       syncedFrom: 'user',
       createdAt: Date.now(),
+      eventVariableKeys: built.eventVariableKeys,
+      placeholderCount: built.placeholderCount,
     });
-    res.json({ ok: true, result, requestedCategory: tplCategory });
+    res.json({
+      ok: true,
+      result,
+      requestedCategory: tplCategory,
+      eventVariableKeys: built.eventVariableKeys,
+      placeholderCount: built.placeholderCount,
+    });
   } catch (err) {
     console.error('createTemplate error:', err.message);
     res.status(200).json({ ok: false, error: String(err.message || err) });
@@ -778,8 +802,12 @@ function enrichCampaign(campaign) {
   };
 }
 
-function resolveEventVariables(tpl, body) {
+function resolveEventVariables(tpl, body, localMeta) {
   const customKeys = [];
+  const stored = (localMeta && localMeta.eventVariableKeys)
+    || (tpl && tpl.localMeta && tpl.localMeta.eventVariableKeys)
+    || [];
+  if (stored.length) customKeys.push(...stored);
   if (Array.isArray(body.eventVariables)) {
     body.eventVariables.forEach((ev) => {
       if (typeof ev === 'string') customKeys.push(ev);
@@ -995,7 +1023,9 @@ app.post('/api/campaigns/:id/tick', async (req, res) => {
 app.get('/api/templates/:name/variables', async (req, res) => {
   const tpl = await findTemplateDefinition(req.params.name, req.query.language);
   if (!tpl) return res.status(404).json({ ok: false, error: 'Plantilla no encontrada.' });
-  const eventVariables = resolveEventVariables(tpl, req.query);
+  const metaMap = await Store.getAllTemplateMeta();
+  const local = metaMap[`${tpl.name}|${tpl.language}`] || {};
+  const eventVariables = resolveEventVariables(tpl, req.query, local);
   res.json({
     ok: true,
     template: tpl.name,
@@ -1010,12 +1040,14 @@ app.get('/api/templates/:name/variables', async (req, res) => {
 app.get('/api/integrations/templates/:name/variables', requireIntegrationKey, async (req, res) => {
   const tpl = await findTemplateDefinition(req.params.name, req.query.language);
   if (!tpl) return res.status(404).json({ ok: false, error: 'Plantilla no encontrada.' });
+  const metaMap = await Store.getAllTemplateMeta();
+  const local = metaMap[`${tpl.name}|${tpl.language}`] || {};
   res.json({
     ok: true,
     template: tpl.name,
     language: tpl.language,
     category: tpl.category,
-    eventVariables: resolveEventVariables(tpl, {}),
+    eventVariables: resolveEventVariables(tpl, {}, local),
   });
 });
 

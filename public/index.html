@@ -483,17 +483,17 @@
   </div>
 
   <div id="modalTemplate" class="modal hidden">
-    <div class="modal-card">
+    <div class="modal-card modal-card-wide">
       <h3>Crear plantilla</h3>
-      <p class="muted">Tras crearla, Meta la revisa (minutos a horas) antes de poder usarla. WhatsApp puede aprobarla con otra categoría (p. ej. Marketing en lugar de Utilidad); la facturación siempre usa la categoría que Meta asigne.</p>
+      <p class="muted">Tras crearla, Meta la revisa (minutos a horas). Si usas variables (<code>{{1}}</code>, <code>{{2}}</code>…), define claves para la API y ejemplos — Meta los exige al crear la plantilla.</p>
       <label>Nombre (sin espacios)
-        <input id="tpName" type="text" placeholder="bienvenida_clientes" />
+        <input id="tpName" type="text" placeholder="recordatorio_pago" />
       </label>
       <div class="row">
         <label>Categoría solicitada
           <select id="tpCategory">
             <option value="MARKETING">Marketing</option>
-            <option value="UTILITY">Utilidad</option>
+            <option value="UTILITY" selected>Utilidad</option>
             <option value="AUTHENTICATION">Autenticación</option>
           </select>
         </label>
@@ -505,15 +505,34 @@
           </select>
         </label>
       </div>
-      <label>Encabezado (opcional)
-        <input id="tpHeader" type="text" placeholder="Título corto" />
+
+      <section class="tp-vars-section">
+        <div class="tp-vars-head">
+          <strong>Variables / placeholders</strong>
+          <button type="button" id="tpAddVar" class="btn-ghost sm">+ Agregar variable</button>
+        </div>
+        <p class="muted sm">Clave = nombre en la API (<code>monto</code>, <code>fecha</code>). Ejemplo = valor que Meta revisa. Inserta <code>{{1}}</code>, <code>{{2}}</code>… en el cuerpo en ese orden.</p>
+        <div id="tpVarList" class="tp-var-list"></div>
+      </section>
+
+      <label>Encabezado (opcional, máx. 60 · un solo <code>{{1}}</code> si lleva variable)
+        <input id="tpHeader" type="text" placeholder="Recordatorio de pago" maxlength="120" />
+        <span id="tpHeaderCount" class="field-count muted"></span>
       </label>
-      <label>Cuerpo del mensaje
-        <textarea id="tpBody" rows="3" placeholder="Hola, gracias por escribir a Punto Pago…"></textarea>
+      <label>Cuerpo del mensaje (máx. 1024)
+        <textarea id="tpBody" rows="4" placeholder="Hola {{1}}, tu saldo pendiente es {{2}}. Vence el {{3}}."></textarea>
+        <span id="tpBodyCount" class="field-count muted"></span>
       </label>
-      <label>Pie (opcional)
-        <input id="tpFooter" type="text" placeholder="Punto Pago" />
+      <div class="tp-emoji-bar">
+        <span class="muted sm">Emojis (compatibles con WhatsApp):</span>
+        <div id="tpEmojiBar" class="tp-emoji-list"></div>
+      </div>
+      <label>Pie (opcional, máx. 60)
+        <input id="tpFooter" type="text" placeholder="Punto Pago · Responde AYUDA" maxlength="80" />
+        <span id="tpFooterCount" class="field-count muted"></span>
       </label>
+
+      <div id="tpPreview" class="tp-preview muted">Vista previa de la plantilla…</div>
       <div id="tpHint" class="hint"></div>
       <div class="modal-actions">
         <button class="btn-ghost" data-close>Cancelar</button>
