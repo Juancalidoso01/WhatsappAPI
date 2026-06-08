@@ -193,11 +193,10 @@ const PAYMENT_AUTH_FLOW = {
       layout: {
         type: "SingleColumnLayout",
         children: [
-          { type: "TextSubheading", text: "Punto Pago" },
           { type: "TextHeading", text: "Confirma tu transacción" },
           {
             type: "TextBody",
-            text: "Por tu seguridad, valida este pago antes de procesarlo. Es el mismo paso de verificación que conoces como 3D Secure.",
+            text: "Verificación de seguridad (3DS). Revisa los datos del pago antes de continuar.",
           },
           {
             type: "Image",
@@ -212,7 +211,7 @@ const PAYMENT_AUTH_FLOW = {
           { type: "TextBody", text: "${data.card_label}" },
           { type: "TextBody", text: "Fecha: ${data.when}" },
           {
-            type: "TextCaption",
+            type: "TextBody",
             text: "Si no reconoces esta compra, elige Rechazar y contáctanos de inmediato.",
           },
           {
@@ -254,7 +253,6 @@ const PAYMENT_AUTH_FLOW = {
       layout: {
         type: "SingleColumnLayout",
         children: [
-          { type: "TextSubheading", text: "Punto Pago" },
           { type: "TextHeading", text: "${data.result_title}" },
           { type: "TextBody", text: "${data.result_body}" },
           { type: "TextBody", text: "Comercio: ${data.merchant}" },

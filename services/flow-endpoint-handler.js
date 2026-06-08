@@ -67,7 +67,7 @@ async function handlePaymentAuth(decryptedBody) {
       screen: "AUTH",
       data: {
         merchant: txn.merchant,
-        amount: `$${txn.amount} ${txn.currency}`,
+        amount: `${txn.currency} ${txn.amount}`,
         card_label: `Tarjeta Punto Pago •••• ${txn.cardLast4}`,
         card_image: img,
         when: formatWhen(txn.createdAt),
@@ -100,7 +100,7 @@ async function handlePaymentAuth(decryptedBody) {
           : "El pago no se procesó. Si no reconoces esta compra, contáctanos de inmediato.",
         decision,
         merchant: txn.merchant,
-        amount: `$${resolved ? resolved.amount : txn.amount} ${txn.currency}`,
+        amount: `${txn.currency} ${resolved ? resolved.amount : txn.amount}`,
       },
     };
   }
@@ -111,7 +111,7 @@ async function handlePaymentAuth(decryptedBody) {
     screen: "AUTH",
     data: {
       merchant: txn.merchant,
-      amount: `$${txn.amount} ${txn.currency}`,
+      amount: `${txn.currency} ${txn.amount}`,
       card_label: `Tarjeta Punto Pago •••• ${txn.cardLast4}`,
       card_image: img,
       when: formatWhen(txn.createdAt),

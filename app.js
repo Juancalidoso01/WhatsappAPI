@@ -47,7 +47,7 @@ const flowActivity = require('./services/flow-activity');
 const { curateFlowList } = require('./services/flow-list-curate');
 const redis = require('./services/upstash');
 
-const PAYMENT_AUTH_FLOW_KEY = 'wa:flow:payment_auth_3ds_v1';
+const PAYMENT_AUTH_FLOW_KEY = 'wa:flow:payment_auth_3ds_v2';
 const FLOW_KEY_SYNCED = 'wa:flow:public_key_synced';
 const app = express();
 
@@ -371,7 +371,6 @@ async function ensureFlowEndpointReady(options = {}) {
   await GraphApi.uploadFlowPublicKey(config.phoneNumberId, publicKey);
   if (redis) {
     await redis.set(FLOW_KEY_SYNCED, '1');
-    await redis.del(PAYMENT_AUTH_FLOW_KEY);
   }
   return endpointUri;
 }
@@ -409,16 +408,33 @@ async function fetchFlowList({ cleanup = false } = {}) {
 
 async function getOrCreatePaymentAuthFlow() {
   const endpointUri = await ensureFlowEndpointReady();
+
+  async function cacheValid(flowId) {
+    if (!flowId) return false;
+    try {
+      const meta = await GraphApi.getFlow(flowId, 'id,name,status,validation_errors');
+      if (!meta || !meta.id) return false;
+      const errors = meta.validation_errors || [];
+      if (errors.length) return false;
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
   if (redis) {
     const cached = await redis.get(PAYMENT_AUTH_FLOW_KEY);
-    if (cached) return { flowId: String(cached), endpointUri };
+    if (cached && await cacheValid(cached)) {
+      return { flowId: String(cached), endpointUri };
+    }
+    if (cached) await redis.del(PAYMENT_AUTH_FLOW_KEY);
   }
 
   const tpl = flowSamples.getSample('payment_auth');
   if (!tpl) throw new Error('Sample payment_auth no configurado.');
 
   const result = await GraphApi.createFlow(config.wabaId, {
-    name: tpl.name || `punto_pago_3ds_verificacion_${Date.now()}`,
+    name: `${tpl.name || 'punto_pago_3ds_verificacion'}_${Date.now()}`,
     categories: tpl.categories,
     flowJson: tpl.flow_json,
     publish: false,
