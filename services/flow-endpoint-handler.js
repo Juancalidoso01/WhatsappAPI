@@ -27,12 +27,12 @@ function cardImageUrl() {
 }
 
 async function buildPaymentAuthScreenData(txn) {
-  const img = await resolveCardImageUrl();
+  const card_image = await CardImageStore.resolveCardImageSrc();
   return {
     merchant: txn.merchant,
     amount: `${txn.currency} ${txn.amount}`,
     card_label: `Tarjeta Punto Pago •••• ${txn.cardLast4}`,
-    card_image: img,
+    card_image,
     when: formatWhen(txn.createdAt),
   };
 }

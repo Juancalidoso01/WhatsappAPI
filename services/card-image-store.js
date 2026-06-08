@@ -1,10 +1,24 @@
 "use strict";
 
+const fs = require("fs");
+const path = require("path");
 const redis = require("./upstash");
 const config = require("./config");
 
 const KEY = "wa:payauth:card_image";
+const DEFAULT_CARD_PATH = path.join(__dirname, "..", "public", "assets", "punto-pago-card.png");
 let memImage = null;
+let defaultBase64Cache = null;
+
+function loadDefaultBase64() {
+  if (defaultBase64Cache) return defaultBase64Cache;
+  try {
+    defaultBase64Cache = fs.readFileSync(DEFAULT_CARD_PATH).toString("base64");
+  } catch (_) {
+    defaultBase64Cache = "";
+  }
+  return defaultBase64Cache;
+}
 
 async function save({ buffer, mimeType }) {
   const row = {
@@ -50,4 +64,13 @@ async function resolveCardImageUrl() {
   return `${root}/assets/punto-pago-card.png`;
 }
 
-module.exports = { save, get, publicUrl, resolveCardImageUrl };
+/** Base64 para el componente Image del Flow (Meta no siempre puede cargar URLs externas). */
+async function resolveCardImageSrc() {
+  const stored = await get();
+  if (stored && stored.data) return stored.data;
+  const b64 = loadDefaultBase64();
+  if (b64) return b64;
+  return resolveCardImageUrl();
+}
+
+module.exports = { save, get, publicUrl, resolveCardImageUrl, resolveCardImageSrc, loadDefaultBase64 };
