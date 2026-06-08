@@ -453,6 +453,11 @@ function countryFlag(cc) {
   if (!cc || cc.length !== 2) return "";
   return String.fromCodePoint(...[...cc.toUpperCase()].map((c) => 127397 + c.charCodeAt(0)));
 }
+function countryName(cc) {
+  if (!cc) return "—";
+  const entry = (typeof RATE_CARD !== "undefined") && RATE_CARD[String(cc).toUpperCase()];
+  return entry ? entry.name : String(cc).toUpperCase();
+}
 function fmtCost(n) {
   const v = Number(n) || 0;
   return v === 0 ? "0" : v.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 4 });
@@ -485,7 +490,7 @@ async function loadBilling() {
   } else {
     tbody.innerHTML = res.rows
       .map((r) => `<tr>
-        <td><span class="flag">${countryFlag(r.country)}</span>${escapeHtml(r.country)}</td>
+        <td><span class="country-cell"><span class="flag">${countryFlag(r.country)}</span>${escapeHtml(countryName(r.country))}</span></td>
         <td><span class="cat-tag ${escapeHtml(r.category)}">${escapeHtml((r.category || "").toLowerCase())}</span></td>
         <td class="num">${fmtNum(r.volume)}</td>
         <td class="num">${fmtCost(r.cost)}</td>
