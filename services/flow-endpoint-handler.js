@@ -13,7 +13,11 @@ function formatWhen(ts) {
   try {
     return new Date(ts).toLocaleString("es-PA", { dateStyle: "medium", timeStyle: "short" });
   } catch (_) {
-    return new Date(ts).toISOString();
+    try {
+      return new Date(ts).toLocaleString("es", { dateStyle: "medium", timeStyle: "short" });
+    } catch (_2) {
+      return new Date(ts).toISOString();
+    }
   }
 }
 

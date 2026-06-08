@@ -385,12 +385,15 @@ app.post('/api/flows/endpoint', apiJson, async (req, res) => {
     const { privateKey } = await FlowKeys.getKeyPair();
     const { decryptedBody, aesKeyBuffer, initialVectorBuffer } = decryptRequest(req.body, privateKey);
     const responseBody = await handleFlowRequest(decryptedBody);
-    return res.status(200).type('text/plain').send(encryptResponse(responseBody, aesKeyBuffer, initialVectorBuffer));
+    if (responseBody && responseBody.version == null) {
+      responseBody.version = decryptedBody.version || "3.0";
+    }
+    return res.status(200).type("text/plain").send(encryptResponse(responseBody, aesKeyBuffer, initialVectorBuffer));
   } catch (err) {
     if (err instanceof FlowEndpointException) {
       return res.sendStatus(err.statusCode);
     }
-    console.error('flow endpoint error:', err.message || err);
+    console.error("flow endpoint error:", err.stack || err.message || err);
     return res.sendStatus(500);
   }
 });

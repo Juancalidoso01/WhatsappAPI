@@ -1,6 +1,7 @@
 "use strict";
 
 const redis = require("./upstash");
+const { parseRedisJson } = require("./redis-json");
 
 const PREFIX = "wa:flow:response:";
 const LIST_KEY = "wa:flow:responses";
@@ -61,16 +62,20 @@ async function recordSend({ phone, flowId, flowToken, mode }) {
 async function recordEndpointEvent(event) {
   const id = `fe_${Date.now()}`;
   const row = { id, ...event, at: Date.now() };
-  if (redis) {
-    await Promise.all([
-      redis.set(`${PREFIX}event:${id}`, JSON.stringify(row)),
-      redis.zadd(EVENT_LIST, { score: row.at, member: id }),
-      redis.hincrby(STATS_KEY, "endpointCalls", 1),
-    ]);
-  } else {
-    mem.events.unshift(row);
-    mem.stats.endpointCalls++;
-    if (mem.events.length > 100) mem.events.length = 100;
+  try {
+    if (redis) {
+      await Promise.all([
+        redis.set(`${PREFIX}event:${id}`, JSON.stringify(row)),
+        redis.zadd(EVENT_LIST, { score: row.at, member: id }),
+        redis.hincrby(STATS_KEY, "endpointCalls", 1),
+      ]);
+    } else {
+      mem.events.unshift(row);
+      mem.stats.endpointCalls++;
+      if (mem.events.length > 100) mem.events.length = 100;
+    }
+  } catch (err) {
+    console.error("recordEndpointEvent error:", err.message || err);
   }
   return row;
 }
@@ -92,7 +97,7 @@ async function listResponses({ limit = 50 } = {}) {
     const ids = await redis.zrange(LIST_KEY, 0, limit - 1, { rev: true });
     const rows = await Promise.all((ids || []).map(async (id) => {
       const raw = await redis.get(`${PREFIX}${id}`);
-      return raw ? JSON.parse(raw) : null;
+      return parseRedisJson(raw);
     }));
     return rows.filter(Boolean);
   }
@@ -104,7 +109,7 @@ async function listSends({ limit = 50 } = {}) {
     const ids = await redis.zrange(SEND_LIST, 0, limit - 1, { rev: true });
     const rows = await Promise.all((ids || []).map(async (id) => {
       const raw = await redis.get(`${PREFIX}send:${id}`);
-      return raw ? JSON.parse(raw) : null;
+      return parseRedisJson(raw);
     }));
     return rows.filter(Boolean);
   }

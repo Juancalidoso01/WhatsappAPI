@@ -1,6 +1,7 @@
 "use strict";
 
 const redis = require("./upstash");
+const { parseRedisJson } = require("./redis-json");
 
 const PREFIX = "wa:payauth:";
 const LIST_KEY = "wa:payauth:list";
@@ -41,7 +42,7 @@ async function get(flowToken) {
   if (!flowToken) return null;
   if (redis) {
     const raw = await redis.get(`${PREFIX}${flowToken}`);
-    return raw ? JSON.parse(raw) : null;
+    return parseRedisJson(raw);
   }
   const row = mem.get(flowToken) || null;
   if (row && row.expiresAt < Date.now()) {
