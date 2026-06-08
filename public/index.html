@@ -202,14 +202,26 @@
 
   <div id="modalMedia" class="modal hidden">
     <div class="modal-card">
-      <h3>Enviar imagen o archivo</h3>
-      <p class="muted">Pega un enlace público (https) al archivo.</p>
+      <h3>Enviar archivo</h3>
+      <p class="muted">Adjunta una imagen, documento, audio o video desde tu equipo.</p>
+      <label>Archivo
+        <input id="mdFile" type="file" accept="image/*,audio/*,video/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip" />
+      </label>
+      <div id="mdPreview" class="media-preview hidden"></div>
       <label>Tipo
-        <select id="mdType"><option value="image">Imagen</option><option value="document">Documento</option></select>
+        <select id="mdType">
+          <option value="image">Imagen</option>
+          <option value="document">Documento</option>
+          <option value="audio">Audio</option>
+          <option value="video">Video</option>
+        </select>
       </label>
-      <label>Enlace (URL)
-        <input id="mdLink" type="text" placeholder="https://…/archivo.jpg" />
-      </label>
+      <details class="media-url-fallback">
+        <summary>O usar enlace público (https)</summary>
+        <label>Enlace (URL)
+          <input id="mdLink" type="text" placeholder="https://…/archivo.jpg" />
+        </label>
+      </details>
       <label>Texto / pie (opcional)
         <input id="mdCaption" type="text" placeholder="Descripción opcional" />
       </label>

@@ -14,11 +14,18 @@ const { urlencoded, json } = require('body-parser');
 require('dotenv').config();
 const express = require('express');
 
+const multer = require('multer');
+
 const config = require('./services/config');
 const Conversation = require('./services/conversation');
 const GraphApi = require('./services/graph-api');
 const Store = require('./services/store');
 const app = express();
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 16 * 1024 * 1024 },
+});
 
 // Safety net: keep the server alive if a WhatsApp API call fails (e.g. when
 // credentials aren't configured yet). The Facebook SDK otherwise installs a
@@ -232,37 +239,77 @@ app.post('/api/send-template', apiJson, async (req, res) => {
   }
 });
 
-// Send an image or document by public link
-app.post('/api/send-media', apiJson, async (req, res) => {
-  const { phone, mediaType, link, caption, filename } = req.body || {};
-  if (!phone || !link) {
-    return res.status(400).json({ error: 'Se requieren "phone" y "link".' });
+function parseSendMediaBody(req, res, next) {
+  if (req.is('multipart/form-data')) {
+    return upload.single('file')(req, res, next);
+  }
+  return apiJson(req, res, next);
+}
+
+// Send media: upload a file from the UI or fall back to a public https link
+app.post('/api/send-media', parseSendMediaBody, async (req, res) => {
+  const { phone, mediaType, link, caption } = req.body || {};
+  const file = req.file;
+
+  if (!phone) {
+    return res.status(400).json({ error: 'Se requiere "phone".' });
+  }
+  if (!file && !link) {
+    return res.status(400).json({ error: 'Adjunta un archivo o pega un enlace público (https).' });
   }
 
   const convo = await Store.getConversation(phone);
   const phoneNumberId = (convo && convo.phoneNumberId) || config.phoneNumberId;
-
-  const stored = await Store.addMessage({
-    phone,
-    phoneNumberId,
-    direction: 'out',
-    text: caption || (mediaType === 'document' ? (filename || '[documento]') : '[imagen]'),
-    type: mediaType === 'document' ? 'document' : 'image',
-    status: 'pending',
-    media: link,
-  });
+  const waType = file
+    ? resolveMediaType(file.mimetype, mediaType)
+    : (mediaType === 'document' ? 'document' : mediaType === 'audio' ? 'audio' : mediaType === 'video' ? 'video' : 'image');
+  const filename = file ? file.originalname : (req.body.filename || '');
+  const label = caption
+    || (waType === 'document' ? (filename || '[documento]') : waType === 'audio' ? '[audio]' : waType === 'video' ? '[video]' : '[imagen]');
 
   if (!phoneNumberId || !config.accessToken) {
-    await Store.updateMessageStatus(phone, stored.id, 'failed');
-    return res.status(200).json({ ok: false, message: stored, warning: 'Falta PHONE_NUMBER_ID o ACCESS_TOKEN.' });
+    return res.status(200).json({ ok: false, warning: 'Falta PHONE_NUMBER_ID o ACCESS_TOKEN.' });
   }
 
+  let stored;
   try {
-    await GraphApi.messageWithMedia(undefined, phoneNumberId, phone, { mediaType, link, caption, filename });
+    let mediaId = null;
+    if (file) {
+      mediaId = await GraphApi.uploadMedia(phoneNumberId, {
+        buffer: file.buffer,
+        mimeType: file.mimetype,
+        filename: file.originalname,
+        type: waType,
+      });
+    }
+
+    stored = await Store.addMessage({
+      phone,
+      phoneNumberId,
+      direction: 'out',
+      text: label,
+      type: waType,
+      status: 'pending',
+      media: file ? null : link,
+      mediaId,
+    });
+
+    await GraphApi.messageWithMedia(undefined, phoneNumberId, phone, {
+      mediaType: waType,
+      link: file ? undefined : link,
+      mediaId,
+      caption,
+      filename,
+    });
+
     await Store.updateMessageStatus(phone, stored.id, 'sent');
+    stored.status = 'sent';
     res.json({ ok: true, message: stored });
   } catch (err) {
-    await Store.updateMessageStatus(phone, stored.id, 'failed');
+    if (stored) {
+      await Store.updateMessageStatus(phone, stored.id, 'failed');
+      stored.status = 'failed';
+    }
     res.status(200).json({ ok: false, message: stored, error: String(err.message || err) });
   }
 });
@@ -442,6 +489,15 @@ async function mirrorIncomingMessage(rawMessage, contactNames, senderPhoneNumber
     id: rawMessage.id,
     mediaId: extractMediaId(rawMessage),
   });
+}
+
+function resolveMediaType(mimeType, requested) {
+  const mime = String(mimeType || '').toLowerCase();
+  if (mime.startsWith('image/')) return 'image';
+  if (mime.startsWith('audio/')) return 'audio';
+  if (mime.startsWith('video/')) return 'video';
+  if (['image', 'audio', 'video', 'document'].includes(requested)) return requested;
+  return 'document';
 }
 
 function extractMediaId(rawMessage) {

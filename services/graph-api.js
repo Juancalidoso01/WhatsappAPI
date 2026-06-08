@@ -60,11 +60,27 @@ module.exports = class GraphApi {
     }
   }
 
-  // --- Media (image / document) by public link ---
-  static async messageWithMedia(messageId, senderPhoneNumberId, recipientPhoneNumber, { mediaType, link, caption, filename }) {
-    const type = mediaType === "document" ? "document" : "image";
-    const media = { link };
-    if (caption) media.caption = caption;
+  // --- Upload media to WhatsApp (returns media id for sending) ---
+  static async uploadMedia(phoneNumberId, { buffer, mimeType, filename, type }) {
+    const form = new FormData();
+    form.append("messaging_product", "whatsapp");
+    form.append("type", type);
+    form.append("file", new Blob([buffer], { type: mimeType }), filename || "file");
+
+    const url = `https://graph.facebook.com/v21.0/${phoneNumberId}/media?access_token=${config.accessToken}`;
+    const res = await fetch(url, { method: "POST", body: form });
+    const json = await res.json();
+    if (json.error) {
+      throw new Error(json.error.error_user_msg || json.error.message || "Error al subir media");
+    }
+    return json.id;
+  }
+
+  // --- Media (image / document / audio / video) by link or uploaded media id ---
+  static async messageWithMedia(messageId, senderPhoneNumberId, recipientPhoneNumber, { mediaType, link, mediaId, caption, filename }) {
+    const type = ["image", "document", "audio", "video"].includes(mediaType) ? mediaType : "image";
+    const media = mediaId ? { id: mediaId } : { link };
+    if (caption && type !== "audio") media.caption = caption;
     if (type === "document" && filename) media.filename = filename;
 
     const requestBody = {

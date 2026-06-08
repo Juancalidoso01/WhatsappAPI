@@ -21,6 +21,7 @@ const api = async (url, opts) => {
 };
 const post = (url, body) =>
   api(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+const postForm = (url, formData) => api(url, { method: "POST", body: formData });
 
 function escapeHtml(s) {
   return String(s == null ? "" : s).replace(/[&<>"']/g, (c) =>
@@ -162,7 +163,40 @@ function renderMedia(m) {
   if (m.type === "audio") {
     return `<audio controls preload="metadata" src="${escapeHtml(src)}"></audio>`;
   }
+  if (m.type === "video") {
+    return `<video controls preload="metadata" src="${escapeHtml(src)}"></video>`;
+  }
+  if (m.type === "document") {
+    const label = m.text || "Documento";
+    return `<a class="doc-link" href="${escapeHtml(src)}" target="_blank" rel="noopener">${escapeHtml(label)}</a>`;
+  }
   return "";
+}
+
+function guessMediaType(file) {
+  const mime = String(file.type || "").toLowerCase();
+  if (mime.startsWith("image/")) return "image";
+  if (mime.startsWith("audio/")) return "audio";
+  if (mime.startsWith("video/")) return "video";
+  return "document";
+}
+
+function updateMediaPreview() {
+  const file = $("mdFile").files[0];
+  const box = $("mdPreview");
+  if (!file) {
+    box.classList.add("hidden");
+    box.innerHTML = "";
+    return;
+  }
+  $("mdType").value = guessMediaType(file);
+  box.classList.remove("hidden");
+  if (file.type.startsWith("image/")) {
+    const url = URL.createObjectURL(file);
+    box.innerHTML = `<img src="${url}" alt="" /><span class="muted">${escapeHtml(file.name)}</span>`;
+    return;
+  }
+  box.innerHTML = `<span class="muted">${escapeHtml(file.name)} · ${Math.max(1, Math.round(file.size / 1024))} KB</span>`;
 }
 
 function statusTick(m) {
@@ -453,15 +487,33 @@ async function sendNewChat() {
 async function sendMedia() {
   const phone = state.activePhone;
   if (!phone) return;
+  const file = $("mdFile").files[0];
   const link = $("mdLink").value.trim();
-  if (!link) { toast("Pega un enlace.", "error"); return; }
-  const res = await post("/api/send-media", {
-    phone, mediaType: $("mdType").value, link, caption: $("mdCaption").value.trim(),
-  });
+  if (!file && !link) { toast("Selecciona un archivo o pega un enlace.", "error"); return; }
+
+  let res;
+  if (file) {
+    const form = new FormData();
+    form.append("phone", phone);
+    form.append("mediaType", $("mdType").value);
+    form.append("caption", $("mdCaption").value.trim());
+    form.append("file", file, file.name);
+    $("mdSend").disabled = true;
+    res = await postForm("/api/send-media", form);
+    $("mdSend").disabled = false;
+  } else {
+    res = await post("/api/send-media", {
+      phone, mediaType: $("mdType").value, link, caption: $("mdCaption").value.trim(),
+    });
+  }
+
   closeModals();
   if (res.ok) toast("Enviado.", "ok");
   else toast("No se pudo enviar: " + (res.error || res.warning || "error"), "error");
-  $("mdLink").value = ""; $("mdCaption").value = "";
+  $("mdFile").value = "";
+  $("mdLink").value = "";
+  $("mdCaption").value = "";
+  updateMediaPreview();
   await loadMessages(phone);
 }
 
@@ -644,6 +696,7 @@ function bindEvents() {
   $("ncSend").addEventListener("click", sendNewChat);
   $("attachBtn").addEventListener("click", () => showModal("modalMedia"));
   $("detailMediaBtn").addEventListener("click", () => showModal("modalMedia"));
+  $("mdFile").addEventListener("change", updateMediaPreview);
   $("mdSend").addEventListener("click", sendMedia);
   $("simBtn").addEventListener("click", () => showModal("modalSim"));
   $("simSend").addEventListener("click", simulate);
