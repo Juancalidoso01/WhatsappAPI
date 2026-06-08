@@ -10,7 +10,7 @@
  *
  * Redis layout (prefixed with "wa:" so it can safely share a database):
  *   wa:convos              ZSET   score=lastActivity, member=phone
- *   wa:convo:<phone>       HASH   { name, phoneNumberId }
+ *   wa:convo:<phone>       HASH   { name, phoneNumberId, firstSeen, notes, conversationOrigin, windowExpiresAt }
  *   wa:msgs:<phone>        LIST   JSON messages (oldest -> newest)
  */
 
@@ -90,11 +90,12 @@ async function addMessage({
       redis.zadd(`${PREFIX}convos`, { score: message.timestamp, member: phone }),
     ];
     if (Object.keys(meta).length) ops.push(redis.hset(convoKey, meta));
-    // Ensure a name exists even if not provided
     ops.push(redis.hsetnx(convoKey, "name", name || phone));
+    ops.push(redis.hsetnx(convoKey, "firstSeen", String(message.timestamp)));
     await Promise.all(ops);
   } else {
     const convo = memGetOrCreate(phone, name, phoneNumberId);
+    if (!convo.firstSeen) convo.firstSeen = message.timestamp;
     convo.messages.push(message);
     convo.lastActivity = message.timestamp;
   }
@@ -155,17 +156,80 @@ async function updateMessageStatus(phone, messageId, status) {
   }
 }
 
-async function getConversation(phone) {
+function parseConvoMeta(meta, phone) {
+  if (!meta || !Object.keys(meta).length) return null;
+  return {
+    phone: String(phone),
+    name: String(meta.name || phone),
+    phoneNumberId: meta.phoneNumberId ? String(meta.phoneNumberId) : null,
+    firstSeen: meta.firstSeen ? Number(meta.firstSeen) : null,
+    conversationOrigin: meta.conversationOrigin || null,
+    windowExpiresAt: meta.windowExpiresAt ? Number(meta.windowExpiresAt) : null,
+    notes: meta.notes || "",
+  };
+}
+
+async function updateConversationMeta(phone, fields) {
+  const p = String(phone);
+  const clean = {};
+  Object.entries(fields || {}).forEach(([k, v]) => {
+    if (v != null && v !== "") clean[k] = String(v);
+  });
+  if (!Object.keys(clean).length) return;
+
   if (redis) {
-    const meta = await redis.hgetall(`${PREFIX}convo:${phone}`);
-    if (!meta) return null;
-    return {
-      phone: String(phone),
-      name: String(meta.name || phone),
-      phoneNumberId: meta.phoneNumberId ? String(meta.phoneNumberId) : null,
-    };
+    await redis.hset(`${PREFIX}convo:${p}`, clean);
+    return;
   }
-  return memConversations.get(phone) || null;
+  const convo = memGetOrCreate(p);
+  Object.assign(convo, clean);
+  if (clean.firstSeen && !convo.firstSeen) convo.firstSeen = Number(clean.firstSeen);
+  if (clean.windowExpiresAt) convo.windowExpiresAt = Number(clean.windowExpiresAt);
+}
+
+function computeMessageStats(messages) {
+  const stats = { total: 0, in: 0, out: 0, byType: {} };
+  let firstSeen = null;
+  let lastInbound = null;
+  (messages || []).forEach((m) => {
+    stats.total++;
+    if (m.direction === "in") {
+      stats.in++;
+      lastInbound = m.timestamp;
+    } else {
+      stats.out++;
+    }
+    const t = m.type || "text";
+    stats.byType[t] = (stats.byType[t] || 0) + 1;
+    if (!firstSeen || m.timestamp < firstSeen) firstSeen = m.timestamp;
+  });
+  return { stats, firstSeen, lastInbound };
+}
+
+async function getConversation(phone) {
+  return getConversationMeta(phone);
+}
+
+async function getConversationMeta(phone) {
+  const p = String(phone);
+  if (redis) {
+    const meta = await redis.hgetall(`${PREFIX}convo:${p}`);
+    return parseConvoMeta(meta, p);
+  }
+  const convo = memConversations.get(p);
+  return convo ? parseConvoMeta(convo, p) : null;
+}
+
+async function getConversationDetail(phone) {
+  const p = String(phone);
+  const [meta, messages] = await Promise.all([getConversationMeta(p), getMessages(p)]);
+  const { stats, firstSeen, lastInbound } = computeMessageStats(messages);
+  return {
+    ...(meta || { phone: p, name: p, phoneNumberId: null, notes: "" }),
+    firstSeen: (meta && meta.firstSeen) || firstSeen,
+    stats,
+    lastInbound,
+  };
 }
 
 async function listConversations() {
@@ -232,7 +296,10 @@ module.exports = {
   addMessage,
   updateMessageId,
   updateMessageStatus,
+  updateConversationMeta,
   getConversation,
+  getConversationMeta,
+  getConversationDetail,
   listConversations,
   getMessages,
   subscribe,

@@ -9,8 +9,10 @@ const state = {
   templates: [],
   activePhone: null,
   messages: [],
+  conversationDetail: null,
   filter: "",
   pollTimer: null,
+  notesTimer: null,
 };
 
 /* ---------- tiny helpers ---------- */
@@ -21,6 +23,8 @@ const api = async (url, opts) => {
 };
 const post = (url, body) =>
   api(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+const patch = (url, body) =>
+  api(url, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
 const postForm = (url, formData) => api(url, { method: "POST", body: formData });
 
 function escapeHtml(s) {
@@ -124,7 +128,7 @@ async function openConversation(phone, name) {
   $("detailAvatar").textContent = initials(name);
   document.querySelector("#screenChats").classList.add("show-chat");
   renderConversations();
-  await loadMessages(phone);
+  await Promise.all([loadMessages(phone), loadConversationDetail(phone)]);
 }
 
 async function loadMessages(phone) {
@@ -136,6 +140,77 @@ async function loadMessages(phone) {
       updateWindow();
     }
   } catch (_) {}
+}
+
+async function loadConversationDetail(phone) {
+  try {
+    const data = await api(`/api/conversations/${encodeURIComponent(phone)}/detail`);
+    if (data && !data.error) {
+      state.conversationDetail = data;
+      renderDetailPanel();
+      updateWindow();
+    }
+  } catch (_) {}
+}
+
+const TYPE_LABELS = {
+  text: "Texto",
+  image: "Imagen",
+  audio: "Audio",
+  video: "Video",
+  document: "Documento",
+  template: "Plantilla",
+  sticker: "Sticker",
+  interactive: "Interactivo",
+};
+
+function renderDetailPanel() {
+  const d = state.conversationDetail;
+  if (!d) return;
+
+  const phoneText = d.phoneFormatted || ("+" + d.phone);
+  $("detailPhone").textContent = phoneText;
+  if (state.activePhone === d.phone) $("chatPhone").textContent = phoneText;
+
+  const countryEl = $("detailCountry");
+  if (d.country && d.country.name) {
+    const flag = d.country.flag ? d.country.flag + " " : "";
+    countryEl.textContent = flag + d.country.name;
+  } else {
+    countryEl.textContent = "—";
+  }
+
+  $("detailOrigin").textContent = d.originLabel || d.conversationOrigin || "—";
+
+  const stats = d.stats || {};
+  const typeLines = Object.entries(stats.byType || {})
+    .sort((a, b) => b[1] - a[1])
+    .map(([t, n]) => `<div class="detail-stat"><span>${escapeHtml(TYPE_LABELS[t] || t)}</span><span>${n}</span></div>`)
+    .join("");
+  $("detailStats").innerHTML = `
+    <div class="detail-stat"><span>Total mensajes</span><span>${stats.total || 0}</span></div>
+    <div class="detail-stat"><span>Entrantes</span><span>${stats.in || 0}</span></div>
+    <div class="detail-stat"><span>Salientes</span><span>${stats.out || 0}</span></div>
+    ${typeLines}`;
+
+  const first = d.firstSeen;
+  $("detailFirstSeen").textContent = first
+    ? `Primer contacto: ${new Date(first).toLocaleString("es", { dateStyle: "medium", timeStyle: "short" })}`
+    : "";
+
+  const notesEl = $("detailNotes");
+  if (document.activeElement !== notesEl) {
+    notesEl.value = d.notes || "";
+  }
+}
+
+async function saveNotes() {
+  const phone = state.activePhone;
+  if (!phone) return;
+  const notes = $("detailNotes").value;
+  if (state.conversationDetail && state.conversationDetail.notes === notes) return;
+  const res = await patch(`/api/conversations/${encodeURIComponent(phone)}`, { notes });
+  if (res.ok && state.conversationDetail) state.conversationDetail.notes = notes;
 }
 
 function previewText(m) {
@@ -282,18 +357,39 @@ function lastInboundTs() {
 }
 
 function updateWindow() {
-  const last = lastInboundTs();
-  const open = last && Date.now() - last < DAY_MS;
+  const detail = state.conversationDetail;
+  let open = false;
+  let expiryMs = null;
+
+  if (detail && detail.windowExpiresAt) {
+    expiryMs = detail.windowExpiresAt * 1000;
+    open = Date.now() < expiryMs;
+  } else {
+    const last = lastInboundTs();
+    open = Boolean(last && Date.now() - last < DAY_MS);
+    if (open) expiryMs = last + DAY_MS;
+  }
+
   const pill = $("detailWindow");
   const banner = $("windowBanner");
-  if (open) {
-    const hrs = Math.max(0, Math.floor((DAY_MS - (Date.now() - last)) / 3600000));
+  const expiryEl = $("detailWindowExpiry");
+
+  if (open && expiryMs) {
+    const remain = Math.max(0, expiryMs - Date.now());
+    const hrs = Math.floor(remain / 3600000);
+    const mins = Math.floor((remain % 3600000) / 60000);
     pill.className = "window-pill open";
-    pill.textContent = `Abierta · ~${hrs}h restantes`;
+    pill.textContent = `Abierta · ${hrs}h ${mins}m`;
+    expiryEl.textContent = `Cierra: ${new Date(expiryMs).toLocaleString("es", { dateStyle: "medium", timeStyle: "short" })}`;
     banner.classList.add("hidden");
   } else {
     pill.className = "window-pill closed";
     pill.textContent = "Cerrada";
+    if (detail && detail.windowExpiresAt) {
+      expiryEl.textContent = `Expiró: ${new Date(detail.windowExpiresAt * 1000).toLocaleString("es", { dateStyle: "medium", timeStyle: "short" })}`;
+    } else {
+      expiryEl.textContent = "Sin mensajes recientes del cliente";
+    }
     banner.classList.remove("hidden");
     banner.innerHTML = `La ventana de 24h está cerrada. Para escribir, envía una <strong>plantilla</strong> primero.`;
   }
@@ -308,6 +404,7 @@ async function sendText(text) {
   if (res.warning) toast(res.warning, "error");
   else if (res.error) toast("No se pudo enviar: " + res.error, "error");
   await loadMessages(phone);
+  await loadConversationDetail(phone);
   await loadConversations();
 }
 
@@ -723,7 +820,12 @@ function startPolling() {
   stopPolling();
   state.pollTimer = setInterval(async () => {
     await loadConversations();
-    if (state.activePhone) await loadMessages(state.activePhone);
+    if (state.activePhone) {
+      await Promise.all([
+        loadMessages(state.activePhone),
+        loadConversationDetail(state.activePhone),
+      ]);
+    }
   }, POLL_MS);
 }
 function stopPolling() { if (state.pollTimer) clearInterval(state.pollTimer); state.pollTimer = null; }
@@ -750,6 +852,11 @@ function bindEvents() {
   $("tpCreate").addEventListener("click", createTemplate);
   $("detailTemplateBtn").addEventListener("click", () => openNewChat());
   $("detailToggle").addEventListener("click", () => $("detailPane").classList.toggle("collapsed"));
+  $("detailNotes").addEventListener("blur", saveNotes);
+  $("detailNotes").addEventListener("input", () => {
+    clearTimeout(state.notesTimer);
+    state.notesTimer = setTimeout(saveNotes, 900);
+  });
   document.querySelectorAll("[data-close]").forEach((b) => b.addEventListener("click", closeModals));
   document.querySelectorAll(".modal").forEach((m) =>
     m.addEventListener("click", (e) => { if (e.target === m) closeModals(); })

@@ -20,6 +20,7 @@ const config = require('./services/config');
 const Conversation = require('./services/conversation');
 const GraphApi = require('./services/graph-api');
 const Store = require('./services/store');
+const phoneMeta = require('./services/phone-meta');
 const app = express();
 
 const upload = multer({
@@ -85,9 +86,24 @@ app.post('/webhook', webhookJson, (req, res) => {
 
           if (value.statuses) {
             value.statuses.forEach(status => {
-              Promise.resolve(Store.updateMessageStatus(String(status.recipient_id), status.id, status.status))
+              const phone = String(status.recipient_id);
+              Promise.resolve(Store.updateMessageStatus(phone, status.id, status.status))
                 .catch(err => console.error('updateMessageStatus error:', err));
-              // Handle message status updates
+
+              const metaFields = {};
+              if (status.conversation) {
+                if (status.conversation.origin && status.conversation.origin.type) {
+                  metaFields.conversationOrigin = status.conversation.origin.type;
+                }
+                if (status.conversation.expiration_timestamp) {
+                  metaFields.windowExpiresAt = status.conversation.expiration_timestamp;
+                }
+              }
+              if (Object.keys(metaFields).length) {
+                Promise.resolve(Store.updateConversationMeta(phone, metaFields))
+                  .catch(err => console.error('updateConversationMeta error:', err));
+              }
+
               Promise.resolve(Conversation.handleStatus(senderPhoneNumberId, status))
                 .catch(err => console.error('handleStatus error:', err));
             });
@@ -232,6 +248,7 @@ app.post('/api/send-template', apiJson, async (req, res) => {
   try {
     const response = await GraphApi.sendTemplate(phoneNumberId, phone, { name: template, language: language || 'es', components });
     await finalizeOutbound(phone, stored, response);
+    await Store.updateConversationMeta(phone, { conversationOrigin: 'business_initiated' });
     res.json({ ok: true, message: stored });
   } catch (err) {
     await Store.updateMessageStatus(phone, stored.id, 'failed');
@@ -358,6 +375,43 @@ app.get('/api/conversations/:phone/messages', async (req, res) => {
   } catch (err) {
     console.error('getMessages error:', err.message);
     res.status(500).json({ error: 'No se pudieron cargar los mensajes.' });
+  }
+});
+
+// Enriched contact detail (country, window, stats, notes)
+app.get('/api/conversations/:phone/detail', async (req, res) => {
+  try {
+    const detail = await Store.getConversationDetail(req.params.phone);
+    if (!detail) return res.status(404).json({ error: 'Conversación no encontrada.' });
+    const country = phoneMeta.inferCountry(detail.phone);
+    res.json({
+      ...detail,
+      country: {
+        code: country.code,
+        name: country.name,
+        flag: phoneMeta.countryFlag(country.code),
+      },
+      phoneFormatted: phoneMeta.formatPhone(detail.phone),
+      originLabel: phoneMeta.originLabel(detail.conversationOrigin),
+    });
+  } catch (err) {
+    console.error('getConversationDetail error:', err.message);
+    res.status(500).json({ error: 'No se pudo cargar el detalle.' });
+  }
+});
+
+// Update internal CRM notes for a conversation
+app.patch('/api/conversations/:phone', apiJson, async (req, res) => {
+  const { notes } = req.body || {};
+  if (typeof notes !== 'string') {
+    return res.status(400).json({ error: 'Se requiere "notes" (texto).' });
+  }
+  try {
+    await Store.updateConversationMeta(req.params.phone, { notes });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('updateConversationNotes error:', err.message);
+    res.status(500).json({ error: 'No se pudieron guardar las notas.' });
   }
 });
 
@@ -492,6 +546,13 @@ async function finalizeOutbound(phone, stored, response) {
 }
 
 async function mirrorIncomingMessage(rawMessage, contactNames, senderPhoneNumberId) {
+  const phone = rawMessage.from;
+  const meta = { conversationOrigin: 'user_initiated' };
+  if (rawMessage.timestamp) {
+    meta.windowExpiresAt = String(Number(rawMessage.timestamp) + 86400);
+  }
+  await Store.updateConversationMeta(phone, meta);
+
   const audio = rawMessage.type === 'audio' ? rawMessage.audio : null;
   return Store.addMessage({
     phone: rawMessage.from,
