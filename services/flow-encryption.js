@@ -51,17 +51,19 @@ function decryptRequest(body, privatePem) {
   };
 }
 
+function flipIv(ivBuffer) {
+  return Buffer.from([...ivBuffer].map((byte) => byte ^ 0xff));
+}
+
 function encryptResponse(response, aesKeyBuffer, initialVectorBuffer) {
-  const flippedIV = Buffer.from(initialVectorBuffer);
-  flippedIV.reverse();
+  const flippedIV = flipIv(initialVectorBuffer);
 
   const cipher = crypto.createCipheriv("aes-128-gcm", aesKeyBuffer, flippedIV);
-  const encrypted = Buffer.concat([
+  return Buffer.concat([
     cipher.update(JSON.stringify(response), "utf-8"),
     cipher.final(),
-  ]);
-  const tag = cipher.getAuthTag();
-  return Buffer.concat([encrypted, tag]).toString("base64");
+    cipher.getAuthTag(),
+  ]).toString("base64");
 }
 
 function isFlowSignatureValid(req, appSecret) {
@@ -83,5 +85,6 @@ module.exports = {
   FlowEndpointException,
   decryptRequest,
   encryptResponse,
+  flipIv,
   isFlowSignatureValid,
 };
