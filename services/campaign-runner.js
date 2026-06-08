@@ -2,6 +2,7 @@
 
 const GraphApi = require("./graph-api");
 const CampaignStore = require("./campaign-store");
+const BillingLedger = require("./billing-ledger");
 const { buildComponentsFromRow } = require("./template-params");
 
 const BATCH_SIZE = 20;
@@ -49,6 +50,19 @@ async function processBatch({ campaignId, templateDef, phoneNumberId }) {
       const sentAt = Date.now();
       await CampaignStore.updateRowStatus(campaignId, row.index, "sent", { wamid, sentAt });
       if (wamid) await CampaignStore.bindWamid(wamid, campaignId, row.index);
+      try {
+        const cat = String((templateDef && templateDef.category) || campaign.templateCategory || "UTILITY").toUpperCase();
+        await BillingLedger.record({
+          phone: row.phone,
+          messageId: wamid,
+          kind: "bulk",
+          category: cat,
+          templateName: campaign.template,
+          preview: `[carga masiva] ${campaign.name || campaign.template}`,
+          source: `campaign:${campaignId}`,
+          recipientName: row.name || null,
+        });
+      } catch (_) { /* non-blocking */ }
       processed++;
     } catch (err) {
       const rate = isRateLimitError(err);

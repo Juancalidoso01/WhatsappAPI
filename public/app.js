@@ -36,6 +36,10 @@ const state = {
   filter: "",
   pollTimer: null,
   notesTimer: null,
+  billingLedger: [],
+  activeBillEntry: null,
+  highlightMessageId: null,
+  billingTab: "resumen",
 };
 
 /* ---------- tiny helpers ---------- */
@@ -167,8 +171,9 @@ function renderConversations() {
   );
 }
 
-async function openConversation(phone, name) {
+async function openConversation(phone, name, highlightMessageId = null) {
   state.activePhone = phone;
+  state.highlightMessageId = highlightMessageId || null;
   $("emptyState").classList.add("hidden");
   $("chatView").classList.remove("hidden");
   $("chatName").textContent = name;
@@ -180,6 +185,17 @@ async function openConversation(phone, name) {
   document.querySelector("#screenChats").classList.add("show-chat");
   renderConversations();
   await Promise.all([loadMessages(phone), loadConversationDetail(phone)]);
+  if (state.highlightMessageId) {
+    requestAnimationFrame(() => {
+      const box = $("messages");
+      const el = $("billHighlightMsg") || (box && box.querySelector(`[data-msg-id="${CSS.escape(state.highlightMessageId)}"]`));
+      if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+      setTimeout(() => {
+        state.highlightMessageId = null;
+        renderMessages();
+      }, 5000);
+    });
+  }
 }
 
 async function loadMessages(phone) {
@@ -382,14 +398,16 @@ function bindAudioDurations() {
 
 function renderMessages() {
   const box = $("messages");
+  const hi = state.highlightMessageId;
   box.innerHTML = state.messages
     .map((m) => {
       const tplClass = m.type === "template" ? " tpl" : "";
       const media = renderMedia(m);
       const caption = m.text ? escapeHtml(m.text) : "";
       const time = new Date(m.timestamp).toLocaleTimeString("es", { hour: "2-digit", minute: "2-digit" });
-      return `<div class="msg-row ${m.direction}">
-        <div class="bubble${tplClass}">
+      const isHi = hi && (m.id === hi);
+      return `<div class="msg-row ${m.direction}" data-msg-id="${escapeHtml(m.id)}"${isHi ? ' id="billHighlightMsg"' : ""}>
+        <div class="bubble${tplClass}${isHi ? " msg-highlight" : ""}">
           ${media}${caption}
           <div class="bubble-meta">${time}${statusTick(m)}</div>
         </div>
@@ -1324,6 +1342,102 @@ function fmtCost(n) {
 }
 function fmtNum(n) { return (Number(n) || 0).toLocaleString("en-US"); }
 
+function fmtBillDate(ts) {
+  if (!ts) return "—";
+  return new Date(ts).toLocaleString("es", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
+}
+
+function fmtCostCell(entry) {
+  if (!entry) return "—";
+  if (entry.isFree || !entry.estimatedCost) {
+    return `<span class="bill-cost-free">Gratis</span>`;
+  }
+  return `<span class="bill-cost-paid">${fmtUsd(entry.estimatedCost)}</span>`;
+}
+
+function isFlowLedgerRow(r) {
+  return r.kind === "flow" || r.kind === "flow_interactive" || r.kind === "template_flow"
+    || Boolean(r.flowName || r.flowId);
+}
+
+function setBillingTab(tab) {
+  state.billingTab = tab || "resumen";
+  document.querySelectorAll(".billing-tab").forEach((btn) =>
+    btn.classList.toggle("active", btn.dataset.billTab === state.billingTab)
+  );
+  document.querySelectorAll(".billing-tab-panel").forEach((panel) =>
+    panel.classList.toggle("hidden", panel.dataset.billPanel !== state.billingTab)
+  );
+}
+
+function openBillDetail(entry) {
+  if (!entry) return;
+  state.activeBillEntry = entry;
+  const body = $("billDetailBody");
+  if (!body) return;
+  body.innerHTML = `
+    <dl>
+      <dt>Fecha</dt><dd>${escapeHtml(fmtBillDate(entry.sentAt))}</dd>
+      <dt>Destino</dt><dd>${escapeHtml(entry.phoneFormatted || entry.phone)}${entry.recipientName ? ` · ${escapeHtml(entry.recipientName)}` : ""}</dd>
+      <dt>País</dt><dd>${countryFlag(entry.country)} ${escapeHtml(entry.countryName || entry.country || "—")}</dd>
+      <dt>Tipo</dt><dd>${escapeHtml(entry.kindLabel || entry.kind)}</dd>
+      <dt>Categoría</dt><dd><span class="cat-tag ${escapeHtml(entry.category)}">${escapeHtml(entry.categoryLabel || categoryBillingLabel(entry.category))}</span></dd>
+      <dt>Costo est.</dt><dd>${entry.isFree ? '<span class="bill-cost-free">Gratis (servicio)</span>' : fmtUsd(entry.estimatedCost || 0)}</dd>
+      ${entry.templateName ? `<dt>Plantilla</dt><dd>${escapeHtml(entry.templateName)}</dd>` : ""}
+      ${entry.flowName ? `<dt>Flow</dt><dd>${escapeHtml(entry.flowName)}</dd>` : ""}
+      ${entry.flowMode ? `<dt>Modo</dt><dd>${escapeHtml(entry.flowMode)}</dd>` : ""}
+      ${entry.preview ? `<dt>Mensaje</dt><dd>${escapeHtml(entry.preview)}</dd>` : ""}
+      ${entry.billingNote ? `<dt>Nota</dt><dd class="muted sm">${escapeHtml(entry.billingNote)}</dd>` : ""}
+    </dl>`;
+  showModal("modalBillDetail");
+}
+
+function openConversationFromBillEntry(entry) {
+  if (!entry || !entry.phone) return;
+  closeModals();
+  switchScreen("chats");
+  openConversation(entry.phone, entry.recipientName || entry.phoneFormatted || entry.phone, entry.messageId || entry.localMessageId);
+}
+
+function renderBillingLedger(rows) {
+  const tbody = $("billLedgerRows");
+  if (!tbody) return;
+  if (!rows.length) {
+    tbody.innerHTML = `<tr><td colspan="5" class="muted center">Sin envíos registrados en este periodo.</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = rows.map((r, i) => `<tr class="bill-row-click" data-ledger-i="${i}">
+    <td>${escapeHtml(fmtBillDate(r.sentAt))}</td>
+    <td>${escapeHtml(r.phoneFormatted || r.phone)}</td>
+    <td>${escapeHtml(r.kindLabel || r.kind)}<div class="bill-preview">${escapeHtml(r.preview || r.templateName || r.flowName || "")}</div></td>
+    <td><span class="cat-tag ${escapeHtml(r.category)}">${escapeHtml(r.categoryLabel || categoryBillingLabel(r.category))}</span></td>
+    <td class="num">${fmtCostCell(r)}</td>
+  </tr>`).join("");
+  tbody.querySelectorAll(".bill-row-click").forEach((tr) =>
+    tr.addEventListener("click", () => openBillDetail(rows[Number(tr.dataset.ledgerI)]))
+  );
+}
+
+function renderBillingFlowRows(rows) {
+  const flowRows = rows.filter(isFlowLedgerRow);
+  const tbody = $("billFlowRows");
+  if (!tbody) return;
+  if (!flowRows.length) {
+    tbody.innerHTML = `<tr><td colspan="5" class="muted center">Sin envíos Flow en este periodo.</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = flowRows.map((r, i) => `<tr class="bill-row-click" data-flow-i="${i}">
+    <td>${escapeHtml(fmtBillDate(r.sentAt))}</td>
+    <td>${escapeHtml(r.flowName || r.templateName || "Flow")}</td>
+    <td>${escapeHtml(r.flowMode || r.kindLabel || "—")}</td>
+    <td><span class="cat-tag ${escapeHtml(r.category)}">${escapeHtml(r.categoryLabel || categoryBillingLabel(r.category))}</span></td>
+    <td class="num">${fmtCostCell(r)}</td>
+  </tr>`).join("");
+  tbody.querySelectorAll(".bill-row-click").forEach((tr) =>
+    tr.addEventListener("click", () => openBillDetail(flowRows[Number(tr.dataset.flowI)]))
+  );
+}
+
 async function loadBilling() {
   const days = $("billRange").value;
   const tbody = $("billRows");
@@ -1332,12 +1446,19 @@ async function loadBilling() {
   try { res = await api(`/api/billing?days=${days}`); } catch (_) { res = { ok: false, error: "Error de red" }; }
 
   const note = $("billNote");
+  const resetIds = [
+    "bcCost", "bcVolume", "bcMkt", "bcUtil", "bcAuth", "bcPortalEst",
+    "bcLedgerCount", "bcLedgerCost", "bcLedgerFree", "bcLedgerBillable",
+    "bcFlowSends", "bcFlowBillable", "bcFlowFree", "bcFlowCost", "bcFlowResponses", "bcFlowEndpoint",
+  ];
   if (!res.ok) {
     tbody.innerHTML = `<tr><td colspan="4" class="muted center">No se pudo cargar.</td></tr>`;
     note.textContent = res.error || "";
-    ["bcCost", "bcVolume", "bcMkt", "bcUtil", "bcAuth", "bcFlowSends", "bcFlowResponses", "bcFlowEndpoint"].forEach((id) => ($(id).textContent = "—"));
+    resetIds.forEach((id) => { if ($(id)) $(id).textContent = "—"; });
     $("billTplAlert").classList.add("hidden");
     if ($("billFlowNote")) $("billFlowNote").textContent = "";
+    if ($("billLedgerRows")) $("billLedgerRows").innerHTML = `<tr><td colspan="5" class="muted center">—</td></tr>`;
+    if ($("billFlowRows")) $("billFlowRows").innerHTML = `<tr><td colspan="5" class="muted center">—</td></tr>`;
     return;
   }
 
@@ -1349,11 +1470,27 @@ async function loadBilling() {
   $("bcUtil").textContent = fmtCost(byCat.UTILITY || 0);
   $("bcAuth").textContent = fmtCost((byCat.AUTHENTICATION || 0) + (byCat.AUTHENTICATION_INTERNATIONAL || 0));
 
+  const ledger = res.ledger || {};
+  const ledgerRows = ledger.rows || [];
+  const ls = ledger.summary || {};
+  state.billingLedger = ledgerRows;
+  if ($("bcPortalEst")) $("bcPortalEst").textContent = fmtUsd(ls.estimatedCost || 0);
+  if ($("bcLedgerCount")) $("bcLedgerCount").textContent = fmtNum(ls.count || 0);
+  if ($("bcLedgerCost")) $("bcLedgerCost").textContent = fmtUsd(ls.estimatedCost || 0);
+  if ($("bcLedgerFree")) $("bcLedgerFree").textContent = fmtNum(ls.freeCount || 0);
+  if ($("bcLedgerBillable")) $("bcLedgerBillable").textContent = fmtNum(ls.billableCount || 0);
+  renderBillingLedger(ledgerRows);
+
   const fs = res.flowStats || {};
-  if ($("bcFlowSends")) $("bcFlowSends").textContent = fmtNum(fs.sends);
-  if ($("bcFlowResponses")) $("bcFlowResponses").textContent = fmtNum(fs.responses);
-  if ($("bcFlowEndpoint")) $("bcFlowEndpoint").textContent = fmtNum(fs.endpointCalls);
+  const fl = ls.flow || {};
+  if ($("bcFlowSends")) $("bcFlowSends").textContent = fmtNum(fl.sends || fs.sends || 0);
+  if ($("bcFlowBillable")) $("bcFlowBillable").textContent = fmtNum(fl.billableSends || 0);
+  if ($("bcFlowFree")) $("bcFlowFree").textContent = fmtNum(fl.freeSends || 0);
+  if ($("bcFlowCost")) $("bcFlowCost").textContent = fmtUsd(fl.estimatedCost || 0);
+  if ($("bcFlowResponses")) $("bcFlowResponses").textContent = fmtNum(fs.responses || 0);
+  if ($("bcFlowEndpoint")) $("bcFlowEndpoint").textContent = fmtNum(fs.endpointCalls || 0);
   if ($("billFlowNote") && res.flowBillingNote) $("billFlowNote").textContent = res.flowBillingNote;
+  renderBillingFlowRows(ledgerRows);
 
   const alert = $("billTplAlert");
   const ts = res.templateSummary || {};
@@ -1362,14 +1499,14 @@ async function loadBilling() {
     const parts = [];
     if (ts.pendingReclass) parts.push(`${ts.pendingReclass} plantilla(s) con reclasificación pendiente`);
     if (ts.reclassified) parts.push(`${ts.reclassified} con categoría distinta a la solicitada`);
-    alert.innerHTML = `<strong>Plantillas:</strong> ${parts.join(" · ")}. Los costos de arriba reflejan la categoría que Meta ya facturó; revisa la pantalla Plantillas para ver solicitudes vs. categoría asignada.`;
+    alert.innerHTML = `<strong>Plantillas:</strong> ${parts.join(" · ")}. Los costos Meta reflejan la categoría facturada; revisa Plantillas para detalle.`;
   } else {
     alert.classList.add("hidden");
     alert.innerHTML = "";
   }
 
   if (!res.rows.length) {
-    tbody.innerHTML = `<tr><td colspan="4" class="muted center">Sin datos en este periodo.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="4" class="muted center">Sin datos Meta en este periodo.</td></tr>`;
   } else {
     tbody.innerHTML = res.rows
       .map((r) => `<tr>
@@ -1380,7 +1517,8 @@ async function loadBilling() {
       </tr>`)
       .join("");
   }
-  note.innerHTML = `Los montos están en la moneda de tu WABA y usan la <strong>categoría asignada por Meta</strong> (no la que solicitaste al crear la plantilla). Un costo de <strong>0</strong> suele indicar mensajes de servicio gratuitos o tráfico de número de prueba.`;
+  note.innerHTML = `Datos Meta en moneda WABA. <strong>Estimado portal</strong> usa tarifas de referencia sobre envíos registrados desde Punto Pago. Costo <strong>0</strong> = servicio gratis o número de prueba.`;
+  setBillingTab(state.billingTab);
 }
 
 function categoryBillingLabel(cat) {
@@ -3001,6 +3139,13 @@ function bindEvents() {
   $("simSend").addEventListener("click", simulate);
   $("billSync").addEventListener("click", loadBilling);
   $("billRange").addEventListener("change", loadBilling);
+  document.querySelectorAll(".billing-tab").forEach((btn) =>
+    btn.addEventListener("click", () => setBillingTab(btn.dataset.billTab))
+  );
+  const billDetailOpenChat = $("billDetailOpenChat");
+  if (billDetailOpenChat) {
+    billDetailOpenChat.addEventListener("click", () => openConversationFromBillEntry(state.activeBillEntry));
+  }
   $("bulkPreviewBtn").addEventListener("click", previewBulkCsv);
   $("bulkCreateBtn").addEventListener("click", createBulkCampaign);
   $("bulkSampleBtn").addEventListener("click", downloadBulkSampleCsv);

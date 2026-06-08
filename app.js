@@ -46,10 +46,58 @@ const flowUseCases = require('./services/flow-use-cases');
 const flowActivity = require('./services/flow-activity');
 const { curateFlowList } = require('./services/flow-list-curate');
 const redis = require('./services/upstash');
+const BillingLedger = require('./services/billing-ledger');
 
 const PAYMENT_AUTH_FLOW_KEY = 'wa:flow:payment_auth_3ds_v3';
 const FLOW_KEY_SYNCED = 'wa:flow:public_key_synced';
 const app = express();
+
+let tplCategoryCache = { at: 0, map: {} };
+
+async function isInServiceWindow(phone) {
+  try {
+    const meta = await Store.getConversationMeta(phone);
+    const exp = meta && meta.windowExpiresAt;
+    if (!exp) return false;
+    const ts = Number(exp);
+    const ms = ts < 1e12 ? ts * 1000 : ts;
+    return Date.now() < ms;
+  } catch (_) {
+    return false;
+  }
+}
+
+async function resolveTemplateCategory(templateName, language = 'es') {
+  const key = `${templateName}|${language || 'es'}`;
+  if (Date.now() - tplCategoryCache.at < 300000 && tplCategoryCache.map[key]) {
+    return tplCategoryCache.map[key];
+  }
+  if (!config.wabaId || !config.accessToken) return 'UTILITY';
+  try {
+    const result = await GraphApi.listTemplates(config.wabaId);
+    const map = {};
+    ((result && result.data) || []).forEach((t) => {
+      map[`${t.name}|${t.language}`] = String(t.category || 'UTILITY').toUpperCase();
+    });
+    tplCategoryCache = { at: Date.now(), map };
+    return map[key] || 'UTILITY';
+  } catch (_) {
+    return 'UTILITY';
+  }
+}
+
+async function trackBillableSend(opts) {
+  try {
+    const row = { ...opts };
+    if (row.phone && row.inServiceWindow == null) {
+      row.inServiceWindow = await isInServiceWindow(row.phone);
+    }
+    return await BillingLedger.record(row);
+  } catch (err) {
+    console.error('trackBillableSend:', err.message);
+    return null;
+  }
+}
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -729,6 +777,36 @@ app.post('/api/flows/payment-auth/test', apiJson, async (req, res) => {
       mode: sendMode,
     });
 
+    const wamid = waMessageId(response);
+    const previewText = flowCopy.bodyText || `[Flow 3DS] ${txn.merchant}`;
+    if (wamid) {
+      await Store.addMessage({
+        phone: normPhone,
+        name: customerName || undefined,
+        phoneNumberId: config.phoneNumberId,
+        direction: 'out',
+        text: previewText.slice(0, 500),
+        type: sendMode === 'template_flow' ? 'template' : 'interactive',
+        status: 'sent',
+        id: wamid,
+      });
+      await Store.updateConversationMeta(normPhone, { conversationOrigin: 'business_initiated' });
+    }
+
+    await trackBillableSend({
+      phone: normPhone,
+      messageId: wamid,
+      kind: sendMode === 'template_flow' ? 'template_flow' : 'flow_interactive',
+      flowMode: sendMode,
+      category: sendMode === 'template_flow' ? 'UTILITY' : undefined,
+      templateName: approvedTpl && approvedTpl.hasFlowButton ? approvedTpl.name : null,
+      flowName: 'punto_pago_3ds_verificacion',
+      flowId,
+      preview: previewText,
+      source: 'payment_auth',
+      recipientName: customerName,
+    });
+
     res.json({
       ok: true,
       transaction: txn,
@@ -736,7 +814,7 @@ app.post('/api/flows/payment-auth/test', apiJson, async (req, res) => {
       sendMode,
       templateName: approvedTpl && approvedTpl.hasFlowButton ? approvedTpl.name : null,
       cardImageUrl: await resolveCardImageUrl(),
-      messageId: response.messages && response.messages[0] && response.messages[0].id,
+      messageId: wamid,
     });
   } catch (err) {
     console.error('payment-auth test error:', err.message);
@@ -920,10 +998,21 @@ app.post('/api/flows/:id/send', apiJson, async (req, res) => {
       phone: normPhone,
       phoneNumberId: config.phoneNumberId,
       direction: 'out',
-      text: `[Flow] ${flowMeta.name || req.params.id}`,
+      text: bodyText || `[Flow] ${flowMeta.name || req.params.id}`,
       type: 'flow',
       status: 'sent',
       id: wamid,
+    });
+    await trackBillableSend({
+      phone: normPhone,
+      messageId: wamid,
+      localMessageId: stored.id,
+      kind: 'flow_interactive',
+      flowMode: sendMode,
+      flowName: flowMeta.name || null,
+      flowId: req.params.id,
+      preview: bodyText || `[Flow] ${flowMeta.name}`,
+      source: 'flow_send',
     });
     res.json({ ok: true, message: stored, response, mode: sendMode, flowAction: action });
   } catch (err) {
@@ -1326,6 +1415,16 @@ app.get('/api/billing', async (req, res) => {
       console.error('billing flow stats error:', flowErr.message);
     }
 
+    const since = (end - days * 86400) * 1000;
+    let ledgerRows = [];
+    let ledgerSummary = { count: 0, estimatedCost: 0, freeCount: 0, billableCount: 0, byCategory: {}, byKind: {}, flow: {} };
+    try {
+      ledgerRows = await BillingLedger.list({ since, limit: 200 });
+      ledgerSummary = BillingLedger.summarize(ledgerRows);
+    } catch (ledgerErr) {
+      console.error('billing ledger error:', ledgerErr.message);
+    }
+
     res.json({
       ok: true,
       days,
@@ -1335,10 +1434,11 @@ app.get('/api/billing', async (req, res) => {
       totals: { cost: totalCost, volume: totalVolume, byCategory },
       templateSummary,
       flowStats,
+      ledger: { rows: ledgerRows, summary: ledgerSummary },
       flowBillingNote:
-        'Los Flows enviados dentro de la ventana de 24 h son mensajes interactivos de servicio (gratis en Meta). '
-        + 'Si abres la conversación con plantilla, se factura como la categoría de esa plantilla. '
-        + 'Las métricas de Flows abajo son contadores internos de Punto Pago.',
+        'Meta no cobra por el Flow en sí: el cargo es por el mensaje que lo abre (plantilla o interactivo). '
+        + 'Dentro de la ventana de 24 h → servicio (gratis). Fuera de 24 h con plantilla → categoría de la plantilla. '
+        + 'Completar el formulario Flow no genera cargo adicional.',
     });
   } catch (err) {
     console.error('billing error:', err.message);
@@ -1371,6 +1471,18 @@ app.post('/api/send-template', apiJson, async (req, res) => {
     const response = await GraphApi.sendTemplate(phoneNumberId, phone, { name: template, language: language || 'es', components });
     await finalizeOutbound(phone, stored, response);
     await Store.updateConversationMeta(phone, { conversationOrigin: 'business_initiated' });
+    const cat = await resolveTemplateCategory(template, language || 'es');
+    await trackBillableSend({
+      phone,
+      messageId: stored.id,
+      localMessageId: stored.id,
+      kind: 'template',
+      category: cat,
+      templateName: template,
+      preview: `[plantilla] ${template}`,
+      source: 'send_template',
+      recipientName: name,
+    });
     res.json({ ok: true, message: stored });
   } catch (err) {
     await Store.updateMessageStatus(phone, stored.id, 'failed');
@@ -1442,6 +1554,14 @@ app.post('/api/send-media', parseSendMediaBody, async (req, res) => {
     });
 
     await finalizeOutbound(phone, stored, response);
+    await trackBillableSend({
+      phone,
+      messageId: stored.id,
+      localMessageId: stored.id,
+      kind: 'media',
+      preview: label,
+      source: 'send_media',
+    });
     res.json({ ok: true, message: stored });
   } catch (err) {
     if (stored) {
@@ -1571,6 +1691,14 @@ app.post('/api/send', apiJson, async (req, res) => {
   try {
     const response = await GraphApi.messageWithText(undefined, phoneNumberId, phone, text);
     await finalizeOutbound(phone, stored, response);
+    await trackBillableSend({
+      phone,
+      messageId: stored.id,
+      localMessageId: stored.id,
+      kind: 'text',
+      preview: text,
+      source: 'send_text',
+    });
     res.json({ ok: true, message: stored });
   } catch (error) {
     await Store.updateMessageStatus(phone, stored.id, 'failed');
