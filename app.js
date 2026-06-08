@@ -44,6 +44,7 @@ const flowPerformance = require('./services/flow-performance');
 const CardImageStore = require('./services/card-image-store');
 const flowUseCases = require('./services/flow-use-cases');
 const flowActivity = require('./services/flow-activity');
+const { curateFlowList } = require('./services/flow-list-curate');
 const redis = require('./services/upstash');
 
 const PAYMENT_AUTH_FLOW_KEY = 'wa:flow:payment_auth_id';
@@ -375,6 +376,37 @@ async function ensureFlowEndpointReady(options = {}) {
   return endpointUri;
 }
 
+async function fetchFlowList({ cleanup = false } = {}) {
+  const result = await GraphApi.listFlows(config.wabaId);
+  const all = result.data || [];
+  const { visible, draftsToDelete, latestDraftId } = curateFlowList(all);
+  if (!cleanup || !draftsToDelete.length) {
+    return { data: visible, totalBefore: all.length, cleaned: 0 };
+  }
+
+  let cleaned = 0;
+  const deletedIds = [];
+  for (const flow of draftsToDelete) {
+    try {
+      await GraphApi.deleteFlow(flow.id);
+      cleaned += 1;
+      deletedIds.push(String(flow.id));
+    } catch (err) {
+      console.warn(`No se pudo eliminar Flow ${flow.id}:`, err.message || err);
+    }
+  }
+
+  if (redis && deletedIds.length) {
+    const cached = await redis.get(PAYMENT_AUTH_FLOW_KEY);
+    if (cached && deletedIds.includes(String(cached))) {
+      if (latestDraftId) await redis.set(PAYMENT_AUTH_FLOW_KEY, latestDraftId);
+      else await redis.del(PAYMENT_AUTH_FLOW_KEY);
+    }
+  }
+
+  return { data: visible, totalBefore: all.length, cleaned, deletedIds };
+}
+
 async function getOrCreatePaymentAuthFlow() {
   const endpointUri = await ensureFlowEndpointReady();
   if (redis) {
@@ -477,7 +509,9 @@ app.get('/api/flows/capability', async (req, res) => {
     const result = await GraphApi.listFlows(config.wabaId);
     base.ok = true;
     base.canListFlows = true;
-    base.flowCount = (result.data || []).length;
+    const curated = curateFlowList(result.data || []);
+    base.flowCount = curated.visible.length;
+    base.flowCountTotal = (result.data || []).length;
   } catch (err) {
     base.error = String(err.message || err);
   }
@@ -667,8 +701,8 @@ app.get('/api/flows', async (req, res) => {
     return res.json({ ok: false, error: 'Falta ACCESS_TOKEN o WABA_ID.', data: [] });
   }
   try {
-    const result = await GraphApi.listFlows(config.wabaId);
-    res.json({ ok: true, data: result.data || [], paging: result.paging || null });
+    const { data, totalBefore, cleaned } = await fetchFlowList({ cleanup: true });
+    res.json({ ok: true, data, totalBefore, cleaned, paging: null });
   } catch (err) {
     res.status(500).json({ ok: false, error: String(err.message || err), data: [] });
   }
@@ -688,8 +722,8 @@ app.get('/api/flows/activity', async (req, res) => {
     let flowList = [];
     if (config.accessToken && config.wabaId) {
       try {
-        const result = await GraphApi.listFlows(config.wabaId);
-        flowList = result.data || [];
+        const { data } = await fetchFlowList({ cleanup: false });
+        flowList = data;
       } catch (_) {}
     }
     const rows = await flowActivity.getActivityReport(flowList);

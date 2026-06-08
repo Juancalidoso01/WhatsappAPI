@@ -2522,7 +2522,19 @@ async function setupFlowEndpoint() {
 async function loadFlows() {
   const res = await api("/api/flows");
   state.flows = (res && res.data) || [];
+  if (res && res.cleaned > 0) {
+    toast(`${res.cleaned} borrador${res.cleaned === 1 ? "" : "es"} de prueba eliminado${res.cleaned === 1 ? "" : "s"} en Meta.`, "ok");
+  }
+  if (state.activeFlowId && !state.flows.some((f) => f.id === state.activeFlowId)) {
+    state.activeFlowId = null;
+  }
   renderFlowsList();
+  if (state.activeFlowId) {
+    await loadFlowDetail(state.activeFlowId);
+  } else if ($("flowsDetailPanel")) {
+    $("flowsDetailPanel").classList.add("hidden");
+    if ($("flowsEmptyDetail")) $("flowsEmptyDetail").classList.remove("hidden");
+  }
 }
 
 function renderFlowsList() {

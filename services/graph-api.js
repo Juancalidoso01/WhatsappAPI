@@ -258,11 +258,22 @@ module.exports = class GraphApi {
 
   // --- WhatsApp Flows ---
   static async listFlows(wabaId) {
-    const url = `https://graph.facebook.com/v21.0/${wabaId}/flows?access_token=${config.accessToken}`;
+    const fields = "id,name,status,categories,updated_time";
+    const url = `https://graph.facebook.com/v21.0/${wabaId}/flows?fields=${encodeURIComponent(fields)}&access_token=${config.accessToken}`;
     const res = await fetch(url);
     const json = await res.json();
     if (json.error) {
       throw new Error(json.error.error_user_msg || json.error.message || "Error al listar Flows.");
+    }
+    return json;
+  }
+
+  static async deleteFlow(flowId) {
+    const url = `https://graph.facebook.com/v21.0/${flowId}?access_token=${config.accessToken}`;
+    const res = await fetch(url, { method: "DELETE" });
+    const json = await res.json().catch(() => ({}));
+    if (json.error) {
+      throw new Error(json.error.error_user_msg || json.error.message || "Error al eliminar Flow.");
     }
     return json;
   }
