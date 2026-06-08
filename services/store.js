@@ -354,6 +354,11 @@ async function getAllTemplateMeta() {
     if (!all) return {};
     const out = {};
     Object.entries(all).forEach(([k, v]) => {
+      if (v == null) return;
+      if (typeof v === "object") {
+        out[k] = v;
+        return;
+      }
       try { out[k] = JSON.parse(v); } catch (_) { /* skip */ }
     });
     return out;
