@@ -351,10 +351,9 @@ module.exports = class GraphApi {
       parameters.flow_action = "data_exchange";
     } else {
       parameters.flow_action = "navigate";
-      parameters.flow_action_payload = {
-        screen: screen || "WELCOME_SCREEN",
-        data: initialData || {},
-      };
+      const payload = { screen: screen || "WELCOME_SCREEN" };
+      if (initialData && Object.keys(initialData).length) payload.data = initialData;
+      parameters.flow_action_payload = payload;
     }
     if (mode === "draft") parameters.mode = "draft";
 

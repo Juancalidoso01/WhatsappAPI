@@ -571,10 +571,11 @@ app.post('/api/flows/:id/send', apiJson, async (req, res) => {
     res.json({ ok: true, message: stored, response, mode: sendMode, flowAction: action });
   } catch (err) {
     const msg = String(err.message || err);
+    const details = err.response && err.response.error_data && err.response.error_data.details;
     const integrity = msg.includes('139000') || /integrity/i.test(msg);
     res.status(200).json({
       ok: false,
-      error: msg,
+      error: details ? `${msg} — ${details}` : msg,
       integrity,
       hint: integrity
         ? 'Meta bloqueó el envío (Integrity). Verifica el negocio y el nombre del número, o prueba con Flow en borrador a un número registrado en la ventana 24 h.'
