@@ -455,9 +455,9 @@ function countryFlag(cc) {
 }
 function fmtCost(n) {
   const v = Number(n) || 0;
-  return v === 0 ? "0" : v.toLocaleString("es", { minimumFractionDigits: 2, maximumFractionDigits: 4 });
+  return v === 0 ? "0" : v.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 4 });
 }
-function fmtNum(n) { return (Number(n) || 0).toLocaleString("es"); }
+function fmtNum(n) { return (Number(n) || 0).toLocaleString("en-US"); }
 
 async function loadBilling() {
   const days = $("billRange").value;
@@ -495,6 +495,86 @@ async function loadBilling() {
   note.innerHTML = `Los montos están en la moneda de tu WABA. Un costo de <strong>0</strong> suele indicar mensajes de servicio gratuitos o tráfico de número de prueba (no facturado). El costo por plantilla individual requiere activar “Template Insights” en Meta.`;
 }
 
+/* ---------- price reference (Meta rate card, Apr 2026, USD) ---------- */
+const RATE_CARD = {
+  PA: { name: "Panamá", marketing: 0.074, utility: 0.0113, auth: 0.0113 },
+  CO: { name: "Colombia", marketing: 0.0125, utility: 0.0008, auth: 0.0008 },
+  MX: { name: "México", marketing: 0.0305, utility: 0.0085, auth: 0.0085 },
+  US: { name: "Estados Unidos", marketing: 0.025, utility: 0.0034, auth: 0.0034 },
+  CA: { name: "Canadá", marketing: 0.025, utility: 0.0034, auth: 0.0034 },
+  AR: { name: "Argentina", marketing: 0.0618, utility: 0.026, auth: 0.026 },
+  BR: { name: "Brasil", marketing: 0.0625, utility: 0.0068, auth: 0.0068 },
+  CL: { name: "Chile", marketing: 0.0889, utility: 0.02, auth: 0.02 },
+  PE: { name: "Perú", marketing: 0.0703, utility: 0.02, auth: 0.02 },
+  EC: { name: "Ecuador", marketing: 0.074, utility: 0.0113, auth: 0.0113 },
+  CR: { name: "Costa Rica", marketing: 0.074, utility: 0.0113, auth: 0.0113 },
+  DO: { name: "Rep. Dominicana", marketing: 0.074, utility: 0.0113, auth: 0.0113 },
+  GT: { name: "Guatemala", marketing: 0.074, utility: 0.0113, auth: 0.0113 },
+  SV: { name: "El Salvador", marketing: 0.074, utility: 0.0113, auth: 0.0113 },
+  HN: { name: "Honduras", marketing: 0.074, utility: 0.0113, auth: 0.0113 },
+  NI: { name: "Nicaragua", marketing: 0.074, utility: 0.0113, auth: 0.0113 },
+  BO: { name: "Bolivia", marketing: 0.074, utility: 0.0113, auth: 0.0113 },
+  PY: { name: "Paraguay", marketing: 0.074, utility: 0.0113, auth: 0.0113 },
+  UY: { name: "Uruguay", marketing: 0.074, utility: 0.0113, auth: 0.0113 },
+  VE: { name: "Venezuela", marketing: 0.074, utility: 0.0113, auth: 0.0113 },
+  PR: { name: "Puerto Rico", marketing: 0.074, utility: 0.0113, auth: 0.0113 },
+  ES: { name: "España", marketing: 0.0615, utility: 0.02, auth: 0.02 },
+  OTHER: { name: "Otro (resto del mundo)", marketing: 0.0604, utility: 0.0077, auth: 0.0077 },
+};
+const priceQty = { marketing: 1000, utility: 1000, auth: 0, service: 0 };
+
+function fmtUsd(n) { return "$" + (Number(n) || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 4 }); }
+
+function initPriceCountry() {
+  const sel = $("priceCountry");
+  if (sel.options.length) return;
+  sel.innerHTML = Object.entries(RATE_CARD)
+    .map(([code, v]) => `<option value="${code}">${escapeHtml(v.name)}</option>`)
+    .join("");
+  sel.value = "PA";
+  sel.addEventListener("change", renderPrices);
+}
+
+function renderPrices() {
+  initPriceCountry();
+  const r = RATE_CARD[$("priceCountry").value] || RATE_CARD.OTHER;
+  const cats = [
+    { key: "marketing", label: "Marketing", rate: r.marketing },
+    { key: "utility", label: "Utility (utilidad)", rate: r.utility },
+    { key: "auth", label: "Authentication", rate: r.auth },
+    { key: "service", label: "Service (servicio)", rate: 0 },
+  ];
+  $("priceRows").innerHTML = cats
+    .map((c) => `<tr>
+      <td><span class="cat-tag ${c.key === "auth" ? "AUTHENTICATION" : c.key.toUpperCase()}">${escapeHtml(c.label)}</span></td>
+      <td class="num">${c.key === "service" ? '<span class="price-free">Gratis</span>' : fmtUsd(c.rate)}</td>
+      <td class="num"><input class="qty-input" type="number" min="0" data-cat="${c.key}" value="${priceQty[c.key] || 0}" /></td>
+      <td class="num" data-sub="${c.key}">${fmtUsd((priceQty[c.key] || 0) * c.rate)}</td>
+    </tr>`)
+    .join("");
+
+  $("priceRows").querySelectorAll(".qty-input").forEach((inp) =>
+    inp.addEventListener("input", () => {
+      priceQty[inp.dataset.cat] = Math.max(0, parseInt(inp.value, 10) || 0);
+      recomputePrices();
+    })
+  );
+  recomputePrices();
+}
+
+function recomputePrices() {
+  const r = RATE_CARD[$("priceCountry").value] || RATE_CARD.OTHER;
+  const rates = { marketing: r.marketing, utility: r.utility, auth: r.auth, service: 0 };
+  let total = 0;
+  Object.keys(rates).forEach((k) => {
+    const sub = (priceQty[k] || 0) * rates[k];
+    total += sub;
+    const cell = $("priceRows").querySelector(`[data-sub="${k}"]`);
+    if (cell) cell.textContent = fmtUsd(sub);
+  });
+  $("priceTotal").textContent = fmtUsd(total);
+}
+
 /* ---------- modals & nav ---------- */
 function showModal(id) { $(id).classList.remove("hidden"); }
 function closeModals() { document.querySelectorAll(".modal").forEach((m) => m.classList.add("hidden")); }
@@ -505,7 +585,7 @@ function switchScreen(name) {
   $("screenTemplates").classList.toggle("hidden", name !== "templates");
   $("screenBilling").classList.toggle("hidden", name !== "billing");
   if (name === "templates") { loadTemplates().then(renderTemplateList); }
-  if (name === "billing") { loadBilling(); }
+  if (name === "billing") { loadBilling(); renderPrices(); }
 }
 
 /* ---------- polling ---------- */

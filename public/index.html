@@ -153,6 +153,7 @@
           <div class="bill-card"><span class="bc-label">Utilidad</span><span class="bc-value" id="bcUtil">—</span></div>
         </div>
 
+        <h2 class="section-title">Lo gastado <span class="muted">· datos reales de tu cuenta</span></h2>
         <div class="billing-table-wrap">
           <table class="billing-table">
             <thead><tr><th>País</th><th>Categoría</th><th class="num">Mensajes</th><th class="num">Costo</th></tr></thead>
@@ -160,6 +161,19 @@
           </table>
         </div>
         <p class="billing-note" id="billNote"></p>
+
+        <h2 class="section-title">Precios de referencia
+          <span class="muted">· tarifa Meta por mensaje</span>
+          <select id="priceCountry" class="inline-select"></select>
+        </h2>
+        <div class="billing-table-wrap">
+          <table class="billing-table price-table">
+            <thead><tr><th>Categoría</th><th class="num">Precio / mensaje</th><th class="num">Cantidad</th><th class="num">Subtotal</th></tr></thead>
+            <tbody id="priceRows"></tbody>
+            <tfoot><tr><td colspan="3">Total estimado</td><td class="num strong" id="priceTotal">—</td></tr></tfoot>
+          </table>
+        </div>
+        <p class="billing-note">Tarifas oficiales de Meta (rate card abr. 2026), en USD por mensaje de plantilla entregado. La categoría la define cada plantilla. Los <strong>mensajes de servicio</strong> (respuestas dentro de la ventana de 24h) son <strong>gratis</strong>. Pueden aplicar descuentos por volumen y comisiones de tu proveedor (BSP).</p>
       </main>
     </section>
 
