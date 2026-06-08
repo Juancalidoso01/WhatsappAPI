@@ -21,7 +21,7 @@ const state = {
   activeUseCaseId: null,
   templatePresets: [],
   activeTemplatePreset: "punto_pago_autorizacion_pago",
-  flowsTab: "probar",
+  flowsTab: "mis",
   payAuthFlowScreen: "AUTH",
   cardImageUrl: null,
   flowsDetailTab: "preview",
@@ -742,6 +742,9 @@ function applyPresetToForm(preset) {
   if ($("tpBody")) $("tpBody").value = preset.bodyText || "";
   if ($("tpFooter")) $("tpFooter").value = preset.footerText || "";
   renderTpVarList(preset.variables || []);
+  if ($("tpVarsSection")) {
+    $("tpVarsSection").classList.toggle("hidden", !(preset.variables && preset.variables.length));
+  }
   updateTpPreview();
 }
 
@@ -752,22 +755,73 @@ async function loadTemplatePresetIntoModal(key) {
 }
 
 function setFlowsTab(tab) {
+  if (tab !== "mis" && tab !== "actividad") tab = "mis";
   state.flowsTab = tab;
   document.querySelectorAll(".flows-tab").forEach((b) =>
     b.classList.toggle("active", b.dataset.flowsTab === tab)
   );
-  const panels = { probar: "flowsPanelProbar", mis: "flowsPanelMis", crear: "flowsPanelCrear", actividad: "flowsPanelActividad" };
-  Object.entries(panels).forEach(([key, id]) => {
+  ["flowsPanelMis", "flowsPanelActividad", "flowsPanelCrear", "flowsPanelProbar"].forEach((id) => {
     const el = $(id);
-    if (el) el.classList.toggle("hidden", key !== tab);
+    if (el) el.classList.add("hidden");
   });
-  if (tab === "crear" && !state.activeUseCaseId) showFlowCreateStep("categories");
   if (tab === "mis") {
+    $("flowsPanelMis")?.classList.remove("hidden");
     const hasFlow = Boolean(state.activeFlowId);
     if ($("flowsDetailPanel")) $("flowsDetailPanel").classList.toggle("hidden", !hasFlow);
     if ($("flowsEmptyDetail")) $("flowsEmptyDetail").classList.toggle("hidden", hasFlow);
+  } else if (tab === "actividad") {
+    $("flowsPanelActividad")?.classList.remove("hidden");
+    loadFlowActivity();
   }
-  if (tab === "actividad") loadFlowActivity();
+}
+
+function openFlowCreate() {
+  state.activeUseCaseId = null;
+  ["flowsPanelMis", "flowsPanelActividad", "flowsPanelProbar"].forEach((id) => {
+    $(id)?.classList.add("hidden");
+  });
+  $("flowsPanelCrear")?.classList.remove("hidden");
+  showFlowCreateStep("categories");
+}
+
+function closeFlowCreate() {
+  state.activeUseCaseId = null;
+  showFlowCreateStep("categories");
+  setFlowsTab("mis");
+}
+
+function openFlowProbar() {
+  ["flowsPanelMis", "flowsPanelActividad", "flowsPanelCrear"].forEach((id) => {
+    $(id)?.classList.add("hidden");
+  });
+  $("flowsPanelProbar")?.classList.remove("hidden");
+  updatePayAuthPreview();
+  updatePayAuthFlowPreview();
+}
+
+function closeFlowProbar() {
+  setFlowsTab("mis");
+}
+
+function syncTpVariablesSection() {
+  const section = $("tpVarsSection");
+  if (!section) return;
+  const header = ($("tpHeader") || {}).value || "";
+  const body = ($("tpBody") || {}).value || "";
+  const bodyPh = tpExtractPlaceholders(body);
+  const headerPh = tpExtractPlaceholders(header);
+  const needed = Math.max(bodyPh.length, headerPh.length ? 1 : 0);
+  const vars = collectTpVariables();
+  const manualRows = vars.filter((v) => v.key || v.example).length;
+  const show = needed > 0 || manualRows > 0 || vars.length > 1;
+  section.classList.toggle("hidden", !show);
+  if (!show) return;
+  const target = Math.max(needed, vars.length, manualRows ? vars.length : 0, 1);
+  if (vars.length !== target) {
+    const next = vars.slice(0, target);
+    while (next.length < target) next.push({ key: "", example: "" });
+    renderTpVarList(next);
+  }
 }
 
 function collectTpVariables() {
@@ -782,7 +836,11 @@ function collectTpVariables() {
 function renderTpVarList(vars) {
   const list = $("tpVarList");
   if (!list) return;
-  const items = vars && vars.length ? vars : [{ key: "", example: "" }];
+  const items = vars && vars.length ? vars : [];
+  if (!items.length) {
+    list.innerHTML = "";
+    return;
+  }
   list.innerHTML = items.map((v, i) => `
     <div class="tp-var-row" data-i="${i}">
       <span class="tp-var-n">{{${i + 1}}}</span>
@@ -801,7 +859,7 @@ function renderTpVarList(vars) {
   list.querySelectorAll(".tp-remove").forEach((btn) => {
     btn.addEventListener("click", () => {
       const rows = collectTpVariables().filter((_, idx) => idx !== Number(btn.closest(".tp-var-row").dataset.i));
-      renderTpVarList(rows.length ? rows : [{ key: "", example: "" }]);
+      renderTpVarList(rows);
       updateTpPreview();
     });
   });
@@ -867,24 +925,11 @@ function updateTpPreview() {
   if (headerPh.length) lines.push("Encabezado con {{1}} — usa el primer ejemplo de variable si aplica.");
   const seqOk = ph.every((n, i) => n === i + 1);
   if (ph.length && !seqOk) lines.push("⚠ Los placeholders del cuerpo deben ser {{1}}, {{2}}… en orden.");
-  preview.textContent = lines.join("\n");
+  const showPreview = ph.length > 0 || headerPh.length > 0 || !seqOk;
+  preview.classList.toggle("hidden", !showPreview);
+  preview.textContent = showPreview ? lines.join("\n") : "";
   updateTpFieldCounts();
-
-  const waBox = $("tpWaPreviewModal");
-  if (waBox) {
-    const byIndex = {};
-    vars.forEach((v, i) => { byIndex[i + 1] = v.example || `{{${i + 1}}}`; });
-    const filledBody = body.replace(/\{\{\s*(\d+)\s*\}\}/g, (_, n) => byIndex[Number(n)] ?? `{{${n}}}`);
-    const ctaSel = $("tpPresetSelect");
-    const presetKey = ctaSel && ctaSel.value ? ctaSel.value : "";
-    const preset = state.templatePresets.find((p) => p.key === presetKey);
-    renderWaMessagePreview(waBox, {
-      headerText: header,
-      bodyText: filledBody,
-      footerText: footer,
-      flowCta: preset ? preset.flowCta : "",
-    });
-  }
+  syncTpVariablesSection();
 }
 
 function renderTpEmojiBar() {
@@ -915,8 +960,9 @@ async function initTemplateModal(presetKey) {
   } else {
     if ($("tpPresetSelect")) $("tpPresetSelect").value = "";
     if (!$("tpBody").value.trim()) {
-      $("tpBody").value = "Hola {{1}}, tu saldo pendiente es {{2}}. Vence el {{3}}. 📅";
-      renderTpVarList(tpDefaultVars());
+      $("tpBody").value = "";
+      renderTpVarList([]);
+      $("tpVarsSection")?.classList.add("hidden");
     }
   }
   renderTpEmojiBar();
@@ -1953,6 +1999,8 @@ async function loadFlowDetail(id) {
     "Aún no hay respuestas. Cuando alguien complete el Flow, aparecerá aquí."
   );
   renderFlowDetailPreview(perfRes);
+  const probarBtn = $("flowDetailProbarBtn");
+  if (probarBtn) probarBtn.classList.toggle("hidden", !perfRes.isPaymentAuth);
   setFlowsDetailTab(state.flowsDetailTab || "preview");
   $("flowsDetailPanel").classList.remove("hidden");
   $("flowsEmptyDetail").classList.add("hidden");
@@ -2419,7 +2467,7 @@ function openFlowUseCase(id) {
         btn.addEventListener("click", () => createFlowSampleKey(btn.dataset.sample))
       );
       tplBox.querySelectorAll(".flow-go-probar").forEach((btn) =>
-        btn.addEventListener("click", () => setFlowsTab("probar"))
+        btn.addEventListener("click", () => openFlowProbar())
       );
     }
   }
@@ -2478,7 +2526,7 @@ function renderFlowsList() {
   if (hint) hint.textContent = state.flows.length ? `(${state.flows.length})` : "";
   if (!box) return;
   if (!state.flows.length) {
-    box.innerHTML = `<p class="muted">No hay Flows. Crea uno desde la pestaña Crear o en <a href="https://business.facebook.com/wa/manage/flows/" target="_blank" rel="noopener">WhatsApp Manager</a>.</p>`;
+    box.innerHTML = `<p class="muted">Aún no tienes Flows. Pulsa «+ Agregar flujo» para crear uno desde una plantilla de Meta.</p>`;
     return;
   }
   box.innerHTML = state.flows.map((f) => {
@@ -2539,7 +2587,7 @@ async function createFlowSampleKey(sample) {
   }
   toast("Flow creado en Meta.", "ok");
   await loadFlows();
-  setFlowsTab("mis");
+  closeFlowCreate();
   if (res.flow && res.flow.id) {
     if (res.defaultScreen) $("flowSendScreen").value = res.defaultScreen;
     if (res.defaultCta) $("flowSendCta").value = res.defaultCta;
@@ -2710,7 +2758,7 @@ async function loadFlowResponses() {
 }
 
 async function initFlowsScreen() {
-  setFlowsTab(state.flowsTab || "probar");
+  setFlowsTab(state.flowsTab || "mis");
   await Promise.all([
     loadFlowCapability(),
     initFlowBuilder(),
@@ -2847,7 +2895,8 @@ function bindEvents() {
         $("tpHeader").value = "";
         $("tpBody").value = "";
         $("tpFooter").value = "";
-        renderTpVarList([{ key: "", example: "" }]);
+        renderTpVarList([]);
+        $("tpVarsSection")?.classList.add("hidden");
       }
       updateTpPreview();
     });
@@ -2892,8 +2941,17 @@ function bindEvents() {
     const vars = collectTpVariables();
     vars.push({ key: "", example: "" });
     renderTpVarList(vars);
+    $("tpVarsSection")?.classList.remove("hidden");
     updateTpPreview();
   });
+  const flowAddBtn = $("flowAddBtn");
+  if (flowAddBtn) flowAddBtn.addEventListener("click", openFlowCreate);
+  const flowCreateCancel = $("flowCreateCancel");
+  if (flowCreateCancel) flowCreateCancel.addEventListener("click", closeFlowCreate);
+  const flowProbarBack = $("flowProbarBack");
+  if (flowProbarBack) flowProbarBack.addEventListener("click", closeFlowProbar);
+  const flowDetailProbarBtn = $("flowDetailProbarBtn");
+  if (flowDetailProbarBtn) flowDetailProbarBtn.addEventListener("click", openFlowProbar);
   ["tpHeader", "tpBody", "tpFooter"].forEach((id) => {
     const el = $(id);
     if (el) el.addEventListener("input", updateTpPreview);

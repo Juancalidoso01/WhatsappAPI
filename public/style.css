@@ -727,6 +727,8 @@ input, textarea, select { font-family: inherit; }
 .flows-split-detail { grid-template-columns: 280px 1fr; }
 .flows-empty-detail { display: flex; align-items: center; justify-content: center; min-height: 320px; }
 .flows-detail.hidden, .flows-empty-detail.hidden { display: none; }
+.flows-list-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; }
+.flows-detail-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 .flows-detail-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 14px; }
 .flows-stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 16px; }
 .flow-stat-card { background: var(--surface-2); border-radius: 12px; padding: 12px; text-align: center; }

@@ -154,7 +154,7 @@
         <header class="pane-header">
           <div>
             <h1>Plantillas</h1>
-            <p class="muted templates-intro">Mensajes aprobados por Meta y borradores listos para solicitar. Toca un borrador para ver cómo se verá en WhatsApp.</p>
+            <p class="muted templates-intro">Mensajes aprobados por Meta para iniciar conversaciones. Una plantilla es el texto del chat; un Flow es el formulario que se abre al tocar el botón (se gestiona aparte).</p>
           </div>
           <button id="newTemplateBtn" class="btn-primary sm">
             <svg viewBox="0 0 24 24" class="ic"><path d="M12 5v14M5 12h14"/></svg>
@@ -376,7 +376,7 @@
         <header class="pane-header flows-header">
           <div>
             <h1>Flows</h1>
-            <p class="muted flows-intro">Formularios dentro del chat de WhatsApp. Prueba casos reales, gestiona los tuyos o crea uno nuevo.</p>
+            <p class="muted flows-intro">Formularios interactivos dentro del chat. Aquí ves los Flows que ya creaste; usa «Agregar flujo» para armar uno nuevo.</p>
           </div>
         </header>
 
@@ -387,14 +387,13 @@
         </div>
 
         <nav class="flows-tabs" id="flowsTabs">
-          <button type="button" class="flows-tab active" data-flows-tab="probar">Probar</button>
-          <button type="button" class="flows-tab" data-flows-tab="mis">Mis Flows</button>
-          <button type="button" class="flows-tab" data-flows-tab="crear">Crear</button>
+          <button type="button" class="flows-tab active" data-flows-tab="mis">Mis Flows</button>
           <button type="button" class="flows-tab" data-flows-tab="actividad">Actividad</button>
         </nav>
 
-        <!-- Tab: Probar -->
-        <section class="flows-tab-panel" id="flowsPanelProbar">
+        <!-- Panel: Probar (solo desde detalle o plantilla de pago) -->
+        <section class="flows-tab-panel hidden" id="flowsPanelProbar">
+          <button type="button" id="flowProbarBack" class="btn-ghost sm flow-create-back">← Volver a mis Flows</button>
           <div class="flows-hero-card flows-hero-wide">
             <div class="flows-hero-copy">
               <span class="flows-hero-badge">Caso Punto Pago</span>
@@ -450,11 +449,16 @@
         </section>
 
         <!-- Tab: Mis Flows -->
-        <section class="flows-tab-panel hidden" id="flowsPanelMis">
+        <section class="flows-tab-panel" id="flowsPanelMis">
           <div class="flows-split flows-split-detail">
             <section class="flows-panel flows-list-panel">
-              <h2 class="section-title">Tus Flows <span class="muted" id="flowsListHint"></span></h2>
-              <p class="muted sm">Toca uno para ver desempeño y actividad.</p>
+              <div class="flows-list-head">
+                <div>
+                  <h2 class="section-title">Tus Flows <span class="muted" id="flowsListHint"></span></h2>
+                  <p class="muted sm">Toca uno para ver desempeño y actividad.</p>
+                </div>
+                <button type="button" id="flowAddBtn" class="btn-primary sm">+ Agregar flujo</button>
+              </div>
               <div id="flowsList" class="flows-list muted">Cargando…</div>
             </section>
 
@@ -464,7 +468,10 @@
                   <h2 class="section-title" id="flowsDetailName">—</h2>
                   <span id="flowsDetailStatus" class="flow-status">—</span>
                 </div>
-                <a id="flowPreviewLink" class="btn-ghost sm hidden" href="#" target="_blank" rel="noopener">Abrir en Meta</a>
+                <div class="flows-detail-actions">
+                  <button type="button" id="flowDetailProbarBtn" class="btn-ghost sm hidden">Probar en WhatsApp</button>
+                  <a id="flowPreviewLink" class="btn-ghost sm hidden" href="#" target="_blank" rel="noopener">Abrir en Meta</a>
+                </div>
               </div>
 
               <div id="flowsStatsCards" class="flows-stats-grid"></div>
@@ -508,8 +515,9 @@
           </div>
         </section>
 
-        <!-- Tab: Crear -->
+        <!-- Panel: Crear (desde + Agregar flujo) -->
         <section class="flows-tab-panel hidden" id="flowsPanelCrear">
+          <button type="button" id="flowCreateCancel" class="btn-ghost sm flow-create-back">← Volver a mis Flows</button>
           <section class="flows-panel" id="flowCreateCategories">
             <h2 class="section-title">Casos de uso con alto impacto</h2>
             <p class="muted sm">Elige una categoría para crear tu Flow. Generamos un borrador en Meta y tú lo revisas antes de publicar.</p>
@@ -809,12 +817,12 @@
         </label>
       </div>
 
-      <section class="tp-vars-section">
+      <section class="tp-vars-section hidden" id="tpVarsSection">
         <div class="tp-vars-head">
           <strong>Variables / placeholders</strong>
           <button type="button" id="tpAddVar" class="btn-ghost sm">+ Agregar variable</button>
         </div>
-        <p class="muted sm">Clave = nombre en la API (<code>monto</code>, <code>fecha</code>). Ejemplo = valor que Meta revisa. Inserta <code>{{1}}</code>, <code>{{2}}</code>… en el cuerpo en ese orden.</p>
+        <p class="muted sm">Solo si usas <code>{{1}}</code>, <code>{{2}}</code>… en el cuerpo. Clave = nombre en la API; ejemplo = valor que Meta revisa al aprobar.</p>
         <div id="tpVarList" class="tp-var-list"></div>
       </section>
 
@@ -835,8 +843,7 @@
         <span id="tpFooterCount" class="field-count muted"></span>
       </label>
 
-      <div id="tpPreview" class="tp-preview muted">Vista previa de la plantilla…</div>
-      <div id="tpWaPreviewModal" class="wa-preview-phone wa-preview-compact" aria-label="Vista previa WhatsApp"></div>
+      <div id="tpPreview" class="tp-preview muted hidden">Vista previa de la plantilla…</div>
       <div id="tpHint" class="hint"></div>
       <div class="modal-actions">
         <button class="btn-ghost" data-close>Cancelar</button>
