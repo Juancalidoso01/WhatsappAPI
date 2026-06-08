@@ -1889,6 +1889,45 @@ async function createFlowFromBuilder() {
   }
 }
 
+async function loadPaymentAuthPanel() {
+  const res = await api("/api/flows/payment-auth/config");
+  const img = $("payAuthCardImg");
+  const hint = $("payAuthCardHint");
+  if (res.ok && res.cardImageUrl && img) {
+    img.src = res.cardImageUrl;
+    if (hint) {
+      hint.textContent = res.note || "";
+    }
+  }
+  const recent = await api("/api/flows/payment-auth/recent");
+  const box = $("payAuthRecent");
+  if (!box) return;
+  const rows = (recent && recent.data) || [];
+  if (!rows.length) {
+    box.textContent = "Sin autorizaciones de prueba aún.";
+    return;
+  }
+  box.innerHTML = rows.slice(0, 5).map((r) => {
+    const st = r.decision ? (r.decision === "authorize" ? "autorizado" : "rechazado") : "pendiente";
+    return `<div>${escapeHtml(r.merchant)} · $${escapeHtml(r.amount)} · ${escapeHtml(st)} · ${escapeHtml(new Date(r.createdAt).toLocaleString("es"))}</div>`;
+  }).join("");
+}
+
+async function sendPaymentAuthTest() {
+  const phone = ($("payAuthPhone") || {}).value.trim();
+  if (!phone) { toast("Ingresa un teléfono.", "error"); return; }
+  const res = await post("/api/flows/payment-auth/test", {
+    phone,
+    merchant: ($("payAuthMerchant") || {}).value.trim(),
+    amount: ($("payAuthAmount") || {}).value.trim(),
+    cardLast4: ($("payAuthCard4") || {}).value.trim(),
+  });
+  if (!res.ok) { toast(res.error || "No se pudo enviar.", "error"); return; }
+  toast("Autorización de pago enviada. Revisa WhatsApp.", "ok");
+  await loadPaymentAuthPanel();
+  if (res.flowId) selectFlow(res.flowId);
+}
+
 async function loadFlowCapability() {
   const res = await api("/api/flows/capability");
   state.flowCapability = res;
@@ -2076,6 +2115,7 @@ async function initFlowsScreen() {
     initFlowBuilder(),
     loadFlowSamples(),
     loadFlowEndpointSetup(),
+    loadPaymentAuthPanel(),
     loadFlows(),
     loadFlowResponses(),
   ]);
@@ -2196,6 +2236,7 @@ function bindEvents() {
   if ($("fbAddMessage")) $("fbAddMessage").addEventListener("click", () => fbAddScreen("message"));
   if ($("fbAddConfirm")) $("fbAddConfirm").addEventListener("click", () => fbAddScreen("confirm"));
   if ($("fbCreateBtn")) $("fbCreateBtn").addEventListener("click", createFlowFromBuilder);
+  if ($("payAuthSendBtn")) $("payAuthSendBtn").addEventListener("click", sendPaymentAuthTest);
   $("flowSampleSelect").addEventListener("change", updateFlowSampleDesc);
   $("detailTemplateBtn").addEventListener("click", () => openNewChat());
   $("detailToggle").addEventListener("click", () => $("detailPane").classList.toggle("collapsed"));

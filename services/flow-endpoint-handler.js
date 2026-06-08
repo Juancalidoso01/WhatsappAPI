@@ -1,19 +1,114 @@
 "use strict";
 
+const config = require("./config");
 const FlowStore = require("./flow-store");
+const PaymentAuthStore = require("./payment-auth-store");
+const { PRODUCTS, productTitle } = require("./flow-quote");
 
-const PRODUCTS = [
-  { id: "credito", title: "Crédito personal" },
-  { id: "tarjeta", title: "Tarjeta de crédito" },
-  { id: "seguro", title: "Seguro" },
-];
-
-function productTitle(id) {
-  const p = PRODUCTS.find((x) => x.id === id);
-  return p ? p.title : id || "—";
+function isPaymentAuthToken(flowToken) {
+  return flowToken && String(flowToken).startsWith("payauth_");
 }
 
-async function handleFlowRequest(decryptedBody) {
+function formatWhen(ts) {
+  try {
+    return new Date(ts).toLocaleString("es-PA", { dateStyle: "medium", timeStyle: "short" });
+  } catch (_) {
+    return new Date(ts).toISOString();
+  }
+}
+
+function cardImageUrl() {
+  return config.cardImageUrl || "https://via.placeholder.com/640x400.png?text=Punto+Pago";
+}
+
+async function handlePaymentAuth(decryptedBody) {
+  const { action, data, version, flow_token: flowToken } = decryptedBody;
+
+  if (action === "ping") {
+    await FlowStore.recordEndpointEvent({ type: "ping", channel: "payment_auth" });
+    return { version, data: { status: "active" } };
+  }
+
+  if (data && data.error) {
+    await FlowStore.recordEndpointEvent({ type: "error", channel: "payment_auth", error: data.error });
+    return { version, data: { acknowledged: true } };
+  }
+
+  const txn = await PaymentAuthStore.get(flowToken);
+  if (!txn) {
+    await FlowStore.recordEndpointEvent({ type: "error", channel: "payment_auth", error: "expired_token" });
+    return {
+      version,
+      screen: "RESULT",
+      data: {
+        result_title: "Solicitud expirada",
+        result_body: "Esta autorización ya no está disponible. Solicita un nuevo enlace.",
+        decision: "expired",
+        merchant: "—",
+        amount: "—",
+      },
+    };
+  }
+
+  if (action === "INIT") {
+    await FlowStore.recordEndpointEvent({ type: "init", channel: "payment_auth", flowToken });
+    return {
+      version,
+      screen: "AUTH",
+      data: {
+        merchant: txn.merchant,
+        amount: `$${txn.amount} ${txn.currency}`,
+        card_label: `Tarjeta Punto Pago •••• ${txn.cardLast4}`,
+        card_image: cardImageUrl(),
+        when: formatWhen(txn.createdAt),
+      },
+    };
+  }
+
+  if (action === "data_exchange") {
+    const form = (data && data.form) || data || {};
+    const decision = form.decision === "authorize" ? "authorize" : "deny";
+    const resolved = await PaymentAuthStore.resolve(flowToken, decision);
+
+    await FlowStore.recordEndpointEvent({
+      type: "data_exchange",
+      channel: "payment_auth",
+      flowToken,
+      decision,
+      merchant: txn.merchant,
+      amount: txn.amount,
+    });
+
+    const authorized = decision === "authorize";
+    return {
+      version,
+      screen: "RESULT",
+      data: {
+        result_title: authorized ? "Pago autorizado" : "Pago rechazado",
+        result_body: authorized
+          ? `${txn.merchant} recibirá la confirmación del pago.`
+          : "La operación fue cancelada. Si no fuiste tú, contacta a soporte.",
+        decision,
+        merchant: txn.merchant,
+        amount: `$${resolved ? resolved.amount : txn.amount} ${txn.currency}`,
+      },
+    };
+  }
+
+  return {
+    version,
+    screen: "AUTH",
+    data: {
+      merchant: txn.merchant,
+      amount: `$${txn.amount} ${txn.currency}`,
+      card_label: `Tarjeta Punto Pago •••• ${txn.cardLast4}`,
+      card_image: cardImageUrl(),
+      when: formatWhen(txn.createdAt),
+    },
+  };
+}
+
+async function handleQuoteFlow(decryptedBody) {
   const { action, screen, data, version, flow_token: flowToken } = decryptedBody;
 
   if (action === "ping") {
@@ -31,9 +126,7 @@ async function handleFlowRequest(decryptedBody) {
     return {
       version,
       screen: "DATA",
-      data: {
-        productos: PRODUCTS,
-      },
+      data: { productos: PRODUCTS },
     };
   }
 
@@ -71,4 +164,12 @@ async function handleFlowRequest(decryptedBody) {
   };
 }
 
-module.exports = { handleFlowRequest, PRODUCTS };
+async function handleFlowRequest(decryptedBody) {
+  const { flow_token: flowToken } = decryptedBody;
+  if (isPaymentAuthToken(flowToken)) {
+    return handlePaymentAuth(decryptedBody);
+  }
+  return handleQuoteFlow(decryptedBody);
+}
+
+module.exports = { handleFlowRequest, isPaymentAuthToken, cardImageUrl };

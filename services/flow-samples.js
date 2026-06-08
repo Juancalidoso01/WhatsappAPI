@@ -172,6 +172,99 @@ const QUOTE_FLOW = {
   ],
 };
 
+const PAYMENT_AUTH_FLOW = {
+  version: "7.3",
+  data_api_version: "4.0",
+  routing_model: {
+    AUTH: ["RESULT"],
+    RESULT: [],
+  },
+  screens: [
+    {
+      id: "AUTH",
+      title: "Autorizar pago",
+      data: {
+        merchant: { type: "string", __example__: "Supermercado XO" },
+        amount: { type: "string", __example__: "$45.90" },
+        card_label: { type: "string", __example__: "Tarjeta •••• 4821" },
+        card_image: { type: "string", __example__: "https://example.com/card.png" },
+        when: { type: "string", __example__: "8 jun 2026, 14:32" },
+      },
+      layout: {
+        type: "SingleColumnLayout",
+        children: [
+          {
+            type: "Image",
+            src: "${data.card_image}",
+            "alt-text": "Tarjeta Punto Pago",
+            "scale-type": "contain",
+            width: 280,
+            height: 175,
+          },
+          { type: "TextHeading", text: "¿Autorizas este pago?" },
+          { type: "TextBody", text: "Comercio: ${data.merchant}" },
+          { type: "TextBody", text: "Monto: ${data.amount}" },
+          { type: "TextBody", text: "${data.card_label}" },
+          { type: "TextBody", text: "${data.when}" },
+          {
+            type: "Form",
+            name: "form",
+            children: [
+              {
+                type: "RadioButtonsGroup",
+                name: "decision",
+                label: "Tu respuesta",
+                required: true,
+                "data-source": [
+                  { id: "authorize", title: "Autorizar pago" },
+                  { id: "deny", title: "Rechazar" },
+                ],
+              },
+            ],
+          },
+          {
+            type: "Footer",
+            label: "Confirmar",
+            "on-click-action": { name: "data_exchange", payload: {} },
+          },
+        ],
+      },
+    },
+    {
+      id: "RESULT",
+      title: "Resultado",
+      terminal: true,
+      success: true,
+      data: {
+        result_title: { type: "string", __example__: "Pago autorizado" },
+        result_body: { type: "string", __example__: "El comercio recibirá la confirmación." },
+        decision: { type: "string", __example__: "authorize" },
+        merchant: { type: "string", __example__: "Supermercado XO" },
+        amount: { type: "string", __example__: "$45.90" },
+      },
+      layout: {
+        type: "SingleColumnLayout",
+        children: [
+          { type: "TextHeading", text: "${data.result_title}" },
+          { type: "TextBody", text: "${data.result_body}" },
+          {
+            type: "Footer",
+            label: "Cerrar",
+            "on-click-action": {
+              name: "complete",
+              payload: {
+                decision: "${data.decision}",
+                merchant: "${data.merchant}",
+                amount: "${data.amount}",
+              },
+            },
+          },
+        ],
+      },
+    },
+  ],
+};
+
 const SAMPLES = {
   hello: {
     name: "punto_pago_hello",
@@ -201,6 +294,17 @@ const SAMPLES = {
     flowAction: "data_exchange",
     dynamic: true,
     flow_json: QUOTE_FLOW,
+  },
+  payment_auth: {
+    name: "punto_pago_autorizacion_pago",
+    categories: ["OTHER"],
+    publish: false,
+    description: "Autorización de pago dinámica: comercio, monto, imagen de tarjeta, autorizar/rechazar.",
+    defaultScreen: "AUTH",
+    defaultCta: "Revisar pago",
+    flowAction: "data_exchange",
+    dynamic: true,
+    flow_json: PAYMENT_AUTH_FLOW,
   },
 };
 

@@ -37,7 +37,11 @@ const flowSamples = require('./services/flow-samples');
 const flowBuilder = require('./services/flow-builder');
 const FlowKeys = require('./services/flow-keys');
 const { decryptRequest, encryptResponse, FlowEndpointException } = require('./services/flow-encryption');
-const { handleFlowRequest } = require('./services/flow-endpoint-handler');
+const { handleFlowRequest, cardImageUrl } = require('./services/flow-endpoint-handler');
+const PaymentAuthStore = require('./services/payment-auth-store');
+const redis = require('./services/upstash');
+
+const PAYMENT_AUTH_FLOW_KEY = 'wa:flow:payment_auth_id';
 const app = express();
 
 const upload = multer({
@@ -341,6 +345,31 @@ async function ensureFlowEndpointReady() {
   return `${base}/api/flows/endpoint`;
 }
 
+async function getOrCreatePaymentAuthFlow() {
+  const endpointUri = await ensureFlowEndpointReady();
+  if (redis) {
+    const cached = await redis.get(PAYMENT_AUTH_FLOW_KEY);
+    if (cached) return { flowId: String(cached), endpointUri };
+  }
+
+  const tpl = flowSamples.getSample('payment_auth');
+  if (!tpl) throw new Error('Sample payment_auth no configurado.');
+
+  const result = await GraphApi.createFlow(config.wabaId, {
+    name: `punto_pago_autorizacion_pago_${Date.now()}`,
+    categories: tpl.categories,
+    flowJson: tpl.flow_json,
+    publish: false,
+    endpointUri,
+  });
+  const validationErrors = result.validation_errors || [];
+  if (validationErrors.length) {
+    throw new Error(validationErrors[0].message || validationErrors[0].error || 'Flow de autorización inválido.');
+  }
+  if (redis && result.id) await redis.set(PAYMENT_AUTH_FLOW_KEY, String(result.id));
+  return { flowId: String(result.id), endpointUri, flow: result };
+}
+
 app.post('/api/flows/endpoint', apiJson, async (req, res) => {
   try {
     const { privateKey } = await FlowKeys.getKeyPair();
@@ -477,6 +506,73 @@ app.post('/api/flows/build', apiJson, async (req, res) => {
     });
   } catch (err) {
     console.error('buildFlow error:', err.message);
+    res.status(200).json({ ok: false, error: String(err.message || err) });
+  }
+});
+
+app.get('/api/flows/payment-auth/config', (req, res) => {
+  res.json({
+    ok: true,
+    cardImageUrl: cardImageUrl(),
+    hasPublicBaseUrl: Boolean(config.publicBaseUrl),
+    note: 'Reemplaza public/assets/punto-pago-card.png con tu imagen real o define CARD_IMAGE_URL.',
+  });
+});
+
+app.get('/api/flows/payment-auth/recent', async (req, res) => {
+  try {
+    res.json({ ok: true, data: await PaymentAuthStore.listRecent({ limit: 20 }) });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: String(err.message || err), data: [] });
+  }
+});
+
+app.post('/api/flows/payment-auth/test', apiJson, async (req, res) => {
+  const { phone, merchant, amount, cardLast4, currency, bodyText, cta } = req.body || {};
+  if (!phone) return res.status(400).json({ ok: false, error: 'Se requiere "phone".' });
+  if (!config.phoneNumberId || !config.accessToken || !config.wabaId) {
+    return res.status(400).json({ ok: false, error: 'Faltan credenciales de WhatsApp.' });
+  }
+
+  try {
+    const txn = await PaymentAuthStore.create({
+      phone,
+      merchant: merchant || 'Supermercado XO',
+      amount: amount || '45.90',
+      currency: currency || 'USD',
+      cardLast4: cardLast4 || '4821',
+    });
+
+    const { flowId } = await getOrCreatePaymentAuthFlow();
+    const response = await GraphApi.sendFlowMessage(
+      config.phoneNumberId,
+      String(phone).replace(/\D/g, ''),
+      {
+        flowId,
+        flowToken: txn.flowToken,
+        cta: cta || 'Revisar pago',
+        bodyText: bodyText || `¿Autorizas un pago en ${txn.merchant}?`,
+        flowAction: 'data_exchange',
+        mode: 'draft',
+      }
+    );
+
+    await FlowStore.recordSend({
+      phone: txn.phone,
+      flowId,
+      flowToken: txn.flowToken,
+      mode: 'draft',
+    });
+
+    res.json({
+      ok: true,
+      transaction: txn,
+      flowId,
+      cardImageUrl: cardImageUrl(),
+      messageId: response.messages && response.messages[0] && response.messages[0].id,
+    });
+  } catch (err) {
+    console.error('payment-auth test error:', err.message);
     res.status(200).json({ ok: false, error: String(err.message || err) });
   }
 });

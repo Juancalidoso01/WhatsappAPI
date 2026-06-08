@@ -43,6 +43,15 @@ module.exports = Object.freeze({
     return trimmed.startsWith("http") ? trimmed : `https://${trimmed}`;
   })(),
 
+  cardImageUrl: (() => {
+    if (process.env.CARD_IMAGE_URL) return process.env.CARD_IMAGE_URL.replace(/\/$/, "");
+    const base = process.env.PUBLIC_BASE_URL || process.env.VERCEL_URL || "";
+    if (!base) return null;
+    const trimmed = String(base).replace(/\/$/, "");
+    const root = trimmed.startsWith("http") ? trimmed : `https://${trimmed}`;
+    return `${root}/assets/punto-pago-card.png`;
+  })(),
+
   // When false, the app never auto-replies; every message is handled by a human
   // from the web interface. Default off per product decision.
   botEnabled: process.env.BOT_ENABLED === "true",

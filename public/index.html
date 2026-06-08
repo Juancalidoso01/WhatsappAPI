@@ -382,6 +382,33 @@
           <p id="flowEndpointHint" class="muted sm"></p>
         </details>
 
+        <section class="flows-panel flows-payment-auth" id="flowsPaymentAuthPanel">
+          <h2 class="section-title">Prueba: autorización de pago</h2>
+          <p class="muted sm">Simula “¿Autorizas pago en comercio X?” con imagen de tarjeta. Requiere endpoint dinámico registrado.</p>
+          <div class="fb-payauth-preview">
+            <img id="payAuthCardImg" src="/assets/punto-pago-card.png" alt="Tarjeta Punto Pago" />
+            <span id="payAuthCardHint" class="muted sm"></span>
+          </div>
+          <div class="row">
+            <label>Teléfono
+              <input id="payAuthPhone" type="text" placeholder="50763163152" value="50763163152" />
+            </label>
+            <label>Comercio
+              <input id="payAuthMerchant" type="text" placeholder="Supermercado XO" value="Supermercado XO" />
+            </label>
+            <label>Monto (USD)
+              <input id="payAuthAmount" type="text" placeholder="45.90" value="45.90" />
+            </label>
+            <label>Últimos 4 dígitos tarjeta
+              <input id="payAuthCard4" type="text" placeholder="4821" value="4821" maxlength="4" />
+            </label>
+          </div>
+          <div class="flows-actions">
+            <button type="button" id="payAuthSendBtn" class="btn-primary sm">Enviar autorización de prueba</button>
+          </div>
+          <div id="payAuthRecent" class="fb-payauth-recent muted sm"></div>
+        </section>
+
         <section class="flows-panel flows-builder" id="flowsBuilderPanel">
           <div class="flows-builder-head">
             <h2 class="section-title">Constructor de Flows</h2>
