@@ -372,27 +372,63 @@
 
         <div id="flowsCapability" class="flows-capability muted">Comprobando compatibilidad…</div>
 
-        <section class="flows-panel flows-endpoint" id="flowsEndpointPanel">
-          <h2 class="section-title">Endpoint dinámico (data_exchange)</h2>
-          <p class="muted sm">Flows con lógica en servidor (cotización, catálogo, etc.). Requiere URL pública HTTPS.</p>
+        <details class="flows-panel flows-endpoint-collapsed">
+          <summary class="section-title">Endpoint dinámico (avanzado)</summary>
+          <p class="muted sm">Solo para lógica en servidor (cotizaciones, catálogos). Los Flows del constructor son estáticos.</p>
           <div class="flows-endpoint-row">
             <code id="flowEndpointUri" class="flows-endpoint-url">—</code>
             <button type="button" id="flowEndpointSetupBtn" class="btn-primary sm">Registrar clave en Meta</button>
           </div>
           <p id="flowEndpointHint" class="muted sm"></p>
+        </details>
+
+        <section class="flows-panel flows-builder" id="flowsBuilderPanel">
+          <div class="flows-builder-head">
+            <h2 class="section-title">Constructor de Flows</h2>
+            <p class="muted sm">Arma pantallas y campos sin escribir código. Se crea en borrador en Meta para que pruebes antes de publicar.</p>
+          </div>
+
+          <div class="fb-meta row">
+            <label>Nombre interno
+              <input id="fbName" type="text" placeholder="encuesta_nps_marzo" maxlength="80" />
+            </label>
+            <label>Categoría Meta
+              <select id="fbCategory"></select>
+            </label>
+            <label>Texto del botón (CTA)
+              <input id="fbCta" type="text" placeholder="Abrir" value="Abrir" />
+            </label>
+          </div>
+
+          <div class="fb-screens-head">
+            <h3 class="fb-subtitle">Pantallas</h3>
+            <div class="fb-screen-add">
+              <button type="button" id="fbAddForm" class="btn-ghost sm">+ Formulario</button>
+              <button type="button" id="fbAddMessage" class="btn-ghost sm">+ Mensaje</button>
+              <button type="button" id="fbAddConfirm" class="btn-ghost sm">+ Confirmación</button>
+            </div>
+          </div>
+          <div id="fbScreens" class="fb-screens"></div>
+
+          <div class="flows-builder-foot">
+            <div id="fbPreview" class="fb-preview muted sm"></div>
+            <div class="flows-actions">
+              <button type="button" id="fbCreateBtn" class="btn-primary sm">Crear borrador en Meta</button>
+            </div>
+          </div>
         </section>
 
-        <div class="flows-grid">
-          <section class="flows-panel">
-            <h2 class="section-title">Crear Flow de ejemplo</h2>
-            <label>Plantilla
-              <select id="flowSampleSelect"></select>
-            </label>
-            <p id="flowSampleDesc" class="muted sm"></p>
-            <button type="button" id="flowCreateBtn" class="btn-primary sm">Crear en Meta</button>
-          </section>
+        <details class="flows-panel">
+          <summary class="section-title">Ejemplos rápidos (opcional)</summary>
+          <label>Plantilla
+            <select id="flowSampleSelect"></select>
+          </label>
+          <p id="flowSampleDesc" class="muted sm"></p>
+          <button type="button" id="flowCreateBtn" class="btn-ghost sm">Crear ejemplo en Meta</button>
+        </details>
 
-          <section class="flows-panel wide">
+        <div class="flows-grid">
+          <section class="flows-panel wide" style="grid-column: 1 / -1;">
             <h2 class="section-title">Flows en tu cuenta <span class="muted" id="flowsListHint"></span></h2>
             <div id="flowsList" class="flows-list muted">Cargando…</div>
           </section>

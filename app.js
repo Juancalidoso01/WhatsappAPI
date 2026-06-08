@@ -34,6 +34,7 @@ const reports = require('./services/reports');
 const templateBuilder = require('./services/template-builder');
 const FlowStore = require('./services/flow-store');
 const flowSamples = require('./services/flow-samples');
+const flowBuilder = require('./services/flow-builder');
 const FlowKeys = require('./services/flow-keys');
 const { decryptRequest, encryptResponse, FlowEndpointException } = require('./services/flow-encryption');
 const { handleFlowRequest } = require('./services/flow-endpoint-handler');
@@ -426,6 +427,58 @@ app.get('/api/flows/capability', async (req, res) => {
 
 app.get('/api/flows/samples', (req, res) => {
   res.json({ ok: true, samples: flowSamples.listSamples() });
+});
+
+app.get('/api/flows/builder/schema', (req, res) => {
+  res.json({ ok: true, schema: flowBuilder.getSchema() });
+});
+
+app.post('/api/flows/build', apiJson, async (req, res) => {
+  if (!config.accessToken || !config.wabaId) {
+    return res.status(400).json({ ok: false, error: 'Falta ACCESS_TOKEN o WABA_ID.' });
+  }
+
+  const { name, category, publish, cta, screens } = req.body || {};
+  const built = flowBuilder.buildFlowJson({
+    name,
+    category,
+    cta,
+    screens,
+  });
+  if (!built.ok) {
+    return res.status(400).json({ ok: false, error: built.error });
+  }
+
+  const cat = category || 'OTHER';
+  try {
+    const result = await GraphApi.createFlow(config.wabaId, {
+      name: String(name).trim().toLowerCase(),
+      categories: [cat],
+      flowJson: built.flowJson,
+      publish: Boolean(publish),
+    });
+    const validationErrors = result.validation_errors || [];
+    if (validationErrors.length) {
+      const first = validationErrors[0];
+      return res.status(200).json({
+        ok: false,
+        error: first.message || first.error || 'Flow JSON inválido.',
+        validation_errors: validationErrors,
+        flow: result,
+      });
+    }
+    res.status(201).json({
+      ok: true,
+      flow: result,
+      defaultScreen: built.firstScreenId,
+      defaultCta: built.defaultCta,
+      fieldKeys: built.fieldKeys,
+      flowAction: 'navigate',
+    });
+  } catch (err) {
+    console.error('buildFlow error:', err.message);
+    res.status(200).json({ ok: false, error: String(err.message || err) });
+  }
 });
 
 app.get('/api/flows', async (req, res) => {

@@ -1587,6 +1587,308 @@ async function initWorkspaceScreen() {
 /* ---------- WhatsApp Flows ---------- */
 const FLOW_STATUS_LABELS = { DRAFT: "Borrador", PUBLISHED: "Publicado", DEPRECATED: "Deprecado", BLOCKED: "Bloqueado", THROTTLED: "Limitado" };
 
+const fbState = {
+  schema: null,
+  screens: [
+    {
+      type: "form",
+      title: "Formulario",
+      introHeading: "",
+      introBody: "",
+      footerLabel: "Enviar",
+      fields: [{ type: "text", label: "Nombre", required: true }],
+    },
+    {
+      type: "confirm",
+      title: "Gracias",
+      heading: "¡Listo!",
+      body: "Recibimos tu respuesta.",
+      footerLabel: "Cerrar",
+    },
+  ],
+};
+
+const FB_SCREEN_LABELS = { form: "Formulario", message: "Mensaje", confirm: "Confirmación" };
+
+async function initFlowBuilder() {
+  if (!fbState.schema) {
+    const res = await api("/api/flows/builder/schema");
+    fbState.schema = (res && res.schema) || { fieldTypes: [], categories: [] };
+    const catSel = $("fbCategory");
+    if (catSel) {
+      catSel.innerHTML = (fbState.schema.categories || [])
+        .map((c) => `<option value="${escapeHtml(c.id)}">${escapeHtml(c.label)}</option>`)
+        .join("");
+    }
+  }
+  renderFbScreens();
+  updateFbPreview();
+}
+
+function fbFieldTypeOptions(selected) {
+  return (fbState.schema?.fieldTypes || [
+    { id: "text", label: "Texto" },
+    { id: "select", label: "Opciones" },
+    { id: "rating", label: "1–5" },
+  ]).map((t) => `<option value="${escapeHtml(t.id)}"${t.id === selected ? " selected" : ""}>${escapeHtml(t.label)}</option>`).join("");
+}
+
+function renderFbScreens() {
+  const box = $("fbScreens");
+  if (!box) return;
+  box.innerHTML = fbState.screens.map((scr, si) => {
+    const typeLabel = FB_SCREEN_LABELS[scr.type] || scr.type;
+    let body = "";
+
+    if (scr.type === "form") {
+      const fields = (scr.fields || []).map((f, fi) => `
+        <div class="fb-field-row" data-si="${si}" data-fi="${fi}">
+          <select class="fb-f-type">${fbFieldTypeOptions(f.type)}</select>
+          <input class="fb-f-label" type="text" placeholder="Etiqueta del campo" value="${escapeHtml(f.label || "")}" />
+          <label class="fb-req"><input type="checkbox" class="fb-f-req" ${f.required ? "checked" : ""} /> Oblig.</label>
+          <button type="button" class="btn-ghost sm fb-f-remove" title="Quitar">×</button>
+          ${f.type === "select" ? `<div class="fb-options"><span class="muted">Opciones (una por línea)</span><textarea class="fb-f-opts">${escapeHtml((f.options || []).join("\n"))}</textarea></div>` : ""}
+        </div>`).join("");
+      body = `
+        <div class="fb-message-fields">
+          <input class="fb-intro-h" type="text" placeholder="Título introductorio (opcional)" value="${escapeHtml(scr.introHeading || "")}" />
+          <input class="fb-intro-b" type="text" placeholder="Texto introductorio (opcional)" value="${escapeHtml(scr.introBody || "")}" />
+        </div>
+        <div class="fb-field-list">${fields}</div>
+        <button type="button" class="btn-ghost sm fb-add-field" data-si="${si}">+ Campo</button>
+        <label class="sm" style="margin-top:10px;display:block">Botón
+          <input class="fb-footer" type="text" value="${escapeHtml(scr.footerLabel || "Continuar")}" />
+        </label>`;
+    } else if (scr.type === "message") {
+      body = `
+        <div class="fb-message-fields">
+          <input class="fb-heading" type="text" placeholder="Título" value="${escapeHtml(scr.heading || "")}" />
+          <input class="fb-body" type="text" placeholder="Mensaje" value="${escapeHtml(scr.body || "")}" />
+          <input class="fb-link-url" type="url" placeholder="Link (opcional, ej. tienda de apps)" value="${escapeHtml(scr.linkUrl || "")}" />
+          <input class="fb-link-label" type="text" placeholder="Texto del link" value="${escapeHtml(scr.linkLabel || "")}" />
+          <label class="sm">Botón
+            <input class="fb-footer" type="text" value="${escapeHtml(scr.footerLabel || "Continuar")}" />
+          </label>
+        </div>`;
+    } else {
+      body = `
+        <div class="fb-message-fields">
+          <input class="fb-heading" type="text" placeholder="Título" value="${escapeHtml(scr.heading || "")}" />
+          <input class="fb-body" type="text" placeholder="Mensaje de agradecimiento" value="${escapeHtml(scr.body || "")}" />
+          <label class="sm">Botón final
+            <input class="fb-footer" type="text" value="${escapeHtml(scr.footerLabel || "Cerrar")}" />
+          </label>
+        </div>`;
+    }
+
+    return `
+      <div class="fb-screen" data-si="${si}">
+        <div class="fb-screen-head">
+          <span class="fb-screen-type">${escapeHtml(typeLabel)}</span>
+          <input class="fb-title" type="text" value="${escapeHtml(scr.title || "")}" placeholder="Título de pantalla" />
+          <div class="fb-screen-actions">
+            <button type="button" class="btn-ghost sm fb-up" data-si="${si}" title="Subir" ${si === 0 ? "disabled" : ""}>↑</button>
+            <button type="button" class="btn-ghost sm fb-down" data-si="${si}" title="Bajar" ${si === fbState.screens.length - 1 ? "disabled" : ""}>↓</button>
+            <button type="button" class="btn-ghost sm fb-del-screen" data-si="${si}" title="Eliminar">×</button>
+          </div>
+        </div>
+        ${body}
+      </div>`;
+  }).join("");
+
+  box.querySelectorAll(".fb-f-type").forEach((sel) => {
+    sel.addEventListener("change", () => { syncFbFromDom(); renderFbScreens(); updateFbPreview(); });
+  });
+  box.querySelectorAll("input, textarea, select").forEach((el) => {
+    if (el.classList.contains("fb-f-type")) return;
+    el.addEventListener("input", () => { syncFbFromDom(); updateFbPreview(); });
+    el.addEventListener("change", () => { syncFbFromDom(); updateFbPreview(); });
+  });
+  box.querySelectorAll(".fb-add-field").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      syncFbFromDom();
+      const si = Number(btn.dataset.si);
+      fbState.screens[si].fields = fbState.screens[si].fields || [];
+      fbState.screens[si].fields.push({ type: "text", label: "", required: false });
+      renderFbScreens();
+      updateFbPreview();
+    });
+  });
+  box.querySelectorAll(".fb-f-remove").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      syncFbFromDom();
+      const row = btn.closest(".fb-field-row");
+      const si = Number(row.dataset.si);
+      const fi = Number(row.dataset.fi);
+      fbState.screens[si].fields.splice(fi, 1);
+      renderFbScreens();
+      updateFbPreview();
+    });
+  });
+  box.querySelectorAll(".fb-up").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      syncFbFromDom();
+      const i = Number(btn.dataset.si);
+      if (i <= 0) return;
+      [fbState.screens[i - 1], fbState.screens[i]] = [fbState.screens[i], fbState.screens[i - 1]];
+      renderFbScreens();
+      updateFbPreview();
+    });
+  });
+  box.querySelectorAll(".fb-down").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      syncFbFromDom();
+      const i = Number(btn.dataset.si);
+      if (i >= fbState.screens.length - 1) return;
+      [fbState.screens[i + 1], fbState.screens[i]] = [fbState.screens[i], fbState.screens[i + 1]];
+      renderFbScreens();
+      updateFbPreview();
+    });
+  });
+  box.querySelectorAll(".fb-del-screen").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      syncFbFromDom();
+      const i = Number(btn.dataset.si);
+      if (fbState.screens.length <= 1) { toast("Debe quedar al menos una pantalla.", "error"); return; }
+      fbState.screens.splice(i, 1);
+      renderFbScreens();
+      updateFbPreview();
+    });
+  });
+}
+
+function syncFbFromDom() {
+  const box = $("fbScreens");
+  if (!box) return;
+  box.querySelectorAll(".fb-screen").forEach((el) => {
+    const si = Number(el.dataset.si);
+    const scr = fbState.screens[si];
+    if (!scr) return;
+    scr.title = (el.querySelector(".fb-title") || {}).value || scr.title;
+    if (scr.type === "form") {
+      scr.introHeading = (el.querySelector(".fb-intro-h") || {}).value || "";
+      scr.introBody = (el.querySelector(".fb-intro-b") || {}).value || "";
+      scr.footerLabel = (el.querySelector(".fb-footer") || {}).value || "Enviar";
+      scr.fields = [];
+      el.querySelectorAll(".fb-field-row").forEach((row) => {
+        const type = (row.querySelector(".fb-f-type") || {}).value || "text";
+        const label = (row.querySelector(".fb-f-label") || {}).value || "";
+        const required = (row.querySelector(".fb-f-req") || {}).checked;
+        const field = { type, label, required };
+        if (type === "select") {
+          const raw = (row.querySelector(".fb-f-opts") || {}).value || "";
+          field.options = raw.split("\n").map((s) => s.trim()).filter(Boolean);
+        }
+        scr.fields.push(field);
+      });
+    } else if (scr.type === "message") {
+      scr.heading = (el.querySelector(".fb-heading") || {}).value || "";
+      scr.body = (el.querySelector(".fb-body") || {}).value || "";
+      scr.linkUrl = (el.querySelector(".fb-link-url") || {}).value || "";
+      scr.linkLabel = (el.querySelector(".fb-link-label") || {}).value || "";
+      scr.footerLabel = (el.querySelector(".fb-footer") || {}).value || "Continuar";
+    } else {
+      scr.heading = (el.querySelector(".fb-heading") || {}).value || "";
+      scr.body = (el.querySelector(".fb-body") || {}).value || "";
+      scr.footerLabel = (el.querySelector(".fb-footer") || {}).value || "Cerrar";
+    }
+  });
+}
+
+function collectFbDefinition() {
+  syncFbFromDom();
+  return {
+    name: ($("fbName") || {}).value.trim(),
+    category: ($("fbCategory") || {}).value || "OTHER",
+    cta: ($("fbCta") || {}).value.trim() || "Abrir",
+    publish: false,
+    screens: fbState.screens.map((s) => ({ ...s, fields: s.fields ? s.fields.map((f) => ({ ...f })) : undefined })),
+  };
+}
+
+function updateFbPreview() {
+  const box = $("fbPreview");
+  if (!box) return;
+  syncFbFromDom();
+  const lines = fbState.screens.map((scr, i) => {
+    const t = FB_SCREEN_LABELS[scr.type] || scr.type;
+    if (scr.type === "form") {
+      const fs = (scr.fields || []).map((f) => `  · ${f.label || "(sin etiqueta)"}${f.required ? " *" : ""}`).join("\n");
+      return `${i + 1}. ${t}: ${scr.title || "—"}\n${fs || "  (sin campos)"}`;
+    }
+    if (scr.type === "message") {
+      return `${i + 1}. ${t}: ${scr.title || "—"}\n  ${scr.heading || ""} ${scr.body || ""}${scr.linkUrl ? `\n  Link: ${scr.linkUrl}` : ""}`;
+    }
+    return `${i + 1}. ${t}: ${scr.title || "—"}\n  ${scr.heading || ""} ${scr.body || ""}`;
+  });
+  box.textContent = lines.join("\n\n") || "Agrega pantallas para ver la vista previa.";
+}
+
+function fbAddScreen(type) {
+  syncFbFromDom();
+  const limits = fbState.schema?.limits || { maxScreens: 8 };
+  if (fbState.screens.length >= limits.maxScreens) {
+    toast(`Máximo ${limits.maxScreens} pantallas.`, "error");
+    return;
+  }
+  if (type === "form") {
+    fbState.screens.push({
+      type: "form",
+      title: "Nuevo formulario",
+      introHeading: "",
+      introBody: "",
+      footerLabel: "Continuar",
+      fields: [{ type: "text", label: "Campo", required: false }],
+    });
+  } else if (type === "message") {
+    fbState.screens.push({
+      type: "message",
+      title: "Mensaje",
+      heading: "",
+      body: "",
+      linkUrl: "",
+      linkLabel: "",
+      footerLabel: "Continuar",
+    });
+  } else {
+    const hasConfirm = fbState.screens.some((s) => s.type === "confirm");
+    if (hasConfirm) {
+      const idx = fbState.screens.findIndex((s) => s.type === "confirm");
+      fbState.screens[idx] = {
+        type: "confirm",
+        title: "Gracias",
+        heading: "¡Listo!",
+        body: "Recibimos tu respuesta.",
+        footerLabel: "Cerrar",
+      };
+    } else {
+      fbState.screens.push({
+        type: "confirm",
+        title: "Gracias",
+        heading: "¡Listo!",
+        body: "Recibimos tu respuesta.",
+        footerLabel: "Cerrar",
+      });
+    }
+  }
+  renderFbScreens();
+  updateFbPreview();
+}
+
+async function createFlowFromBuilder() {
+  const def = collectFbDefinition();
+  if (!def.name) { toast("Ingresa un nombre interno para el Flow.", "error"); return; }
+  const res = await post("/api/flows/build", def);
+  if (!res.ok) { toast(res.error || "No se pudo crear el Flow.", "error"); return; }
+  toast("Flow creado en borrador.", "ok");
+  await loadFlows();
+  if (res.flow && res.flow.id) {
+    if (res.defaultScreen) $("flowSendScreen").value = res.defaultScreen;
+    if (res.defaultCta) $("flowSendCta").value = res.defaultCta;
+    selectFlow(res.flow.id);
+  }
+}
+
 async function loadFlowCapability() {
   const res = await api("/api/flows/capability");
   state.flowCapability = res;
@@ -1769,7 +2071,14 @@ async function loadFlowResponses() {
 }
 
 async function initFlowsScreen() {
-  await Promise.all([loadFlowCapability(), loadFlowSamples(), loadFlowEndpointSetup(), loadFlows(), loadFlowResponses()]);
+  await Promise.all([
+    loadFlowCapability(),
+    initFlowBuilder(),
+    loadFlowSamples(),
+    loadFlowEndpointSetup(),
+    loadFlows(),
+    loadFlowResponses(),
+  ]);
 }
 
 /* ---------- modals & nav ---------- */
@@ -1883,6 +2192,10 @@ function bindEvents() {
   $("flowPublishBtn").addEventListener("click", publishActiveFlow);
   $("flowRefreshResponses").addEventListener("click", loadFlowResponses);
   if ($("flowEndpointSetupBtn")) $("flowEndpointSetupBtn").addEventListener("click", setupFlowEndpoint);
+  if ($("fbAddForm")) $("fbAddForm").addEventListener("click", () => fbAddScreen("form"));
+  if ($("fbAddMessage")) $("fbAddMessage").addEventListener("click", () => fbAddScreen("message"));
+  if ($("fbAddConfirm")) $("fbAddConfirm").addEventListener("click", () => fbAddScreen("confirm"));
+  if ($("fbCreateBtn")) $("fbCreateBtn").addEventListener("click", createFlowFromBuilder);
   $("flowSampleSelect").addEventListener("change", updateFlowSampleDesc);
   $("detailTemplateBtn").addEventListener("click", () => openNewChat());
   $("detailToggle").addEventListener("click", () => $("detailPane").classList.toggle("collapsed"));
