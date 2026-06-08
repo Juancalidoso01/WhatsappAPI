@@ -612,6 +612,31 @@ input, textarea, select { font-family: inherit; }
   .tp-var-row .tp-insert, .tp-var-row .tp-remove { grid-column: span 1; }
 }
 
+/* ---------- WhatsApp Flows ---------- */
+.flows-pane { flex: 1; min-width: 0; display: flex; flex-direction: column; padding: 20px 28px; overflow-y: auto; background: var(--bg); max-width: 960px; }
+.flows-intro { margin: 4px 0 0; font-size: 12px; max-width: 620px; }
+.flows-capability { margin: 12px 0; padding: 12px 14px; border-radius: 12px; background: var(--surface-2); font-size: 12px; line-height: 1.55; }
+.flows-capability.ok { background: #e3f8ee; color: #1d6b42; }
+.flows-capability.warn { background: #fff6e0; color: #7a5a00; }
+.flows-grid { display: grid; grid-template-columns: 280px 1fr; gap: 14px; margin-bottom: 14px; }
+.flows-panel { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 16px 18px; margin-bottom: 14px; }
+.flows-panel.wide { min-width: 0; }
+.flows-panel label { display: block; font-size: 12px; font-weight: 600; color: var(--muted); margin-bottom: 10px; }
+.flows-panel input, .flows-panel select { width: 100%; margin-top: 6px; }
+.flows-list { font-size: 13px; }
+.flow-item { padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; margin-bottom: 8px; cursor: pointer; }
+.flow-item:hover { background: var(--surface-2); }
+.flow-item.active { border-color: var(--brand); background: var(--brand-50); }
+.flow-item-head { display: flex; justify-content: space-between; gap: 8px; align-items: center; }
+.flow-status { font-size: 10px; font-weight: 700; text-transform: uppercase; padding: 2px 6px; border-radius: 99px; background: var(--surface-2); }
+.flow-status.PUBLISHED { background: #e3f8ee; color: #1d6b42; }
+.flow-status.DRAFT { background: #fff6e0; color: #7a5a00; }
+.flows-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+.flows-responses { font-size: 12px; max-height: 280px; overflow-y: auto; }
+.flow-resp-item { padding: 10px; border-bottom: 1px solid var(--border); }
+.flow-resp-item pre { margin: 6px 0 0; font-size: 11px; white-space: pre-wrap; word-break: break-word; }
+@media (max-width: 768px) { .flows-grid { grid-template-columns: 1fr; } }
+
 /* ---------- Toast ---------- */
 .toast {
   position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);

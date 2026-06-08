@@ -27,6 +27,9 @@
       <button class="rail-btn" data-screen="integration" title="Integración API" aria-label="Integración API">
         <svg viewBox="0 0 24 24" fill-rule="evenodd"><path d="M8 4h8a2 2 0 0 1 2 2v2H6V6a2 2 0 0 1 2-2zm-2 6h12v10a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V10zm4 2v6h2v-6h-2zm4 0v6h2v-6h-2z"/></svg>
       </button>
+      <button class="rail-btn" data-screen="flows" title="WhatsApp Flows" aria-label="WhatsApp Flows">
+        <svg viewBox="0 0 24 24" fill-rule="evenodd"><path d="M4 4h6v6H4V4zm10 0h6v6h-6V4zM4 14h6v6H4v-6zm10 3h6v3h-6v-3zm0-3h2v2h-2v-2zm4 0h2v2h-2v-2z"/></svg>
+      </button>
       <button class="rail-btn" data-screen="billing" title="Facturación" aria-label="Facturación">
         <svg viewBox="0 0 24 24" fill-rule="evenodd"><path d="M4 4h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2zm0 4v2.2h16V8H4zm2 5.4v2h6v-2H6zm9 0v2h3v-2h-3z"/></svg>
       </button>
@@ -353,6 +356,68 @@
               </select>
             </label>
           </div>
+        </section>
+      </main>
+    </section>
+
+    <!-- ============ SCREEN: FLOWS ============ -->
+    <section class="screen hidden" id="screenFlows">
+      <main class="flows-pane">
+        <header class="pane-header">
+          <div>
+            <h1>WhatsApp Flows</h1>
+            <p class="muted flows-intro">Formularios interactivos dentro del chat. El cliente completa pantallas y la respuesta llega al webhook.</p>
+          </div>
+        </header>
+
+        <div id="flowsCapability" class="flows-capability muted">Comprobando compatibilidad…</div>
+
+        <div class="flows-grid">
+          <section class="flows-panel">
+            <h2 class="section-title">Crear Flow de ejemplo</h2>
+            <label>Plantilla
+              <select id="flowSampleSelect"></select>
+            </label>
+            <p id="flowSampleDesc" class="muted sm"></p>
+            <button type="button" id="flowCreateBtn" class="btn-primary sm">Crear en Meta</button>
+          </section>
+
+          <section class="flows-panel wide">
+            <h2 class="section-title">Flows en tu cuenta <span class="muted" id="flowsListHint"></span></h2>
+            <div id="flowsList" class="flows-list muted">Cargando…</div>
+          </section>
+        </div>
+
+        <section class="flows-panel flows-send hidden" id="flowsSendPanel">
+          <h2 class="section-title">Enviar Flow: <span id="flowsSendName">—</span></h2>
+          <p class="muted sm">Requiere ventana de 24 h (conversación activa). Flows en borrador se envían en modo <code>draft</code>.</p>
+          <div class="row">
+            <label>Teléfono (solo dígitos)
+              <input id="flowSendPhone" type="text" placeholder="50761234567" />
+            </label>
+            <label>Texto del mensaje
+              <input id="flowSendBody" type="text" placeholder="Completa el formulario" />
+            </label>
+          </div>
+          <div class="row">
+            <label>Botón CTA
+              <input id="flowSendCta" type="text" placeholder="Abrir" />
+            </label>
+            <label>Pantalla inicial
+              <input id="flowSendScreen" type="text" placeholder="WELCOME_SCREEN" />
+            </label>
+          </div>
+          <div class="flows-actions">
+            <button type="button" id="flowSendBtn" class="btn-primary sm">Enviar Flow</button>
+            <button type="button" id="flowPublishBtn" class="btn-ghost sm">Publicar Flow</button>
+            <a id="flowPreviewLink" class="btn-ghost sm hidden" href="#" target="_blank" rel="noopener">Vista previa Meta</a>
+          </div>
+        </section>
+
+        <section class="flows-panel">
+          <h2 class="section-title">Respuestas recibidas</h2>
+          <div id="flowsResponses" class="flows-responses muted">Sin respuestas aún.</div>
+          <button type="button" id="flowRefreshResponses" class="btn-ghost sm">Actualizar</button>
         </section>
       </main>
     </section>

@@ -13,6 +13,10 @@ const state = {
   bulkPollTimer: null,
   workspace: null,
   workspaceTab: "profile",
+  flows: [],
+  flowCapability: null,
+  activeFlowId: null,
+  flowSamples: [],
   activePhone: null,
   messages: [],
   conversationDetail: null,
@@ -1573,6 +1577,154 @@ async function initWorkspaceScreen() {
   await Promise.all([loadWorkspace(), loadWorkspaceReports()]);
 }
 
+/* ---------- WhatsApp Flows ---------- */
+const FLOW_STATUS_LABELS = { DRAFT: "Borrador", PUBLISHED: "Publicado", DEPRECATED: "Deprecado", BLOCKED: "Bloqueado", THROTTLED: "Limitado" };
+
+async function loadFlowCapability() {
+  const res = await api("/api/flows/capability");
+  state.flowCapability = res;
+  const box = $("flowsCapability");
+  if (!box) return;
+  if (!res.hasCredentials) {
+    box.className = "flows-capability warn";
+    box.innerHTML = "<strong>Sin credenciales.</strong> Configura ACCESS_TOKEN, WABA_ID y PHONE_NUMBER_ID.";
+    return;
+  }
+  const cls = res.canListFlows ? (res.testNumberLikely ? "warn" : "ok") : "warn";
+  box.className = `flows-capability ${cls}`;
+  const notes = (res.notes || []).map((n) => `<li>${escapeHtml(n)}</li>`).join("");
+  box.innerHTML = `
+    <strong>${res.canListFlows ? "Flows API disponible" : "Flows API no accesible"}</strong>
+    ${res.testNumberLikely ? " · <em>Posible número de prueba Meta</em>" : ""}
+    ${res.flowCount != null ? ` · ${res.flowCount} flow(s) en la cuenta` : ""}
+    ${res.error ? `<div style="margin-top:6px">${escapeHtml(res.error)}</div>` : ""}
+    <ul style="margin:8px 0 0;padding-left:18px">${notes}</ul>`;
+}
+
+async function loadFlowSamples() {
+  const res = await api("/api/flows/samples");
+  state.flowSamples = (res && res.samples) || [];
+  const sel = $("flowSampleSelect");
+  if (!sel) return;
+  sel.innerHTML = state.flowSamples
+    .map((s) => `<option value="${escapeHtml(s.key)}">${escapeHtml(s.name)}</option>`)
+    .join("");
+  updateFlowSampleDesc();
+}
+
+function updateFlowSampleDesc() {
+  const sel = $("flowSampleSelect");
+  const key = sel ? sel.value : "hello";
+  const s = state.flowSamples.find((x) => x.key === key);
+  if ($("flowSampleDesc")) $("flowSampleDesc").textContent = s ? s.description : "";
+}
+
+async function loadFlows() {
+  const res = await api("/api/flows");
+  state.flows = (res && res.data) || [];
+  renderFlowsList();
+}
+
+function renderFlowsList() {
+  const box = $("flowsList");
+  $("flowsListHint").textContent = state.flows.length ? `(${state.flows.length})` : "";
+  if (!state.flows.length) {
+    box.innerHTML = `<p class="muted">No hay Flows. Crea uno de ejemplo o en <a href="https://business.facebook.com/wa/manage/flows/" target="_blank" rel="noopener">WhatsApp Manager</a>.</p>`;
+    return;
+  }
+  box.innerHTML = state.flows.map((f) => {
+    const st = (f.status || "").toUpperCase();
+    const active = f.id === state.activeFlowId ? " active" : "";
+    return `<div class="flow-item${active}" data-id="${escapeHtml(f.id)}">
+      <div class="flow-item-head">
+        <strong>${escapeHtml(f.name || f.id)}</strong>
+        <span class="flow-status ${escapeHtml(st)}">${escapeHtml(FLOW_STATUS_LABELS[st] || st)}</span>
+      </div>
+      <div class="muted" style="font-size:11px;margin-top:4px">ID: ${escapeHtml(f.id)} · ${escapeHtml((f.categories || []).join(", ") || "—")}</div>
+    </div>`;
+  }).join("");
+  box.querySelectorAll(".flow-item").forEach((el) =>
+    el.addEventListener("click", () => selectFlow(el.dataset.id))
+  );
+}
+
+async function selectFlow(id) {
+  state.activeFlowId = id;
+  renderFlowsList();
+  $("flowsSendPanel").classList.remove("hidden");
+  const f = state.flows.find((x) => x.id === id);
+  $("flowsSendName").textContent = f ? f.name : id;
+
+  const detail = await api(`/api/flows/${encodeURIComponent(id)}`);
+  if (detail.ok && detail.flow && detail.flow.preview && detail.flow.preview.preview_url) {
+    const a = $("flowPreviewLink");
+    a.href = detail.flow.preview.preview_url;
+    a.classList.remove("hidden");
+  } else if ($("flowPreviewLink")) {
+    $("flowPreviewLink").classList.add("hidden");
+  }
+}
+
+async function createFlowSample() {
+  const sample = $("flowSampleSelect").value || "hello";
+  const res = await post("/api/flows", { sample });
+  if (!res.ok) { toast(res.error || "No se pudo crear el Flow.", "error"); return; }
+  toast("Flow creado en Meta.", "ok");
+  await loadFlows();
+  if (res.flow && res.flow.id) {
+    if (res.defaultScreen) $("flowSendScreen").value = res.defaultScreen;
+    if (res.defaultCta) $("flowSendCta").value = res.defaultCta;
+    selectFlow(res.flow.id);
+  }
+}
+
+async function sendActiveFlow() {
+  const id = state.activeFlowId;
+  if (!id) { toast("Selecciona un Flow.", "error"); return; }
+  const phone = $("flowSendPhone").value.trim();
+  if (!phone) { toast("Ingresa un teléfono.", "error"); return; }
+  const res = await post(`/api/flows/${encodeURIComponent(id)}/send`, {
+    phone,
+    bodyText: $("flowSendBody").value.trim(),
+    cta: $("flowSendCta").value.trim(),
+    screen: $("flowSendScreen").value.trim(),
+  });
+  if (!res.ok) {
+    toast(res.hint || res.error || "No se pudo enviar.", "error");
+    return;
+  }
+  toast(`Flow enviado (modo ${res.mode || "published"}).`, "ok");
+}
+
+async function publishActiveFlow() {
+  const id = state.activeFlowId;
+  if (!id) return;
+  const res = await post(`/api/flows/${encodeURIComponent(id)}/publish`, {});
+  if (!res.ok) { toast(res.error || "No se pudo publicar.", "error"); return; }
+  toast("Flow publicado.", "ok");
+  await loadFlows();
+}
+
+async function loadFlowResponses() {
+  const box = $("flowsResponses");
+  const res = await api("/api/flows/responses?limit=30");
+  const rows = (res && res.data) || [];
+  if (!rows.length) {
+    box.innerHTML = `<p class="muted">Sin respuestas aún. Envía un Flow y complétalo desde el teléfono.</p>`;
+    return;
+  }
+  box.innerHTML = rows.map((r) => `<div class="flow-resp-item">
+    <strong>+${escapeHtml(r.phone)}</strong>
+    <span class="muted"> · ${escapeHtml(new Date(r.receivedAt).toLocaleString("es"))}</span>
+    ${r.flowToken ? `<span class="muted"> · token: ${escapeHtml(r.flowToken)}</span>` : ""}
+    <pre>${escapeHtml(JSON.stringify(r.responseJson, null, 2))}</pre>
+  </div>`).join("");
+}
+
+async function initFlowsScreen() {
+  await Promise.all([loadFlowCapability(), loadFlowSamples(), loadFlows(), loadFlowResponses()]);
+}
+
 /* ---------- modals & nav ---------- */
 function showModal(id) { $(id).classList.remove("hidden"); }
 function closeModals() { document.querySelectorAll(".modal").forEach((m) => m.classList.add("hidden")); }
@@ -1584,11 +1736,13 @@ function switchScreen(name) {
   $("screenBulk").classList.toggle("hidden", name !== "bulk");
   $("screenIntegration").classList.toggle("hidden", name !== "integration");
   $("screenWorkspace").classList.toggle("hidden", name !== "workspace");
+  $("screenFlows").classList.toggle("hidden", name !== "flows");
   $("screenBilling").classList.toggle("hidden", name !== "billing");
   if (name === "templates") { loadTemplates().then(renderTemplateList); }
   if (name === "bulk") { initBulkScreen(); }
   if (name === "integration") { initIntegrationScreen(); }
   if (name === "workspace") { initWorkspaceScreen(); }
+  if (name === "flows") { initFlowsScreen(); }
   if (name === "billing") { loadBilling(); renderPrices(); }
   if (name !== "bulk") stopBulkPolling();
   if (name !== "workspace") toggleWorkspaceFlyout(false);
@@ -1677,6 +1831,11 @@ function bindEvents() {
     const el = $(id);
     if (el) el.addEventListener("input", updateTpPreview);
   });
+  $("flowCreateBtn").addEventListener("click", createFlowSample);
+  $("flowSendBtn").addEventListener("click", sendActiveFlow);
+  $("flowPublishBtn").addEventListener("click", publishActiveFlow);
+  $("flowRefreshResponses").addEventListener("click", loadFlowResponses);
+  $("flowSampleSelect").addEventListener("change", updateFlowSampleDesc);
   $("detailTemplateBtn").addEventListener("click", () => openNewChat());
   $("detailToggle").addEventListener("click", () => $("detailPane").classList.toggle("collapsed"));
   $("detailNotes").addEventListener("blur", saveNotes);

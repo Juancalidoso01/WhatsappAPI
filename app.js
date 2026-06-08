@@ -32,6 +32,8 @@ const { requireIntegrationKey } = require('./services/api-auth');
 const WorkspaceStore = require('./services/workspace-store');
 const reports = require('./services/reports');
 const templateBuilder = require('./services/template-builder');
+const FlowStore = require('./services/flow-store');
+const flowSamples = require('./services/flow-samples');
 const app = express();
 
 const upload = multer({
@@ -70,6 +72,11 @@ app.use(express.static(path.join(__dirname, 'public')));
 app.get('/docs/INTEGRACION_API.md', (req, res) => {
   res.type('text/markdown; charset=utf-8');
   res.sendFile(path.join(__dirname, 'docs', 'INTEGRACION_API.md'));
+});
+
+app.get('/docs/FLOWS.md', (req, res) => {
+  res.type('text/markdown; charset=utf-8');
+  res.sendFile(path.join(__dirname, 'docs', 'FLOWS.md'));
 });
 
 // JSON parser that validates the Facebook signature. Scoped to the webhook
@@ -157,6 +164,9 @@ app.post('/webhook', webhookJson, (req, res) => {
               Promise.resolve(mirrorIncomingMessage(rawMessage, contactNames, senderPhoneNumberId))
                 .catch(err => console.error('addMessage error:', err));
 
+              Promise.resolve(handleFlowResponse(rawMessage, contactNames))
+                .catch(err => console.error('flow response error:', err));
+
               // Auto-reply only when the bot is explicitly enabled. By default
               // every conversation is handled manually from the web interface.
               if (config.botEnabled) {
@@ -182,6 +192,7 @@ app.get('/api/config', async (req, res) => {
     phoneNumberId: config.phoneNumberId || null,
     hasCredentials: Boolean(config.accessToken && config.phoneNumberId),
     templatesEnabled: Boolean(config.accessToken && config.wabaId),
+    flowsEnabled: Boolean(config.accessToken && config.wabaId && config.phoneNumberId),
     botEnabled: config.botEnabled,
     persistent: Store.isPersistent(),
     workspace: {
@@ -307,6 +318,175 @@ app.get('/api/reports/summary', async (req, res) => {
     res.json({ ok: true, summary });
   } catch (err) {
     res.status(500).json({ ok: false, error: String(err.message || err) });
+  }
+});
+
+// ----- WhatsApp Flows -----
+app.get('/api/flows/capability', async (req, res) => {
+  const base = {
+    ok: false,
+    hasCredentials: Boolean(config.accessToken && config.wabaId && config.phoneNumberId),
+    canListFlows: false,
+    testNumberLikely: false,
+    notes: [],
+  };
+  if (!base.hasCredentials) {
+    base.notes.push('Configura ACCESS_TOKEN, WABA_ID y PHONE_NUMBER_ID.');
+    return res.json(base);
+  }
+
+  try {
+    const result = await GraphApi.listFlows(config.wabaId);
+    base.ok = true;
+    base.canListFlows = true;
+    base.flowCount = (result.data || []).length;
+  } catch (err) {
+    base.error = String(err.message || err);
+    base.notes.push('No se pudo listar Flows. Verifica permisos whatsapp_business_management.');
+  }
+
+  try {
+    const line = parseLineHealth(await GraphApi.getPhoneLineHealth(config.phoneNumberId));
+    base.line = line;
+    const phone = String(line.displayPhone || '');
+    base.testNumberLikely = /555|test|0000/i.test(phone) || (line.verifiedName || '').toLowerCase().includes('test');
+  } catch (_) {}
+
+  base.notes.push(
+    'Número de prueba Meta: puedes crear Flows y probarlos en borrador (mode draft) dentro de la ventana de 24 h.',
+    'Enviar Flows publicados masivamente requiere WABA verificada y nombre de display aprobado.',
+    'Si ves error 139000 (Integrity), completa verificación de negocio en Meta Business.',
+    'Flow dinámico con endpoint propio requiere URL pública + cifrado (fase 2).',
+  );
+
+  res.json(base);
+});
+
+app.get('/api/flows/samples', (req, res) => {
+  res.json({ ok: true, samples: flowSamples.listSamples() });
+});
+
+app.get('/api/flows', async (req, res) => {
+  if (!config.accessToken || !config.wabaId) {
+    return res.json({ ok: false, error: 'Falta ACCESS_TOKEN o WABA_ID.', data: [] });
+  }
+  try {
+    const result = await GraphApi.listFlows(config.wabaId);
+    res.json({ ok: true, data: result.data || [], paging: result.paging || null });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: String(err.message || err), data: [] });
+  }
+});
+
+app.get('/api/flows/responses', async (req, res) => {
+  try {
+    const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 50, 1), 200);
+    res.json({ ok: true, data: await FlowStore.listResponses({ limit }) });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: String(err.message || err), data: [] });
+  }
+});
+
+app.get('/api/flows/:id', async (req, res) => {
+  if (!config.accessToken) return res.status(400).json({ ok: false, error: 'Falta ACCESS_TOKEN.' });
+  try {
+    let fields = 'id,name,status,categories,validation_errors,json_version,endpoint_uri,preview';
+    if (config.phoneNumberId) {
+      fields += `,health_status.phone_number(${config.phoneNumberId})`;
+    }
+    const flow = await GraphApi.getFlow(req.params.id, fields);
+    res.json({ ok: true, flow });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: String(err.message || err) });
+  }
+});
+
+app.post('/api/flows', apiJson, async (req, res) => {
+  const { sample, name, publish } = req.body || {};
+  if (!config.accessToken || !config.wabaId) {
+    return res.status(400).json({ ok: false, error: 'Falta ACCESS_TOKEN o WABA_ID.' });
+  }
+  const tpl = flowSamples.getSample(sample || 'hello');
+  if (!tpl) return res.status(400).json({ ok: false, error: 'Sample no válido (hello | lead).' });
+
+  try {
+    const result = await GraphApi.createFlow(config.wabaId, {
+      name: name || tpl.name,
+      categories: tpl.categories,
+      flowJson: tpl.flow_json,
+      publish: publish != null ? Boolean(publish) : tpl.publish,
+    });
+    res.status(201).json({
+      ok: true,
+      flow: result,
+      sample: sample || 'hello',
+      defaultScreen: tpl.defaultScreen,
+      defaultCta: tpl.defaultCta,
+    });
+  } catch (err) {
+    console.error('createFlow error:', err.message);
+    res.status(200).json({ ok: false, error: String(err.message || err) });
+  }
+});
+
+app.post('/api/flows/:id/publish', async (req, res) => {
+  if (!config.accessToken) return res.status(400).json({ ok: false, error: 'Falta ACCESS_TOKEN.' });
+  try {
+    const result = await GraphApi.publishFlow(req.params.id);
+    res.json({ ok: true, result });
+  } catch (err) {
+    res.status(200).json({ ok: false, error: String(err.message || err) });
+  }
+});
+
+app.post('/api/flows/:id/send', apiJson, async (req, res) => {
+  const { phone, bodyText, cta, screen, flowToken, mode } = req.body || {};
+  if (!phone) return res.status(400).json({ ok: false, error: 'Se requiere "phone".' });
+  if (!config.phoneNumberId || !config.accessToken) {
+    return res.status(400).json({ ok: false, error: 'Falta PHONE_NUMBER_ID o ACCESS_TOKEN.' });
+  }
+
+  let flowMeta;
+  try {
+    flowMeta = await GraphApi.getFlow(req.params.id, 'id,name,status');
+  } catch (err) {
+    return res.json({ ok: false, error: String(err.message || err) });
+  }
+
+  const sendMode = mode || (String(flowMeta.status).toUpperCase() === 'DRAFT' ? 'draft' : 'published');
+
+  try {
+    const response = await GraphApi.sendFlowMessage(config.phoneNumberId, String(phone).replace(/\D/g, ''), {
+      flowId: req.params.id,
+      flowToken: flowToken || `ptp_${req.params.id}_${Date.now()}`,
+      cta,
+      bodyText,
+      screen,
+      mode: sendMode === 'draft' ? 'draft' : undefined,
+    });
+    const wamid = waMessageId(response);
+    const normPhone = String(phone).replace(/\D/g, '');
+    const stored = await Store.addMessage({
+      phone: normPhone,
+      phoneNumberId: config.phoneNumberId,
+      direction: 'out',
+      text: `[Flow] ${flowMeta.name || req.params.id}`,
+      type: 'flow',
+      status: 'sent',
+      id: wamid,
+    });
+    res.json({ ok: true, message: stored, response, mode: sendMode });
+  } catch (err) {
+    const msg = String(err.message || err);
+    const integrity = msg.includes('139000') || /integrity/i.test(msg);
+    res.status(200).json({
+      ok: false,
+      error: msg,
+      integrity,
+      hint: integrity
+        ? 'Meta bloqueó el envío (Integrity). Verifica el negocio y el nombre del número, o prueba con Flow en borrador a un número registrado en la ventana 24 h.'
+        : 'Asegúrate de que el contacto tenga conversación activa (ventana 24 h) para mensajes interactivos.',
+    });
   }
 });
 
@@ -1257,6 +1437,27 @@ async function finalizeOutbound(phone, stored, response) {
   return stored;
 }
 
+async function handleFlowResponse(rawMessage, contactNames) {
+  if (rawMessage.type !== 'interactive') return null;
+  const interactive = rawMessage.interactive || {};
+  if (interactive.type !== 'nfm_reply' || !interactive.nfm_reply) return null;
+
+  let responseJson = interactive.nfm_reply.response_json;
+  if (typeof responseJson === 'string') {
+    try { responseJson = JSON.parse(responseJson); } catch (_) { /* keep string */ }
+  }
+
+  const row = await FlowStore.saveResponse({
+    phone: rawMessage.from,
+    flowToken: responseJson && responseJson.flow_token,
+    responseJson,
+    messageId: rawMessage.id,
+    contextMessageId: rawMessage.context && rawMessage.context.id,
+  });
+
+  return row;
+}
+
 async function mirrorIncomingMessage(rawMessage, contactNames, senderPhoneNumberId) {
   const phone = rawMessage.from;
   const meta = { conversationOrigin: 'user_initiated' };
@@ -1301,6 +1502,15 @@ function extractMessageText(rawMessage) {
       return rawMessage.text && rawMessage.text.body;
     case 'interactive': {
       const interactive = rawMessage.interactive || {};
+      if (interactive.type === 'nfm_reply' && interactive.nfm_reply) {
+        const rj = interactive.nfm_reply.response_json;
+        try {
+          const parsed = typeof rj === 'string' ? JSON.parse(rj) : rj;
+          return `[Flow] ${JSON.stringify(parsed)}`;
+        } catch (_) {
+          return `[Flow] ${rj || 'completado'}`;
+        }
+      }
       if (interactive.button_reply) return interactive.button_reply.title;
       if (interactive.list_reply) return interactive.list_reply.title;
       return '[interactive]';

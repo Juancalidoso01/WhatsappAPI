@@ -256,6 +256,109 @@ module.exports = class GraphApi {
     });
   }
 
+  // --- WhatsApp Flows ---
+  static async listFlows(wabaId) {
+    const url = `https://graph.facebook.com/v21.0/${wabaId}/flows?access_token=${config.accessToken}`;
+    const res = await fetch(url);
+    const json = await res.json();
+    if (json.error) {
+      throw new Error(json.error.error_user_msg || json.error.message || "Error al listar Flows.");
+    }
+    return json;
+  }
+
+  static async getFlow(flowId, fields) {
+    const f = fields || "id,name,status,categories,validation_errors,json_version,endpoint_uri,preview,health_status";
+    const url = `https://graph.facebook.com/v21.0/${flowId}?fields=${encodeURIComponent(f)}&access_token=${config.accessToken}`;
+    const res = await fetch(url);
+    const json = await res.json();
+    if (json.error) {
+      throw new Error(json.error.error_user_msg || json.error.message || "Error al leer Flow.");
+    }
+    return json;
+  }
+
+  static async getFlowHealthForPhone(flowId, phoneNumberId) {
+    const f = `health_status.phone_number(${phoneNumberId})`;
+    return this.getFlow(flowId, f);
+  }
+
+  static async createFlow(wabaId, { name, categories, flowJson, publish, endpointUri }) {
+    const body = {
+      name,
+      categories: categories || ["OTHER"],
+      flow_json: typeof flowJson === "string" ? flowJson : JSON.stringify(flowJson),
+    };
+    if (publish) body.publish = true;
+    if (endpointUri) body.endpoint_uri = endpointUri;
+
+    const url = `https://graph.facebook.com/v21.0/${wabaId}/flows?access_token=${config.accessToken}`;
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const json = await res.json();
+    if (json.error) {
+      throw new Error(json.error.error_user_msg || json.error.message || "Error al crear Flow.");
+    }
+    return json;
+  }
+
+  static async publishFlow(flowId) {
+    const url = `https://graph.facebook.com/v21.0/${flowId}/publish?access_token=${config.accessToken}`;
+    const res = await fetch(url, { method: "POST" });
+    const json = await res.json();
+    if (json.error) {
+      throw new Error(json.error.error_user_msg || json.error.message || "Error al publicar Flow.");
+    }
+    return json;
+  }
+
+  static async sendFlowMessage(senderPhoneNumberId, recipientPhoneNumber, {
+    flowId,
+    flowToken,
+    cta,
+    bodyText,
+    screen,
+    initialData,
+    mode,
+    headerText,
+    footerText,
+  }) {
+    const parameters = {
+      flow_message_version: "3",
+      flow_token: flowToken || `ptp_${Date.now()}`,
+      flow_id: String(flowId),
+      flow_cta: cta || "Abrir",
+      flow_action: "navigate",
+      flow_action_payload: {
+        screen: screen || "WELCOME_SCREEN",
+        data: initialData || {},
+      },
+    };
+    if (mode === "draft") parameters.mode = "draft";
+
+    const interactive = {
+      type: "flow",
+      body: { text: bodyText || "Completa el siguiente formulario." },
+      action: { name: "flow", parameters },
+    };
+    if (headerText) interactive.header = { type: "text", text: headerText };
+    if (footerText) interactive.footer = { text: footerText };
+
+    const requestBody = {
+      messaging_product: "whatsapp",
+      recipient_type: "individual",
+      to: recipientPhoneNumber,
+      type: "interactive",
+      interactive,
+    };
+
+    const api = getApi();
+    return api.call("POST", [`${senderPhoneNumberId}`, "messages"], requestBody);
+  }
+
   static async messageWithText(messageId, senderPhoneNumberId, recipientPhoneNumber, text) {
     const requestBody = {
       messaging_product: "whatsapp",
