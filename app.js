@@ -335,13 +335,23 @@ app.get('/api/reports/summary', async (req, res) => {
 async function ensureFlowEndpointReady() {
   const base = config.publicBaseUrl;
   if (!base) {
-    throw new Error('Configura PUBLIC_BASE_URL con la URL pública HTTPS de esta app (ej. https://tu-app.vercel.app).');
+    throw new Error(
+      'Configura PUBLIC_BASE_URL con la URL de producción (ej. https://whatsapp-api-ten-tau.vercel.app). '
+      + 'No uses URLs de preview de Vercel: Meta recibe 401 Authentication Required.',
+    );
+  }
+  if (config.isPreviewDeployUrl && config.isPreviewDeployUrl(base)) {
+    throw new Error(
+      'PUBLIC_BASE_URL apunta a un deploy preview de Vercel. Usa la URL de producción '
+      + '(https://whatsapp-api-ten-tau.vercel.app) para el endpoint de Flows.',
+    );
   }
   if (!config.phoneNumberId || !config.accessToken) {
     throw new Error('Falta PHONE_NUMBER_ID o ACCESS_TOKEN para registrar la clave del endpoint.');
   }
   const { publicKey } = await FlowKeys.getKeyPair();
   await GraphApi.uploadFlowPublicKey(config.phoneNumberId, publicKey);
+  if (redis) await redis.del(PAYMENT_AUTH_FLOW_KEY);
   return `${base}/api/flows/endpoint`;
 }
 
@@ -388,12 +398,17 @@ app.post('/api/flows/endpoint', apiJson, async (req, res) => {
 app.get('/api/flows/endpoint/setup', async (req, res) => {
   try {
     const keys = await FlowKeys.getKeyPair();
+    const endpointUri = config.publicBaseUrl ? `${config.publicBaseUrl}/api/flows/endpoint` : null;
     res.json({
       ok: true,
-      endpointUri: config.publicBaseUrl ? `${config.publicBaseUrl}/api/flows/endpoint` : null,
+      endpointUri,
       hasPublicBaseUrl: Boolean(config.publicBaseUrl),
+      isPreviewUrl: config.isPreviewDeployUrl ? config.isPreviewDeployUrl(endpointUri) : false,
       keySource: keys.source,
       publicKeyRegistered: Boolean(config.phoneNumberId && config.accessToken),
+      warning: config.isPreviewDeployUrl && config.isPreviewDeployUrl(endpointUri)
+        ? 'URL de preview: Meta recibirá 401. Configura PUBLIC_BASE_URL con tu dominio de producción.'
+        : null,
     });
   } catch (err) {
     res.status(500).json({ ok: false, error: String(err.message || err) });

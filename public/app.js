@@ -1978,7 +1978,11 @@ async function loadFlowEndpointSetup() {
   if (!uriEl) return;
   if (res.ok && res.endpointUri) {
     uriEl.textContent = res.endpointUri;
-    hint.textContent = `Clave: ${res.keySource || "—"}. Pulsa “Registrar clave en Meta” antes de crear el sample quote.`;
+    hint.textContent = res.warning
+      ? res.warning
+      : `Clave: ${res.keySource || "—"}. Pulsa “Registrar clave en Meta” antes de flows dinámicos.`;
+    if (res.warning) hint.style.color = "var(--red)";
+    else hint.style.color = "";
   } else {
     uriEl.textContent = "Configura PUBLIC_BASE_URL en el servidor";
     hint.textContent = "Sin URL pública no se puede usar data_exchange.";

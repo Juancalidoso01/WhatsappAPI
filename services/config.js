@@ -19,6 +19,38 @@ const ENV_VARS = [
   "REDIS_PORT"
 ];
 
+function resolvePublicBaseUrl() {
+  if (process.env.PUBLIC_BASE_URL) {
+    const trimmed = String(process.env.PUBLIC_BASE_URL).replace(/\/$/, "");
+    return trimmed.startsWith("http") ? trimmed : `https://${trimmed}`;
+  }
+
+  // Never use preview deployment URLs for Meta (Vercel Deployment Protection → 401).
+  const productionHost = process.env.VERCEL_PROJECT_PRODUCTION_URL;
+  if (productionHost) {
+    const trimmed = String(productionHost).replace(/\/$/, "");
+    return trimmed.startsWith("http") ? trimmed : `https://${trimmed}`;
+  }
+
+  const vercelUrl = process.env.VERCEL_URL ? String(process.env.VERCEL_URL).replace(/^https?:\/\//, "") : "";
+  const isPreviewDeploy = /-projects-[a-z0-9]+\.vercel\.app$/i.test(vercelUrl);
+  if (process.env.VERCEL_ENV === "production" && vercelUrl && !isPreviewDeploy) {
+    return `https://${vercelUrl}`;
+  }
+
+  return null;
+}
+
+function isPreviewDeployUrl(url) {
+  if (!url) return false;
+  try {
+    const host = new URL(url.startsWith("http") ? url : `https://${url}`).hostname;
+    return /-projects-[a-z0-9]+\.vercel\.app$/i.test(host);
+  } catch (_) {
+    return false;
+  }
+}
+
 module.exports = Object.freeze({
   // Application information
   appSecret: process.env.APP_SECRET,
@@ -36,20 +68,15 @@ module.exports = Object.freeze({
   brandName: process.env.BRAND_NAME || "Punto Pago",
 
   // Public HTTPS base URL (required for WhatsApp Flow endpoint_uri)
-  publicBaseUrl: (() => {
-    const raw = process.env.PUBLIC_BASE_URL || process.env.VERCEL_URL || "";
-    if (!raw) return null;
-    const trimmed = String(raw).replace(/\/$/, "");
-    return trimmed.startsWith("http") ? trimmed : `https://${trimmed}`;
-  })(),
+  publicBaseUrl: resolvePublicBaseUrl(),
+
+  isPreviewDeployUrl,
 
   cardImageUrl: (() => {
     if (process.env.CARD_IMAGE_URL) return process.env.CARD_IMAGE_URL.replace(/\/$/, "");
-    const base = process.env.PUBLIC_BASE_URL || process.env.VERCEL_URL || "";
+    const base = resolvePublicBaseUrl();
     if (!base) return null;
-    const trimmed = String(base).replace(/\/$/, "");
-    const root = trimmed.startsWith("http") ? trimmed : `https://${trimmed}`;
-    return `${root}/assets/punto-pago-card.png`;
+    return `${base}/assets/punto-pago-card.png`;
   })(),
 
   // When false, the app never auto-replies; every message is handled by a human
