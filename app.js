@@ -37,7 +37,7 @@ const flowSamples = require('./services/flow-samples');
 const flowBuilder = require('./services/flow-builder');
 const FlowKeys = require('./services/flow-keys');
 const { decryptRequest, encryptResponse, FlowEndpointException } = require('./services/flow-encryption');
-const { handleFlowRequest, cardImageUrl, resolveCardImageUrl } = require('./services/flow-endpoint-handler');
+const { handleFlowRequest, cardImageUrl, resolveCardImageUrl, buildPaymentAuthScreenData } = require('./services/flow-endpoint-handler');
 const PaymentAuthStore = require('./services/payment-auth-store');
 const templatePresets = require('./services/template-presets');
 const flowPerformance = require('./services/flow-performance');
@@ -47,7 +47,7 @@ const flowActivity = require('./services/flow-activity');
 const { curateFlowList } = require('./services/flow-list-curate');
 const redis = require('./services/upstash');
 
-const PAYMENT_AUTH_FLOW_KEY = 'wa:flow:payment_auth_3ds_v2';
+const PAYMENT_AUTH_FLOW_KEY = 'wa:flow:payment_auth_3ds_v3';
 const FLOW_KEY_SYNCED = 'wa:flow:public_key_synced';
 const app = express();
 
@@ -622,7 +622,7 @@ app.get('/api/flows/payment-auth/card-image', async (req, res) => {
     res.setHeader("Cache-Control", "public, max-age=300");
     return res.send(buf);
   }
-  res.redirect(302, cardImageUrl());
+  return res.sendFile(path.join(__dirname, "public", "assets", "punto-pago-card.png"));
 });
 
 app.post('/api/flows/payment-auth/card-image', (req, res, next) => {
@@ -676,6 +676,7 @@ app.post('/api/flows/payment-auth/test', apiJson, async (req, res) => {
     }) || {};
 
     const { flowId } = await getOrCreatePaymentAuthFlow();
+    const screenData = await buildPaymentAuthScreenData(txn);
     const response = await GraphApi.sendFlowMessage(
       config.phoneNumberId,
       String(phone).replace(/\D/g, ''),
@@ -686,7 +687,9 @@ app.post('/api/flows/payment-auth/test', apiJson, async (req, res) => {
         bodyText: bodyText || flowCopy.bodyText || `Confirma tu pago de ${templatePresets.formatAmount(txn.amount, txn.currency)} en ${txn.merchant}.`,
         headerText: headerText || flowCopy.headerText,
         footerText: footerText || flowCopy.footerText,
-        flowAction: 'data_exchange',
+        flowAction: 'navigate',
+        screen: 'AUTH',
+        initialData: screenData,
         mode: 'draft',
       }
     );

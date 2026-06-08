@@ -42,11 +42,12 @@ function publicUrl() {
 async function resolveCardImageUrl() {
   const custom = process.env.CARD_IMAGE_URL;
   if (custom) return custom.replace(/\/$/, "");
-  const stored = await get();
-  if (stored && publicUrl()) return publicUrl();
   const base = config.publicBaseUrl;
-  if (base) return `${base.replace(/\/$/, "")}/assets/punto-pago-card.png`;
-  return "https://via.placeholder.com/640x400.png?text=Punto+Pago";
+  if (!base) return "https://via.placeholder.com/640x400.png?text=Punto+Pago";
+  const root = base.replace(/\/$/, "");
+  const stored = await get();
+  if (stored) return `${root}/api/flows/payment-auth/card-image`;
+  return `${root}/assets/punto-pago-card.png`;
 }
 
 module.exports = { save, get, publicUrl, resolveCardImageUrl };

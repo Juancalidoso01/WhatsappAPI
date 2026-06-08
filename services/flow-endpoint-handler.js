@@ -26,8 +26,15 @@ function cardImageUrl() {
   return config.cardImageUrl || "https://via.placeholder.com/640x400.png?text=Punto+Pago";
 }
 
-async function resolveCardImageUrl() {
-  return CardImageStore.resolveCardImageUrl();
+async function buildPaymentAuthScreenData(txn) {
+  const img = await resolveCardImageUrl();
+  return {
+    merchant: txn.merchant,
+    amount: `${txn.currency} ${txn.amount}`,
+    card_label: `Tarjeta Punto Pago •••• ${txn.cardLast4}`,
+    card_image: img,
+    when: formatWhen(txn.createdAt),
+  };
 }
 
 async function handlePaymentAuth(decryptedBody) {
@@ -61,17 +68,10 @@ async function handlePaymentAuth(decryptedBody) {
 
   if (action === "INIT") {
     await FlowStore.recordEndpointEvent({ type: "init", channel: "payment_auth", flowToken, phone: txn.phone });
-    const img = await resolveCardImageUrl();
     return {
       version,
       screen: "AUTH",
-      data: {
-        merchant: txn.merchant,
-        amount: `${txn.currency} ${txn.amount}`,
-        card_label: `Tarjeta Punto Pago •••• ${txn.cardLast4}`,
-        card_image: img,
-        when: formatWhen(txn.createdAt),
-      },
+      data: await buildPaymentAuthScreenData(txn),
     };
   }
 
@@ -105,18 +105,15 @@ async function handlePaymentAuth(decryptedBody) {
     };
   }
 
-  const img = await resolveCardImageUrl();
   return {
     version,
     screen: "AUTH",
-    data: {
-      merchant: txn.merchant,
-      amount: `${txn.currency} ${txn.amount}`,
-      card_label: `Tarjeta Punto Pago •••• ${txn.cardLast4}`,
-      card_image: img,
-      when: formatWhen(txn.createdAt),
-    },
+    data: await buildPaymentAuthScreenData(txn),
   };
+}
+
+async function resolveCardImageUrl() {
+  return CardImageStore.resolveCardImageUrl();
 }
 
 async function handleQuoteFlow(decryptedBody) {
@@ -183,4 +180,11 @@ async function handleFlowRequest(decryptedBody) {
   return handleQuoteFlow(decryptedBody);
 }
 
-module.exports = { handleFlowRequest, isPaymentAuthToken, cardImageUrl, resolveCardImageUrl };
+module.exports = {
+  handleFlowRequest,
+  isPaymentAuthToken,
+  cardImageUrl,
+  resolveCardImageUrl,
+  buildPaymentAuthScreenData,
+  formatWhen,
+};

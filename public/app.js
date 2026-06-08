@@ -1851,7 +1851,7 @@ function renderFlowPhonePreview(container, screen, data) {
   const d = data || getPayAuthFlowData();
   const title = screen === "RESULT" ? "Resultado" : "Verificación de pago";
   let bodyHtml = "";
-  let footerLabel = "Confirmar";
+  let footerLabel = "Continuar";
 
   if (screen === "AUTH") {
     bodyHtml = `
@@ -1864,6 +1864,7 @@ function renderFlowPhonePreview(container, screen, data) {
       <p>${escapeHtml(d.card_label)}</p>
       <p>Fecha: ${escapeHtml(d.when)}</p>
       <p class="flow-phone-caption">Si no reconoces esta compra, elige Rechazar y contáctanos de inmediato.</p>
+      <p class="flow-phone-caption">Elige una opción y pulsa Continuar para enviar tu respuesta.</p>
       <div class="flow-phone-radio">
         <label class="selected"><span class="dot"></span> Aprobar transacción</label>
         <label><span class="dot"></span> Rechazar transacción</label>

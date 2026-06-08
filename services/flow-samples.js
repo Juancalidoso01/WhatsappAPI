@@ -215,6 +215,10 @@ const PAYMENT_AUTH_FLOW = {
             text: "Si no reconoces esta compra, elige Rechazar y contáctanos de inmediato.",
           },
           {
+            type: "TextBody",
+            text: "Elige una opción y pulsa Continuar para enviar tu respuesta.",
+          },
+          {
             type: "Form",
             name: "form",
             children: [
@@ -232,7 +236,7 @@ const PAYMENT_AUTH_FLOW = {
           },
           {
             type: "Footer",
-            label: "Confirmar",
+            label: "Continuar",
             "on-click-action": { name: "data_exchange", payload: {} },
           },
         ],
