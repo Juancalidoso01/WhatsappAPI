@@ -44,11 +44,65 @@ function listPresets() {
     label: p.label,
     description: p.description,
     name: p.name,
+    templateFlowName: p.templateFlowName || null,
     category: p.category,
     language: p.language,
     variableCount: (p.variables || []).length,
     flowCta: p.flowCta,
+    isFlowPreset: Boolean(p.templateFlowName || p.flowCta),
   }));
+}
+
+function templateHasFlowButton(tpl) {
+  const buttons = (tpl && tpl.components || []).find((c) => c.type === "BUTTONS");
+  return Boolean(buttons && (buttons.buttons || []).some(
+    (btn) => String(btn.type || "").toUpperCase() === "FLOW"
+  ));
+}
+
+function findTemplateByName(templates, name, language) {
+  if (!name) return null;
+  const lang = language || "es";
+  return (templates || []).find((t) => t.name === name && t.language === lang)
+    || (templates || []).find((t) => t.name === name);
+}
+
+function tplStatusRow(tpl, { notSubmittedLabel = "Sin enviar" } = {}) {
+  if (!tpl) return { status: "NOT_SUBMITTED", label: notSubmittedLabel, approved: false };
+  const status = String(tpl.status || "UNKNOWN").toUpperCase();
+  const labels = { APPROVED: "Aprobada", PENDING: "En revisión", REJECTED: "Rechazada" };
+  return {
+    name: tpl.name,
+    status,
+    label: labels[status] || status,
+    approved: status === "APPROVED",
+    id: tpl.id,
+  };
+}
+
+function resolvePresetsMetaStatus(templates) {
+  return Object.values(PRESETS).map((p) => {
+    const lang = p.language || "es";
+    const textTpl = findTemplateByName(templates, p.name, lang);
+    const flowTpl = p.templateFlowName
+      ? findTemplateByName(templates, p.templateFlowName, lang)
+      : null;
+    const text = tplStatusRow(textTpl);
+    const flow = p.templateFlowName
+      ? {
+        ...tplStatusRow(flowTpl, { notSubmittedLabel: "Sin enviar" }),
+        hasFlowButton: flowTpl ? templateHasFlowButton(flowTpl) : false,
+      }
+      : null;
+    return {
+      key: p.key,
+      text,
+      flow,
+      readyForProduction: Boolean(
+        text.approved && flow && flow.approved && flow.hasFlowButton
+      ),
+    };
+  });
 }
 
 function getPreset(key) {
@@ -174,6 +228,9 @@ module.exports = {
   buildFlowMessage,
   buildPaymentAuthTemplateSend,
   resolveApprovedPaymentAuthTemplate,
+  resolvePresetsMetaStatus,
+  templateHasFlowButton,
+  findTemplateByName,
   fillNumberedPlaceholders,
   formatAmount,
 };

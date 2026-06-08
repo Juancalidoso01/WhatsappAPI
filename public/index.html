@@ -164,8 +164,14 @@
 
         <section class="tpl-drafts-section" id="tplDraftsSection">
           <div class="tpl-drafts-head">
-            <h2 class="section-title">Borradores Punto Pago</h2>
-            <p class="muted sm">Listos para revisar y enviar a Meta cuando te gusten.</p>
+            <div>
+              <h2 class="section-title">Borradores Punto Pago</h2>
+              <p class="muted sm">Listos para revisar y enviar a Meta. Los testigos de estado se actualizan al sincronizar.</p>
+            </div>
+            <div class="tpl-drafts-actions">
+              <button type="button" id="tplSyncMetaBtn" class="btn-ghost sm">Sincronizar con Meta</button>
+              <span id="tplSyncMetaHint" class="muted sm"></span>
+            </div>
           </div>
           <div id="tplPresetCards" class="tpl-preset-cards">Cargando borradores…</div>
         </section>

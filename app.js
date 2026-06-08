@@ -1072,8 +1072,62 @@ app.get('/api/templates/create-meta', (req, res) => {
   });
 });
 
-app.get('/api/templates/presets', (req, res) => {
-  res.json({ ok: true, presets: templatePresets.listPresets() });
+app.get('/api/templates/presets', async (req, res) => {
+  const presets = templatePresets.listPresets();
+  let metaStatus = null;
+  let syncedAt = null;
+  if (config.accessToken && config.wabaId) {
+    try {
+      const result = await GraphApi.listTemplates(config.wabaId);
+      metaStatus = templatePresets.resolvePresetsMetaStatus((result && result.data) || []);
+      syncedAt = Date.now();
+    } catch (err) {
+      console.warn('presets meta status:', err.message || err);
+    }
+  }
+  res.json({ ok: true, presets, metaStatus, syncedAt });
+});
+
+// Sincronizar plantillas desde Meta (estado, categorías y testigos de borradores Flow)
+app.post('/api/templates/sync-meta', async (req, res) => {
+  if (!config.accessToken || !config.wabaId) {
+    return res.status(400).json({ ok: false, error: 'Falta ACCESS_TOKEN o WABA_ID.' });
+  }
+  try {
+    const result = await GraphApi.listTemplates(config.wabaId);
+    const raw = (result && result.data) || [];
+    const metaMap = await Store.getAllTemplateMeta();
+    let categoriesSynced = 0;
+
+    for (const t of raw) {
+      const key = `${t.name}|${t.language}`;
+      const local = metaMap[key] || {};
+      if (local.requestedCategory) continue;
+      const inferred = templateCategory.inferRequestedCategory(t, local);
+      if (!inferred) continue;
+      await Store.setTemplateRequestedCategory(t.name, t.language, inferred, {
+        syncedFrom: 'meta',
+        syncedAt: Date.now(),
+      });
+      metaMap[key] = { ...local, requestedCategory: inferred, syncedFrom: 'meta', syncedAt: Date.now() };
+      categoriesSynced += 1;
+    }
+
+    const data = await enrichTemplatesList(raw, metaMap);
+    const metaStatus = templatePresets.resolvePresetsMetaStatus(raw);
+    res.json({
+      ok: true,
+      syncedAt: Date.now(),
+      categoriesSynced,
+      total: raw.length,
+      data,
+      metaStatus,
+      summary: templateCategory.summarizeTemplates(data),
+    });
+  } catch (err) {
+    console.error('sync-meta error:', err.message);
+    res.status(500).json({ ok: false, error: String(err.message || err) });
+  }
 });
 
 app.get('/api/templates/presets/:key', (req, res) => {

@@ -21,6 +21,8 @@ const state = {
   activeUseCaseId: null,
   templatePresets: [],
   activeTemplatePreset: "punto_pago_autorizacion_pago",
+  presetMetaStatus: [],
+  tplMetaSyncedAt: null,
   flowsTab: "mis",
   payAuthFlowScreen: "AUTH",
   cardImageUrl: null,
@@ -512,9 +514,11 @@ function renderTemplateRow(t, i) {
   const date = formatTplDate(t.displayAt, t.displayAtKind);
   const snippet = previewSnippet(t);
   const fullPreview = previewSnippet(t, 500);
-  return `<tr class="tpl-row" data-i="${i}" title="${escapeHtml(fullPreview)}">
+  const isFlowTpl = templateHasFlowButtonMeta(t);
+  return `<tr class="tpl-row${isFlowTpl ? " tpl-row-flow" : ""}" data-i="${i}" title="${escapeHtml(fullPreview)}">
     <td class="tpl-name-cell">
       <span class="tpl-table-name">${escapeHtml(t.name)}</span>
+      ${isFlowTpl ? `<span class="tpl-flow-tag">Flow</span>` : ""}
       ${comment ? `<span class="tpl-table-note" title="${escapeHtml(comment)}">${escapeHtml(comment)}</span>` : ""}
     </td>
     <td>${escapeHtml(t.language || "—")}</td>
@@ -643,10 +647,69 @@ function renderWaMessagePreview(container, data) {
     <div class="wa-preview-note">Vista previa · el Flow se abre al tocar el botón</div>`;
 }
 
+function templateHasFlowButtonMeta(t) {
+  const b = (t.components || []).find((x) => x.type === "BUTTONS");
+  return Boolean(b && (b.buttons || []).some((btn) => String(btn.type || "").toUpperCase() === "FLOW"));
+}
+
+function presetMetaForKey(key) {
+  return (state.presetMetaStatus || []).find((m) => m.key === key) || null;
+}
+
+function metaStatusBadge(status, fallbackLabel) {
+  const st = String(status || "NOT_SUBMITTED").toLowerCase();
+  const labels = {
+    approved: "Aprobada",
+    pending: "En revisión",
+    rejected: "Rechazada",
+    not_submitted: "Sin enviar",
+  };
+  const cls = st === "approved" ? "approved" : st === "rejected" ? "rejected" : st === "pending" ? "pending" : "draft";
+  const text = labels[st] || fallbackLabel || status || "—";
+  return `<span class="status-badge ${cls}">${escapeHtml(text)}</span>`;
+}
+
 async function loadTemplatePresets() {
   const res = await api("/api/templates/presets");
   state.templatePresets = (res && res.presets) || [];
+  state.presetMetaStatus = (res && res.metaStatus) || [];
+  state.tplMetaSyncedAt = res && res.syncedAt ? res.syncedAt : null;
+  updateTplSyncHint();
   renderTplPresetCards();
+}
+
+async function syncTemplatesWithMeta() {
+  const btn = $("tplSyncMetaBtn");
+  const hint = $("tplSyncMetaHint");
+  if (btn) btn.disabled = true;
+  if (hint) hint.textContent = "Sincronizando…";
+  const res = await post("/api/templates/sync-meta", {});
+  if (btn) btn.disabled = false;
+  if (!res.ok) {
+    if (hint) hint.textContent = res.error || "No se pudo sincronizar.";
+    toast(res.error || "Error al sincronizar con Meta.", "error");
+    return;
+  }
+  state.templates = res.data || [];
+  state.presetMetaStatus = res.metaStatus || [];
+  state.tplMetaSyncedAt = res.syncedAt || Date.now();
+  updateTplSyncHint();
+  renderTplPresetCards();
+  renderTemplateList();
+  toast(`Sincronizado: ${res.total || 0} plantilla(s) en Meta.`, "ok");
+}
+
+function updateTplSyncHint() {
+  const hint = $("tplSyncMetaHint");
+  if (!hint) return;
+  if (!state.tplMetaSyncedAt) {
+    hint.textContent = "Pulsa para actualizar estados desde Meta.";
+    return;
+  }
+  const when = new Date(state.tplMetaSyncedAt).toLocaleString("es", {
+    day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit",
+  });
+  hint.textContent = `Actualizado ${when}`;
 }
 
 function renderTplPresetCards() {
@@ -656,16 +719,28 @@ function renderTplPresetCards() {
     box.innerHTML = `<p class="muted">No hay borradores disponibles.</p>`;
     return;
   }
-  box.innerHTML = state.templatePresets.map((p) => `
-    <button type="button" class="tpl-preset-card" data-preset="${escapeHtml(p.key)}">
+  box.innerHTML = state.templatePresets.map((p) => {
+    const ms = presetMetaForKey(p.key);
+    const textBadge = ms ? metaStatusBadge(ms.text && ms.text.status) : metaStatusBadge("NOT_SUBMITTED");
+    const flowBadge = p.templateFlowName && ms
+      ? metaStatusBadge(ms.flow && ms.flow.status)
+      : "";
+    const ready = ms && ms.readyForProduction
+      ? `<span class="tpl-preset-tag tpl-ready-prod">Lista para producción</span>`
+      : "";
+    return `
+    <button type="button" class="tpl-preset-card${p.isFlowPreset ? " flow-preset" : ""}" data-preset="${escapeHtml(p.key)}">
       <h3>${escapeHtml(p.label)}</h3>
       <p>${escapeHtml(p.description || "")}</p>
       <div class="tpl-card-meta">
-        <span class="tpl-preset-tag">Borrador</span>
+        <span class="tpl-preset-tag">Texto ${textBadge}</span>
+        ${p.templateFlowName ? `<span class="tpl-preset-tag">+ Flow ${flowBadge}</span>` : ""}
+        ${ready}
         <span class="tpl-preset-tag">${escapeHtml(String(p.category || "UTILITY").toLowerCase())}</span>
-        ${p.variableCount ? `<span class="tpl-preset-tag">${p.variableCount} variables</span>` : ""}
       </div>
-    </button>`).join("");
+      <p class="tpl-preset-names muted sm">${escapeHtml(p.name)}${p.templateFlowName ? ` · ${escapeHtml(p.templateFlowName)}` : ""}</p>
+    </button>`;
+  }).join("");
   box.querySelectorAll(".tpl-preset-card").forEach((btn) =>
     btn.addEventListener("click", () => openTplDraftModal(btn.dataset.preset))
   );
@@ -2933,6 +3008,8 @@ function bindEvents() {
     if (wrap && !wrap.contains(e.target)) toggleWorkspaceFlyout(false);
   });
   $("newTemplateBtn").addEventListener("click", () => { initTemplateModal(); showModal("modalTemplate"); });
+  const tplSyncMetaBtn = $("tplSyncMetaBtn");
+  if (tplSyncMetaBtn) tplSyncMetaBtn.addEventListener("click", syncTemplatesWithMeta);
   const tplDraftCreateBtn = $("tplDraftCreateBtn");
   if (tplDraftCreateBtn) {
     tplDraftCreateBtn.addEventListener("click", () => {
