@@ -162,6 +162,11 @@ function completeAction(payload) {
   return { name: "complete", payload };
 }
 
+function screenIdAt(index) {
+  const letter = String.fromCharCode(65 + (index % 26));
+  return `SCREEN_${letter}`;
+}
+
 function buildFlowJson(definition) {
   const check = validateDefinition(definition);
   if (!check.ok) return check;
@@ -179,7 +184,7 @@ function buildFlowJson(definition) {
   const fieldRefs = [];
   const flowScreens = [];
   const routing = {};
-  const screenIds = bodyScreens.map((_, i) => `SCREEN_${i + 1}`);
+  const screenIds = bodyScreens.map((_, i) => screenIdAt(i));
   const confirmId = hasConfirm ? "CONFIRM" : null;
 
   bodyScreens.forEach((scr, i) => {
@@ -238,13 +243,12 @@ function buildFlowJson(definition) {
     flowScreens.push({
       id: screenId,
       title: String(scr.title).trim(),
-      terminal: !nextId,
-      success: !nextId,
       data: {},
       layout: {
         type: "SingleColumnLayout",
         children: layoutChildren,
       },
+      ...(nextId ? {} : { terminal: true, success: true }),
     });
 
     routing[screenId] = nextId ? [nextId] : [];
