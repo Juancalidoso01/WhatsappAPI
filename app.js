@@ -47,6 +47,7 @@ const flowActivity = require('./services/flow-activity');
 const redis = require('./services/upstash');
 
 const PAYMENT_AUTH_FLOW_KEY = 'wa:flow:payment_auth_id';
+const FLOW_KEY_SYNCED = 'wa:flow:public_key_synced';
 const app = express();
 
 const upload = multer({
@@ -342,7 +343,8 @@ app.get('/api/reports/summary', async (req, res) => {
 
 // ----- WhatsApp Flows -----
 
-async function ensureFlowEndpointReady() {
+async function ensureFlowEndpointReady(options = {}) {
+  const { force = false } = options;
   const base = config.publicBaseUrl;
   if (!base) {
     throw new Error(
@@ -359,10 +361,18 @@ async function ensureFlowEndpointReady() {
   if (!config.phoneNumberId || !config.accessToken) {
     throw new Error('Falta PHONE_NUMBER_ID o ACCESS_TOKEN para registrar la clave del endpoint.');
   }
+  const endpointUri = `${base}/api/flows/endpoint`;
+  if (redis && !force) {
+    const synced = await redis.get(FLOW_KEY_SYNCED);
+    if (synced === '1') return endpointUri;
+  }
   const { publicKey } = await FlowKeys.getKeyPair();
   await GraphApi.uploadFlowPublicKey(config.phoneNumberId, publicKey);
-  if (redis) await redis.del(PAYMENT_AUTH_FLOW_KEY);
-  return `${base}/api/flows/endpoint`;
+  if (redis) {
+    await redis.set(FLOW_KEY_SYNCED, '1');
+    await redis.del(PAYMENT_AUTH_FLOW_KEY);
+  }
+  return endpointUri;
 }
 
 async function getOrCreatePaymentAuthFlow() {
@@ -412,13 +422,27 @@ app.get('/api/flows/endpoint/setup', async (req, res) => {
   try {
     const keys = await FlowKeys.getKeyPair();
     const endpointUri = config.publicBaseUrl ? `${config.publicBaseUrl}/api/flows/endpoint` : null;
+    let synced = false;
+    let syncError = null;
+    if (endpointUri && config.phoneNumberId && config.accessToken) {
+      if (redis) synced = (await redis.get(FLOW_KEY_SYNCED)) === '1';
+      if (!synced) {
+        try {
+          await ensureFlowEndpointReady();
+          synced = true;
+        } catch (err) {
+          syncError = String(err.message || err);
+        }
+      }
+    }
     res.json({
       ok: true,
       endpointUri,
+      synced,
+      syncError,
       hasPublicBaseUrl: Boolean(config.publicBaseUrl),
       isPreviewUrl: config.isPreviewDeployUrl ? config.isPreviewDeployUrl(endpointUri) : false,
       keySource: keys.source,
-      publicKeyRegistered: Boolean(config.phoneNumberId && config.accessToken),
       warning: config.isPreviewDeployUrl && config.isPreviewDeployUrl(endpointUri)
         ? 'URL de preview: Meta recibirá 401. Configura PUBLIC_BASE_URL con tu dominio de producción.'
         : null,
@@ -433,7 +457,7 @@ app.post('/api/flows/endpoint/setup', async (req, res) => {
     return res.status(400).json({ ok: false, error: 'Falta PHONE_NUMBER_ID o ACCESS_TOKEN.' });
   }
   try {
-    const endpointUri = await ensureFlowEndpointReady();
+    const endpointUri = await ensureFlowEndpointReady({ force: true });
     res.json({ ok: true, endpointUri, message: 'Clave pública registrada en Meta.' });
   } catch (err) {
     res.status(200).json({ ok: false, error: String(err.message || err) });

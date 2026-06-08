@@ -2476,21 +2476,33 @@ async function loadFlowEndpointSetup() {
   const res = await api("/api/flows/endpoint/setup");
   const uriEl = $("flowEndpointUri");
   const hint = $("flowEndpointHint");
+  const retryBtn = $("flowEndpointSetupBtn");
   if (!uriEl) return;
   if (res.ok && res.endpointUri) {
     uriEl.textContent = res.endpointUri;
     if (hint) {
-      hint.textContent = res.warning
-        ? res.warning
-        : "Servidor conectado. Pulsa «Sincronizar con Meta» si es la primera vez.";
-      hint.style.color = res.warning ? "var(--red)" : "";
+      if (res.warning) {
+        hint.textContent = res.warning;
+        hint.style.color = "var(--red)";
+      } else if (res.synced) {
+        hint.textContent = "Conectado con Meta. Los formularios dinámicos (como autorización de pago) se configuran solos.";
+        hint.style.color = "";
+      } else if (res.syncError) {
+        hint.textContent = res.syncError;
+        hint.style.color = "var(--red)";
+      } else {
+        hint.textContent = "Comprobando conexión con Meta…";
+        hint.style.color = "";
+      }
     }
+    if (retryBtn) retryBtn.classList.toggle("hidden", Boolean(res.synced && !res.warning));
   } else {
     uriEl.textContent = "No configurado";
     if (hint) {
-      hint.textContent = "El servidor necesita una URL pública para formularios con datos en vivo.";
+      hint.textContent = "El servidor necesita PUBLIC_BASE_URL para formularios con datos en vivo.";
       hint.style.color = "";
     }
+    if (retryBtn) retryBtn.classList.add("hidden");
   }
 }
 
@@ -2563,15 +2575,6 @@ async function selectFlow(id) {
 
 async function createFlowSampleKey(sample) {
   const key = sample || "hello";
-  const s = state.flowSamples.find((x) => x.key === key);
-  if (s && s.dynamic) {
-    const setup = await api("/api/flows/endpoint/setup");
-    if (!setup.endpointUri) {
-      toast("Primero configura el servidor en Configuración.", "error");
-      openFlowsConfigModal();
-      return;
-    }
-  }
   const res = await post("/api/flows", { sample: key });
   if (!res.ok) { toast(res.error || "No se pudo crear el Flow.", "error"); return; }
   if (res.validation_errors && res.validation_errors.length) {

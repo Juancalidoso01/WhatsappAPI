@@ -770,19 +770,19 @@
   <div id="modalFlowsConfig" class="modal hidden">
     <div class="modal-card">
       <h3>Configuración de Flows</h3>
-      <p class="muted sm">Opciones técnicas. Solo necesitas esto si usas formularios con datos en tiempo real (como autorización de pago).</p>
+      <p class="muted sm">Opciones técnicas. La conexión con Meta para formularios dinámicos se configura sola al abrir Flows.</p>
       <div class="flows-config-block">
         <strong>Estado del servidor</strong>
         <p id="flowsConfigStatus" class="muted sm">—</p>
       </div>
       <div class="flows-config-block">
-        <strong>Conexión con Meta</strong>
+        <strong>Servidor de formularios</strong>
         <p id="flowEndpointHint" class="muted sm">—</p>
-        <button type="button" id="flowEndpointSetupBtn" class="btn-primary sm">Sincronizar con Meta</button>
       </div>
       <details class="flows-config-advanced">
         <summary>Detalles técnicos</summary>
         <code id="flowEndpointUri" class="flows-endpoint-url">—</code>
+        <button type="button" id="flowEndpointSetupBtn" class="btn-ghost sm hidden" style="margin-top:10px">Reintentar conexión con Meta</button>
       </details>
       <div class="modal-actions">
         <button class="btn-ghost" data-close>Cerrar</button>
