@@ -2474,9 +2474,11 @@ async function loadFlows() {
 
 function renderFlowsList() {
   const box = $("flowsList");
-  $("flowsListHint").textContent = state.flows.length ? `(${state.flows.length})` : "";
+  const hint = $("flowsListHint");
+  if (hint) hint.textContent = state.flows.length ? `(${state.flows.length})` : "";
+  if (!box) return;
   if (!state.flows.length) {
-    box.innerHTML = `<p class="muted">No hay Flows. Crea uno de ejemplo o en <a href="https://business.facebook.com/wa/manage/flows/" target="_blank" rel="noopener">WhatsApp Manager</a>.</p>`;
+    box.innerHTML = `<p class="muted">No hay Flows. Crea uno desde la pestaña Crear o en <a href="https://business.facebook.com/wa/manage/flows/" target="_blank" rel="noopener">WhatsApp Manager</a>.</p>`;
     return;
   }
   box.innerHTML = state.flows.map((f) => {
@@ -2896,16 +2898,14 @@ function bindEvents() {
     const el = $(id);
     if (el) el.addEventListener("input", updateTpPreview);
   });
-  $("flowCreateBtn").addEventListener("click", createFlowSample);
-  $("flowSendBtn").addEventListener("click", sendActiveFlow);
-  $("flowPublishBtn").addEventListener("click", publishActiveFlow);
-  $("flowRefreshResponses").addEventListener("click", loadFlowActivity);
+  $("flowSendBtn")?.addEventListener("click", sendActiveFlow);
+  $("flowPublishBtn")?.addEventListener("click", publishActiveFlow);
+  $("flowRefreshResponses")?.addEventListener("click", loadFlowActivity);
   if ($("flowEndpointSetupBtn")) $("flowEndpointSetupBtn").addEventListener("click", setupFlowEndpoint);
   if ($("fbAddForm")) $("fbAddForm").addEventListener("click", () => fbAddScreen("form"));
   if ($("fbAddMessage")) $("fbAddMessage").addEventListener("click", () => fbAddScreen("message"));
   if ($("fbAddConfirm")) $("fbAddConfirm").addEventListener("click", () => fbAddScreen("confirm"));
   if ($("fbCreateBtn")) $("fbCreateBtn").addEventListener("click", createFlowFromBuilder);
-  if ($("flowCreateBtn")) $("flowCreateBtn").addEventListener("click", createFlowSample);
   if ($("payAuthSendBtn")) $("payAuthSendBtn").addEventListener("click", sendPaymentAuthTest);
   $("detailTemplateBtn").addEventListener("click", () => openNewChat());
   $("detailToggle").addEventListener("click", () => $("detailPane").classList.toggle("collapsed"));
