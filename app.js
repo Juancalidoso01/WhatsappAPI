@@ -43,6 +43,7 @@ const templatePresets = require('./services/template-presets');
 const flowPerformance = require('./services/flow-performance');
 const CardImageStore = require('./services/card-image-store');
 const flowUseCases = require('./services/flow-use-cases');
+const flowActivity = require('./services/flow-activity');
 const redis = require('./services/upstash');
 
 const PAYMENT_AUTH_FLOW_KEY = 'wa:flow:payment_auth_id';
@@ -620,6 +621,7 @@ app.post('/api/flows/payment-auth/test', apiJson, async (req, res) => {
       phone: txn.phone,
       flowId,
       flowToken: txn.flowToken,
+      flowName: 'punto_pago_autorizacion_pago',
       mode: 'draft',
     });
 
@@ -653,6 +655,32 @@ app.get('/api/flows/responses', async (req, res) => {
     const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 50, 1), 200);
     res.json({ ok: true, data: await FlowStore.listResponses({ limit }) });
   } catch (err) {
+    res.status(500).json({ ok: false, error: String(err.message || err), data: [] });
+  }
+});
+
+app.get('/api/flows/activity', async (req, res) => {
+  try {
+    let flowList = [];
+    if (config.accessToken && config.wabaId) {
+      try {
+        const result = await GraphApi.listFlows(config.wabaId);
+        flowList = result.data || [];
+      } catch (_) {}
+    }
+    const rows = await flowActivity.getActivityReport(flowList);
+    res.json({
+      ok: true,
+      data: rows,
+      summary: {
+        total: rows.length,
+        sent: rows.reduce((n, r) => n + r.sent, 0),
+        viewed: rows.reduce((n, r) => n + r.viewed, 0),
+        completed: rows.reduce((n, r) => n + r.completed, 0),
+      },
+    });
+  } catch (err) {
+    console.error('flows activity error:', err.message);
     res.status(500).json({ ok: false, error: String(err.message || err), data: [] });
   }
 });
@@ -779,6 +807,7 @@ app.post('/api/flows/:id/send', apiJson, async (req, res) => {
       phone: normPhone,
       flowId: req.params.id,
       flowToken: token,
+      flowName: flowMeta.name || null,
       mode: sendMode,
     });
     const stored = await Store.addMessage({

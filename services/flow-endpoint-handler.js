@@ -60,7 +60,7 @@ async function handlePaymentAuth(decryptedBody) {
   }
 
   if (action === "INIT") {
-    await FlowStore.recordEndpointEvent({ type: "init", channel: "payment_auth", flowToken });
+    await FlowStore.recordEndpointEvent({ type: "init", channel: "payment_auth", flowToken, phone: txn.phone });
     const img = await resolveCardImageUrl();
     return {
       version,

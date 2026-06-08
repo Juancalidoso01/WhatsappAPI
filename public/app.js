@@ -26,6 +26,8 @@ const state = {
   cardImageUrl: null,
   flowsDetailTab: "preview",
   activeFlowPerformance: null,
+  activeActivityRow: null,
+  flowActivity: [],
   activePhone: null,
   messages: [],
   conversationDetail: null,
@@ -765,6 +767,7 @@ function setFlowsTab(tab) {
     if ($("flowsDetailPanel")) $("flowsDetailPanel").classList.toggle("hidden", !hasFlow);
     if ($("flowsEmptyDetail")) $("flowsEmptyDetail").classList.toggle("hidden", hasFlow);
   }
+  if (tab === "actividad") loadFlowActivity();
 }
 
 function collectTpVariables() {
@@ -2289,6 +2292,7 @@ async function sendPaymentAuthTest() {
   if (!res.ok) { toast(res.error || "No se pudo enviar.", "error"); return; }
   toast("Autorización de pago enviada. Revisa WhatsApp.", "ok");
   await loadPaymentAuthPanel();
+  await loadFlowActivity();
   if (res.flowId) {
     await selectFlow(res.flowId);
     setFlowsTab("mis");
@@ -2564,6 +2568,7 @@ async function sendActiveFlow() {
   }
   toast(`Flow enviado (modo ${res.mode || "published"}).`, "ok");
   if (state.activeFlowId) await loadFlowDetail(state.activeFlowId);
+  await loadFlowActivity();
 }
 
 async function publishActiveFlow() {
@@ -2575,20 +2580,131 @@ async function publishActiveFlow() {
   await loadFlows();
 }
 
-async function loadFlowResponses() {
-  const box = $("flowsResponses");
-  const res = await api("/api/flows/responses?limit=30");
-  const rows = (res && res.data) || [];
-  if (!rows.length) {
-    box.innerHTML = `<p class="muted">Sin respuestas aún. Envía un Flow y complétalo desde el teléfono.</p>`;
+const FLOW_KIND_LABELS = { survey: "Encuesta", payment: "Pago", form: "Formulario", flow: "Flow" };
+
+function formatActivityDate(ts) {
+  if (!ts) return "—";
+  return new Date(ts).toLocaleString("es", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
+}
+
+function renderFlowActivityDetail(row) {
+  const box = $("flowActivityDetail");
+  if (!box || !row) return;
+  box.classList.remove("hidden");
+
+  let body = `<h3>${escapeHtml(row.name)}</h3>`;
+
+  if (row.kind === "survey" && row.surveyResults && row.surveyResults.length) {
+    body += `<p class="muted sm">Resultados agregados de la encuesta</p>
+      <table class="flow-survey-table billing-table">
+        <thead><tr><th>Pregunta / campo</th><th>Respuesta</th><th class="num">Personas</th><th class="num">%</th></tr></thead>
+        <tbody>`;
+    row.surveyResults.forEach((field) => {
+      const entries = Object.entries(field.counts).sort((a, b) => b[1] - a[1]);
+      entries.forEach(([answer, count], i) => {
+        const pct = field.total ? Math.round((count / field.total) * 100) : 0;
+        body += `<tr>
+          <td>${i === 0 ? escapeHtml(field.label) : ""}</td>
+          <td>${escapeHtml(answer)}</td>
+          <td class="num">${count}</td>
+          <td class="num">${pct}%</td>
+        </tr>`;
+      });
+    });
+    body += `</tbody></table>`;
+  } else if (row.kind === "payment" && row.paymentResults) {
+    const p = row.paymentResults;
+    body += `<div class="flows-stats-grid" style="margin-bottom:14px">
+      <div class="flow-stat-card"><span class="n">${p.authorized}</span><span class="l">Autorizados</span></div>
+      <div class="flow-stat-card"><span class="n">${p.denied}</span><span class="l">Rechazados</span></div>
+      <div class="flow-stat-card"><span class="n">${p.pending}</span><span class="l">Pendientes</span></div>
+    </div>`;
+  }
+
+  if (row.recentResponses && row.recentResponses.length) {
+    body += `<p class="muted sm" style="margin-top:8px">Respuestas individuales</p>
+      <table class="flow-responses-mini billing-table">
+        <thead><tr><th>Teléfono</th><th>Fecha</th><th>Datos</th></tr></thead><tbody>`;
+    row.recentResponses.forEach((r) => {
+      const ans = Object.entries(r.answers || {}).map(([k, v]) => `${k}: ${v}`).join(" · ") || "—";
+      body += `<tr>
+        <td>+${escapeHtml(r.phone)}</td>
+        <td>${escapeHtml(formatActivityDate(r.receivedAt))}</td>
+        <td>${escapeHtml(ans)}</td>
+      </tr>`;
+    });
+    body += `</tbody></table>`;
+  } else if (!row.surveyResults || !row.surveyResults.length) {
+    body += `<p class="muted sm">Sin respuestas detalladas todavía.</p>`;
+  }
+
+  box.innerHTML = body;
+}
+
+function selectActivityRow(index) {
+  state.activeActivityRow = index;
+  const row = state.flowActivity[index];
+  document.querySelectorAll(".flow-activity-row").forEach((tr, i) =>
+    tr.classList.toggle("active", i === index)
+  );
+  renderFlowActivityDetail(row);
+}
+
+async function loadFlowActivity() {
+  const tbody = $("flowActivityRows");
+  const summary = $("flowActivitySummary");
+  const detail = $("flowActivityDetail");
+  if (!tbody) return;
+
+  const res = await api("/api/flows/activity");
+  state.flowActivity = (res && res.data) || [];
+
+  if (summary && res.summary) {
+    summary.classList.remove("hidden");
+    summary.innerHTML = [
+      [res.summary.total, "Flows con actividad"],
+      [res.summary.sent, "Enviados"],
+      [res.summary.viewed, "Vieron"],
+      [res.summary.completed, "Completaron"],
+    ].map(([n, l]) => `<div class="flow-stat-card"><span class="n">${n}</span><span class="l">${escapeHtml(l)}</span></div>`).join("");
+  }
+
+  if (!state.flowActivity.length) {
+    tbody.innerHTML = `<tr><td colspan="6" class="muted center">Sin actividad aún. Envía un Flow desde Probar o Mis Flows.</td></tr>`;
+    if (detail) detail.classList.add("hidden");
     return;
   }
-  box.innerHTML = rows.map((r) => `<div class="flow-resp-item">
-    <strong>+${escapeHtml(r.phone)}</strong>
-    <span class="muted"> · ${escapeHtml(new Date(r.receivedAt).toLocaleString("es"))}</span>
-    ${r.flowToken ? `<span class="muted"> · token: ${escapeHtml(r.flowToken)}</span>` : ""}
-    <pre>${escapeHtml(JSON.stringify(r.responseJson, null, 2))}</pre>
-  </div>`).join("");
+
+  tbody.innerHTML = state.flowActivity.map((row, i) => {
+    const kind = FLOW_KIND_LABELS[row.kind] || "Flow";
+    return `<tr class="flow-activity-row${state.activeActivityRow === i ? " active" : ""}" data-i="${i}">
+      <td>
+        <strong>${escapeHtml(row.name)}</strong>
+        <span class="kind-tag ${escapeHtml(row.kind)}">${escapeHtml(kind)}</span>
+      </td>
+      <td class="num">${row.sent}</td>
+      <td class="num">${row.viewed}</td>
+      <td class="num">${row.completed}${row.sent ? ` <span class="muted">(${row.completionRate}%)</span>` : ""}</td>
+      <td>${escapeHtml(formatActivityDate(row.lastActivityAt))}</td>
+      <td><span class="muted">Ver →</span></td>
+    </tr>`;
+  }).join("");
+
+  tbody.querySelectorAll(".flow-activity-row").forEach((tr) =>
+    tr.addEventListener("click", () => selectActivityRow(Number(tr.dataset.i)))
+  );
+
+  if (state.activeActivityRow != null && state.flowActivity[state.activeActivityRow]) {
+    renderFlowActivityDetail(state.flowActivity[state.activeActivityRow]);
+  } else if (state.flowActivity.length === 1) {
+    selectActivityRow(0);
+  } else if (detail) {
+    detail.classList.add("hidden");
+  }
+}
+
+async function loadFlowResponses() {
+  await loadFlowActivity();
 }
 
 async function initFlowsScreen() {
@@ -2596,11 +2712,12 @@ async function initFlowsScreen() {
   await Promise.all([
     loadFlowCapability(),
     initFlowBuilder(),
+    loadFlowUseCases(),
     loadFlowSamples(),
     loadFlowEndpointSetup(),
     loadPaymentAuthPanel(),
     loadFlows(),
-    loadFlowResponses(),
+    loadFlowActivity(),
   ]);
 }
 
@@ -2742,6 +2859,8 @@ function bindEvents() {
   );
   const flowsConfigBtn = $("flowsConfigBtn");
   if (flowsConfigBtn) flowsConfigBtn.addEventListener("click", openFlowsConfigModal);
+  const flowCreateBack = $("flowCreateBack");
+  if (flowCreateBack) flowCreateBack.addEventListener("click", backToFlowCategories);
   ["payAuthCustomerName", "payAuthMerchant", "payAuthAmount", "payAuthCard4"].forEach((id) => {
     const el = $(id);
     if (el) el.addEventListener("input", () => { updatePayAuthPreview(); updatePayAuthFlowPreview(); });
@@ -2780,7 +2899,7 @@ function bindEvents() {
   $("flowCreateBtn").addEventListener("click", createFlowSample);
   $("flowSendBtn").addEventListener("click", sendActiveFlow);
   $("flowPublishBtn").addEventListener("click", publishActiveFlow);
-  $("flowRefreshResponses").addEventListener("click", loadFlowResponses);
+  $("flowRefreshResponses").addEventListener("click", loadFlowActivity);
   if ($("flowEndpointSetupBtn")) $("flowEndpointSetupBtn").addEventListener("click", setupFlowEndpoint);
   if ($("fbAddForm")) $("fbAddForm").addEventListener("click", () => fbAddScreen("form"));
   if ($("fbAddMessage")) $("fbAddMessage").addEventListener("click", () => fbAddScreen("message"));

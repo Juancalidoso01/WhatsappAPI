@@ -10,12 +10,26 @@ const STATS_KEY = "wa:flow:stats";
 const EVENT_LIST = "wa:flow:endpoint:events";
 const mem = { responses: [], sends: [], events: [], stats: { sends: 0, responses: 0, endpointCalls: 0 } };
 
+async function resolveTokenMeta(flowToken) {
+  if (!flowToken || !redis) return null;
+  const raw = await redis.get(`wa:flow:token:${flowToken}`);
+  if (!raw) return null;
+  try {
+    return typeof raw === "string" ? JSON.parse(raw) : raw;
+  } catch (_) {
+    return { flowId: String(raw) };
+  }
+}
+
 async function saveResponse({ phone, flowToken, responseJson, messageId, contextMessageId }) {
+  const tokenMeta = flowToken ? await resolveTokenMeta(flowToken) : null;
   const id = `fr_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
   const row = {
     id,
     phone: String(phone),
     flowToken: flowToken || null,
+    flowId: tokenMeta && tokenMeta.flowId ? String(tokenMeta.flowId) : null,
+    flowName: tokenMeta && tokenMeta.flowName ? tokenMeta.flowName : null,
     responseJson,
     messageId: messageId || null,
     contextMessageId: contextMessageId || null,
@@ -36,22 +50,27 @@ async function saveResponse({ phone, flowToken, responseJson, messageId, context
   return row;
 }
 
-async function recordSend({ phone, flowId, flowToken, mode }) {
+async function recordSend({ phone, flowId, flowToken, mode, flowName }) {
   const id = `fs_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
   const row = {
     id,
     phone: String(phone),
     flowId,
     flowToken,
+    flowName: flowName || null,
     mode: mode || "published",
     sentAt: Date.now(),
   };
   if (redis) {
-    await Promise.all([
+    const ops = [
       redis.set(`${PREFIX}send:${id}`, JSON.stringify(row)),
       redis.zadd(SEND_LIST, { score: row.sentAt, member: id }),
       redis.hincrby(STATS_KEY, "sends", 1),
-    ]);
+    ];
+    if (flowToken && flowId) {
+      ops.push(redis.set(`wa:flow:token:${flowToken}`, JSON.stringify({ flowId: String(flowId), flowName: flowName || null }), { ex: 604800 }));
+    }
+    await Promise.all(ops);
   } else {
     mem.sends.unshift(row);
     mem.stats.sends++;

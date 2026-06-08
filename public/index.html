@@ -567,11 +567,29 @@
         <section class="flows-tab-panel hidden" id="flowsPanelActividad">
           <section class="flows-panel">
             <div class="flows-panel-head-row">
-              <h2 class="section-title">Respuestas recibidas</h2>
+              <h2 class="section-title">Actividad de Flows</h2>
               <button type="button" id="flowRefreshResponses" class="btn-ghost sm">Actualizar</button>
             </div>
-            <p class="muted sm">Cuando alguien completa un Flow, la respuesta aparece aquí.</p>
-            <div id="flowsResponses" class="flows-responses muted">Sin respuestas aún.</div>
+            <p class="muted sm">Resumen por Flow o encuesta: cuántas personas lo recibieron, lo abrieron y lo completaron.</p>
+            <div id="flowActivitySummary" class="flows-stats-grid flows-activity-summary hidden"></div>
+            <div class="billing-table-wrap flow-activity-table-wrap">
+              <table class="billing-table flow-activity-table">
+                <thead>
+                  <tr>
+                    <th>Flow / Encuesta</th>
+                    <th class="num">Enviados</th>
+                    <th class="num">Vieron</th>
+                    <th class="num">Completaron</th>
+                    <th>Última actividad</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody id="flowActivityRows">
+                  <tr><td colspan="6" class="muted center">Cargando…</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <div id="flowActivityDetail" class="flow-activity-detail hidden"></div>
           </section>
         </section>
       </main>
