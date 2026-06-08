@@ -696,14 +696,41 @@ async function syncTemplatesWithMeta() {
   updateTplSyncHint();
   renderTplPresetCards();
   renderTemplateList();
+  if (state.activeTemplatePreset) renderTplDraftMetaBar(state.activeTemplatePreset);
   toast(`Sincronizado: ${res.total || 0} plantilla(s) en Meta.`, "ok");
+}
+
+function renderTplDraftMetaBar(key) {
+  const el = $("tplDraftMetaBar");
+  if (!el) return;
+  const preset = state.templatePresets.find((p) => p.key === key);
+  const ms = presetMetaForKey(key);
+  if (!preset) {
+    el.innerHTML = "";
+    return;
+  }
+  if (!ms) {
+    el.innerHTML = `<p class="muted sm tpl-draft-meta-hint">Pulsa «Sincronizar con Meta» arriba para ver el estado de aprobación.</p>`;
+    return;
+  }
+  const textBadge = metaStatusBadge(ms.text && ms.text.status);
+  const flowBadge = preset.templateFlowName
+    ? metaStatusBadge(ms.flow && ms.flow.status)
+    : "";
+  const readyTag = ms.readyForProduction
+    ? `<span class="tpl-preset-tag tpl-ready-prod">Lista para producción</span>`
+    : `<p class="muted sm tpl-draft-meta-hint">Cuando Texto y + Flow estén aprobadas, los envíos usarán la plantilla oficial con botón Flow.</p>`;
+  el.innerHTML = `
+    <span class="tpl-preset-tag">Texto ${textBadge}</span>
+    ${preset.templateFlowName ? `<span class="tpl-preset-tag">+ Flow ${flowBadge}</span>` : ""}
+    ${readyTag}`;
 }
 
 function updateTplSyncHint() {
   const hint = $("tplSyncMetaHint");
   if (!hint) return;
   if (!state.tplMetaSyncedAt) {
-    hint.textContent = "Pulsa para actualizar estados desde Meta.";
+    hint.textContent = "Actualiza estados de aprobación (Texto / + Flow).";
     return;
   }
   const when = new Date(state.tplMetaSyncedAt).toLocaleString("es", {
@@ -757,6 +784,7 @@ async function openTplDraftModal(key) {
   }
   if ($("tplDraftTitle")) $("tplDraftTitle").textContent = preset ? preset.label : "Borrador";
   if ($("tplDraftDesc")) $("tplDraftDesc").textContent = preset ? preset.description : "";
+  renderTplDraftMetaBar(key);
   await updateTplDraftPreview();
   showModal("modalTplDraft");
 }
@@ -1083,6 +1111,7 @@ async function createTemplate() {
     );
     await loadTemplates();
     renderTemplateList();
+    await loadTemplatePresets();
   } else {
     hint.className = "hint error";
     hint.textContent = res.error || "No se pudo crear.";
