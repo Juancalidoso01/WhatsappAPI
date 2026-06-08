@@ -196,8 +196,25 @@ async function enrichTemplatesList(templates, metaMap) {
       requestedCategory: local.requestedCategory,
       pendingCategory: local.pendingCategory,
     });
-    return { ...t, categoryInfo, localMeta: local };
+    const createdAt = local.createdAt ? Number(local.createdAt) : null;
+    const updatedAt = parseMetaTimestamp(t.last_updated_time);
+    return {
+      ...t,
+      categoryInfo,
+      localMeta: local,
+      createdAt,
+      updatedAt,
+      displayAt: createdAt || updatedAt,
+      displayAtKind: createdAt ? 'created' : 'updated',
+    };
   });
+}
+
+function parseMetaTimestamp(value) {
+  if (value == null || value === '') return null;
+  if (typeof value === 'number') return value < 1e12 ? value * 1000 : value;
+  const parsed = Date.parse(String(value));
+  return Number.isNaN(parsed) ? null : parsed;
 }
 
 // List WhatsApp message templates from the WABA
@@ -208,7 +225,8 @@ app.get('/api/templates', async (req, res) => {
   try {
     const result = await GraphApi.listTemplates(config.wabaId);
     const raw = (result && result.data) || [];
-    const data = await enrichTemplatesList(raw);
+    const data = (await enrichTemplatesList(raw))
+      .sort((a, b) => (b.displayAt || 0) - (a.displayAt || 0) || String(a.name).localeCompare(String(b.name)));
     res.json({
       data,
       total: data.length,
@@ -286,7 +304,10 @@ app.post('/api/templates', apiJson, async (req, res) => {
       language,
       components,
     });
-    await Store.setTemplateRequestedCategory(tplName, language, tplCategory, { syncedFrom: 'user' });
+    await Store.setTemplateRequestedCategory(tplName, language, tplCategory, {
+      syncedFrom: 'user',
+      createdAt: Date.now(),
+    });
     res.json({ ok: true, result, requestedCategory: tplCategory });
   } catch (err) {
     console.error('createTemplate error:', err.message);

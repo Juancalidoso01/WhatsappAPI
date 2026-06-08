@@ -136,7 +136,7 @@ module.exports = class GraphApi {
   // --- WhatsApp message templates management (on the WABA) ---
   static async listTemplates(wabaId, pageSize = 100) {
     const api = getApi();
-    const fields = "name,status,category,correct_category,language,components,quality_score";
+    const fields = "id,name,status,category,correct_category,language,components,quality_score,last_updated_time";
     const seen = new Set();
     const all = [];
     let after = null;
@@ -151,7 +151,7 @@ module.exports = class GraphApi {
         page = await api.call("GET", [`${wabaId}`, "message_templates"], params);
       } catch (err) {
         if (all.length) break;
-        const fallbackFields = "name,status,category,language,components,quality_score";
+        const fallbackFields = "id,name,status,category,language,components,quality_score,last_updated_time";
         page = await api.call("GET", [`${wabaId}`, "message_templates"], { ...params, fields: fallbackFields });
       }
 

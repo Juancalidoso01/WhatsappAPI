@@ -435,34 +435,53 @@ function categoryComment(t) {
   return "";
 }
 
-function renderTemplateCard(t, i) {
+function formatTplDate(ts, kind) {
+  if (!ts) return { main: "—", sub: "" };
+  const d = new Date(ts);
+  const main = d.toLocaleDateString("es", { day: "2-digit", month: "short", year: "numeric" });
+  const sub = kind === "created" ? "Creada aquí" : "Meta";
+  return { main, sub };
+}
+
+function previewSnippet(t, max = 72) {
   const header = (t.components || []).find((x) => x.type === "HEADER");
-  const footer = (t.components || []).find((x) => x.type === "FOOTER");
+  const body = bodyOf(t) || "";
+  const parts = [];
+  if (header && header.text) parts.push(header.text);
+  if (body) parts.push(body);
+  const text = parts.join(" · ").replace(/\s+/g, " ").trim();
+  if (!text) return "—";
+  return text.length > max ? text.slice(0, max - 1) + "…" : text;
+}
+
+function renderTemplateRow(t, i) {
   const st = (t.status || "").toLowerCase();
   const cls = st === "approved" ? "approved" : st === "rejected" ? "rejected" : "pending";
   const info = t.categoryInfo || {};
   const comment = categoryComment(t);
   const canSend = st === "approved";
-  return `<article class="tpl-card" data-i="${i}">
-    <div class="tpl-card-head">
-      <div>
-        <h2 class="tpl-card-name">${escapeHtml(t.name)}</h2>
-        <div class="tpl-card-meta">
-          <span class="status-badge ${cls}">${escapeHtml(t.status || "—")}</span>
-          <span class="muted">${escapeHtml(t.language || "")}</span>
-          ${catTagHtml(info.billingCategory, info.billingLabel)}
-        </div>
-      </div>
-      ${canSend ? `<button type="button" class="btn-primary sm tpl-send-btn" data-i="${i}">Enviar</button>` : ""}
-    </div>
-    ${comment ? `<p class="tpl-card-comment">${escapeHtml(comment)}</p>` : ""}
-    <div class="tpl-preview">
-      ${header && header.text ? `<div class="tpl-h">${escapeHtml(header.text)}</div>` : ""}
-      <div>${escapeHtml(bodyOf(t))}</div>
-      ${footer && footer.text ? `<div class="tpl-f">${escapeHtml(footer.text)}</div>` : ""}
-    </div>
-    ${!canSend ? `<p class="tpl-card-note muted">Solo las plantillas aprobadas se pueden enviar.</p>` : ""}
-  </article>`;
+  const date = formatTplDate(t.displayAt, t.displayAtKind);
+  const snippet = previewSnippet(t);
+  const fullPreview = previewSnippet(t, 500);
+  return `<tr class="tpl-row" data-i="${i}" title="${escapeHtml(fullPreview)}">
+    <td class="tpl-name-cell">
+      <span class="tpl-table-name">${escapeHtml(t.name)}</span>
+      ${comment ? `<span class="tpl-table-note" title="${escapeHtml(comment)}">${escapeHtml(comment)}</span>` : ""}
+    </td>
+    <td>${escapeHtml(t.language || "—")}</td>
+    <td>${catTagHtml(info.billingCategory, info.billingLabel)}</td>
+    <td><span class="status-badge ${cls}">${escapeHtml(t.status || "—")}</span></td>
+    <td class="tpl-date-cell">
+      <span>${escapeHtml(date.main)}</span>
+      ${date.sub ? `<span class="muted">${escapeHtml(date.sub)}</span>` : ""}
+    </td>
+    <td class="tpl-preview-cell muted">${escapeHtml(snippet)}</td>
+    <td class="tpl-action-cell">
+      ${canSend
+    ? `<button type="button" class="btn-ghost sm tpl-send-btn" data-i="${i}">Enviar</button>`
+    : `<span class="muted">—</span>`}
+    </td>
+  </tr>`;
 }
 
 function renderTemplateList() {
@@ -476,8 +495,24 @@ function renderTemplateList() {
     return;
   }
   const count = state.templates.length;
-  list.innerHTML = `<p class="templates-count muted">${count} plantilla${count === 1 ? "" : "s"} en tu cuenta</p>`
-    + state.templates.map((t, i) => renderTemplateCard(t, i)).join("");
+  list.innerHTML = `
+    <p class="templates-count muted">${count} plantilla${count === 1 ? "" : "s"} en tu cuenta</p>
+    <div class="billing-table-wrap">
+      <table class="templates-table billing-table">
+        <thead>
+          <tr>
+            <th>Plantilla</th>
+            <th>Idioma</th>
+            <th>Categoría</th>
+            <th>Estado</th>
+            <th>Fecha</th>
+            <th>Mensaje</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>${state.templates.map((t, i) => renderTemplateRow(t, i)).join("")}</tbody>
+      </table>
+    </div>`;
   list.querySelectorAll(".tpl-send-btn").forEach((btn) =>
     btn.addEventListener("click", (e) => {
       e.stopPropagation();

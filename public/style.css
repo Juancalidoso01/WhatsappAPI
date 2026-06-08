@@ -265,20 +265,27 @@ input, textarea, select { font-family: inherit; }
 }
 .templates-pane .pane-header { align-items: flex-start; margin-bottom: 8px; }
 .templates-intro { margin: 4px 0 0; font-size: 12px; max-width: 520px; }
-.templates-count { margin: 0 0 4px; font-size: 12px; }
-.templates-grid { display: grid; gap: 14px; margin-top: 12px; }
-.tpl-card {
-  background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
-  padding: 16px 18px;
+.templates-count { margin: 0 0 8px; font-size: 12px; }
+.templates-table-wrap { margin-top: 8px; }
+.templates-table { font-size: 13px; }
+.templates-table th { font-size: 11px; white-space: nowrap; }
+.templates-table td { vertical-align: top; padding-top: 10px; padding-bottom: 10px; }
+.templates-table .tpl-name-cell { min-width: 140px; max-width: 200px; }
+.templates-table .tpl-table-name { display: block; font-weight: 600; font-size: 13px; line-height: 1.3; }
+.templates-table .tpl-table-note {
+  display: block; margin-top: 4px; font-size: 11px; line-height: 1.35; color: var(--muted);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 220px;
 }
-.tpl-card-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
-.tpl-card-name { margin: 0 0 8px; font-size: 16px; }
-.tpl-card-meta { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-.tpl-card-comment {
-  margin: 10px 0 0; padding: 10px 12px; border-radius: 10px; background: var(--surface-2);
-  font-size: 12.5px; line-height: 1.45; color: var(--muted);
+.templates-table .tpl-date-cell { white-space: nowrap; font-size: 12px; line-height: 1.35; }
+.templates-table .tpl-date-cell .muted { display: block; font-size: 10px; margin-top: 2px; }
+.templates-table .tpl-preview-cell {
+  max-width: 280px; font-size: 12px; line-height: 1.4;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-.tpl-card-note { margin: 10px 0 0; font-size: 12px; }
+.templates-table .tpl-action-cell { width: 72px; text-align: right; white-space: nowrap; }
+.templates-table .cat-tag { font-size: 11px; padding: 2px 7px; }
+.templates-table .status-badge { font-size: 10px; }
+.templates-table tbody tr:hover { background: var(--surface-2); cursor: default; }
 .center-msg { padding: 32px 24px; text-align: center; }
 .hint.warn { color: #8a6300; background: #fff6e0; padding: 8px 10px; border-radius: 8px; }
 .status-badge { font-size: 10.5px; font-weight: 600; padding: 2px 8px; border-radius: 20px; text-transform: capitalize; }
