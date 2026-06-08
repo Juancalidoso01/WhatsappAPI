@@ -130,13 +130,23 @@
             Crear
           </button>
         </header>
+        <div class="tpl-toolbar">
+          <button id="tplSyncBtn" class="btn-ghost sm block" type="button">Actualizar categorías</button>
+          <select id="tplFilter">
+            <option value="all">Todas las plantillas</option>
+            <option value="pending">Reclasificación pendiente</option>
+            <option value="reclassified">Distinta a la solicitada</option>
+            <option value="impact">Con impacto en facturación</option>
+          </select>
+        </div>
+        <div id="tplSummary" class="tpl-summary hidden"></div>
         <ul id="templateList" class="template-list"></ul>
       </aside>
       <main class="chat-pane">
         <div id="templateEmpty" class="empty-state">
           <img src="/logo.png" alt="" class="empty-logo" />
           <h2>Plantillas de WhatsApp</h2>
-          <p>Crea y revisa el estado de aprobación de tus plantillas. Meta debe aprobarlas antes de poder enviarlas.</p>
+          <p>Crea y revisa el estado de aprobación de tus plantillas. Meta puede asignar una categoría distinta a la solicitada; eso afecta el costo por envío.</p>
         </div>
         <section id="templateDetail" class="template-detail hidden"></section>
       </main>
@@ -168,9 +178,12 @@
           <div class="bill-card"><span class="bc-label">Mensajes entregados</span><span class="bc-value" id="bcVolume">—</span></div>
           <div class="bill-card"><span class="bc-label">Marketing</span><span class="bc-value" id="bcMkt">—</span></div>
           <div class="bill-card"><span class="bc-label">Utilidad</span><span class="bc-value" id="bcUtil">—</span></div>
+          <div class="bill-card"><span class="bc-label">Autenticación</span><span class="bc-value" id="bcAuth">—</span></div>
         </div>
 
-        <h2 class="section-title">Lo gastado <span class="muted">· datos reales de tu cuenta</span></h2>
+        <div id="billTplAlert" class="billing-alert hidden"></div>
+
+        <h2 class="section-title">Lo gastado <span class="muted">· datos reales de tu cuenta (categoría asignada por Meta)</span></h2>
         <div class="billing-table-wrap">
           <table class="billing-table">
             <thead><tr><th>País</th><th>Categoría</th><th class="num">Mensajes</th><th class="num">Costo</th></tr></thead>
@@ -267,15 +280,16 @@
   <div id="modalTemplate" class="modal hidden">
     <div class="modal-card">
       <h3>Crear plantilla</h3>
-      <p class="muted">Tras crearla, Meta la revisa (minutos a horas) antes de poder usarla.</p>
+      <p class="muted">Tras crearla, Meta la revisa (minutos a horas) antes de poder usarla. WhatsApp puede aprobarla con otra categoría (p. ej. Marketing en lugar de Utilidad); la facturación siempre usa la categoría que Meta asigne.</p>
       <label>Nombre (sin espacios)
         <input id="tpName" type="text" placeholder="bienvenida_clientes" />
       </label>
       <div class="row">
-        <label>Categoría
+        <label>Categoría solicitada
           <select id="tpCategory">
             <option value="MARKETING">Marketing</option>
             <option value="UTILITY">Utilidad</option>
+            <option value="AUTHENTICATION">Autenticación</option>
           </select>
         </label>
         <label>Idioma

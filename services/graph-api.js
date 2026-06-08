@@ -138,7 +138,7 @@ module.exports = class GraphApi {
     const api = getApi();
     return api.call("GET", [`${wabaId}`, "message_templates"], {
       limit,
-      fields: "name,status,category,language,components,quality_score",
+      fields: "name,status,category,correct_category,language,components,quality_score",
     });
   }
 

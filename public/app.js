@@ -7,6 +7,8 @@ const state = {
   config: { brandName: "Punto Pago", templatesEnabled: false, hasCredentials: false },
   conversations: [],
   templates: [],
+  templateSummary: null,
+  templateFilter: "all",
   activePhone: null,
   messages: [],
   conversationDetail: null,
@@ -412,30 +414,107 @@ async function sendText(text) {
 async function loadTemplates() {
   const res = await api("/api/templates");
   state.templates = (res && res.data) || [];
+  state.templateSummary = (res && res.summary) || null;
   if (res && res.warning) toast(res.warning, "error");
+  if (res && res.synced > 0) toast(`${res.synced} plantilla(s) existente(s) actualizada(s) con categoría desde Meta.`, "ok");
   return state.templates;
+}
+
+async function syncTemplateCategories() {
+  const btn = $("tplSyncBtn");
+  if (btn) { btn.disabled = true; btn.textContent = "Actualizando…"; }
+  try {
+    const res = await api("/api/templates/sync-categories", { method: "POST" });
+    if (!res.ok) {
+      toast(res.error || "No se pudo actualizar.", "error");
+      return;
+    }
+    state.templates = res.data || [];
+    state.templateSummary = res.summary || null;
+    renderTemplateList();
+    const parts = [];
+    if (res.synced) parts.push(`${res.synced} nueva(s)`);
+    if (res.refreshed) parts.push(`${res.refreshed} actualizada(s)`);
+    toast(parts.length ? `Categorías sincronizadas: ${parts.join(", ")}.` : "Categorías ya estaban al día.", "ok");
+  } catch (_) {
+    toast("Error al sincronizar categorías.", "error");
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = "Actualizar categorías"; }
+  }
+}
+
+function catTagHtml(cat, label) {
+  const key = String(cat || "").toUpperCase();
+  const text = label || key.toLowerCase();
+  if (!key) return `<span class="cat-tag">—</span>`;
+  return `<span class="cat-tag ${escapeHtml(key)}">${escapeHtml(text)}</span>`;
+}
+
+function categoryBadgeHtml(info) {
+  if (!info) return catTagHtml(null);
+  let html = catTagHtml(info.billingCategory, info.billingLabel);
+  if (info.status === "pending_reclass") {
+    html += `<span class="cat-warn pending" title="${escapeHtml(info.hint || "")}">Reclasificación</span>`;
+  } else if (info.status === "reclassified") {
+    html += `<span class="cat-warn reclassified" title="${escapeHtml(info.hint || "")}">Distinta</span>`;
+  }
+  return html;
+}
+
+function filteredTemplates() {
+  const f = state.templateFilter;
+  return state.templates.filter((t) => {
+    const info = t.categoryInfo;
+    if (f === "pending") return info && info.status === "pending_reclass";
+    if (f === "reclassified") return info && info.status === "reclassified";
+    if (f === "impact") return info && info.impactsBilling;
+    return true;
+  });
+}
+
+function renderTemplateSummary() {
+  const box = $("tplSummary");
+  const s = state.templateSummary;
+  if (!s || !s.withBillingImpact) {
+    box.classList.add("hidden");
+    box.innerHTML = "";
+    return;
+  }
+  box.classList.remove("hidden");
+  const parts = [];
+  if (s.pendingReclass) parts.push(`${s.pendingReclass} con reclasificación pendiente`);
+  if (s.reclassified) parts.push(`${s.reclassified} con categoría distinta a la solicitada`);
+  box.innerHTML = `<strong>Atención:</strong> ${parts.join(" · ")}. La facturación usa la categoría que Meta asigna, no la que solicitaste al crear.`;
 }
 
 function renderTemplateList() {
   const list = $("templateList");
+  renderTemplateSummary();
   if (!state.config.templatesEnabled) {
     list.innerHTML = `<li class="muted" style="padding:24px;text-align:center">Configura ACCESS_TOKEN y WABA_ID para gestionar plantillas.</li>`;
     return;
   }
+  const visible = filteredTemplates();
   if (!state.templates.length) {
     list.innerHTML = `<li class="muted" style="padding:24px;text-align:center">No hay plantillas. Pulsa “Crear”.</li>`;
     return;
   }
-  list.innerHTML = state.templates
-    .map((t, i) => {
+  if (!visible.length) {
+    list.innerHTML = `<li class="muted" style="padding:24px;text-align:center">Ninguna plantilla coincide con este filtro.</li>`;
+    return;
+  }
+  list.innerHTML = visible
+    .map((t) => {
+      const i = state.templates.indexOf(t);
       const st = (t.status || "").toLowerCase();
       const cls = st === "approved" ? "approved" : st === "rejected" ? "rejected" : "pending";
+      const info = t.categoryInfo || {};
       return `<li class="tpl-item" data-i="${i}">
         <div class="tpl-name">${escapeHtml(t.name)}</div>
         <div class="tpl-sub">
           <span class="status-badge ${cls}">${escapeHtml(t.status || "—")}</span>
           <span>${escapeHtml(t.language || "")}</span>
-          <span>${escapeHtml((t.category || "").toLowerCase())}</span>
+          ${categoryBadgeHtml(info)}
         </div>
       </li>`;
     })
@@ -449,6 +528,30 @@ function bodyOf(t) {
   const c = (t.components || []).find((x) => x.type === "BODY");
   return c ? c.text : "";
 }
+function renderCategoryPanel(info, t) {
+  if (!info) return "";
+  const rows = [
+    `<div class="tpl-cat-row"><span class="tpl-cat-label">Facturación (Meta)</span>${catTagHtml(info.billingCategory, info.billingLabel)}</div>`,
+  ];
+  if (info.requested) {
+    const synced = t.localMeta && t.localMeta.syncedFrom === "meta";
+    const note = synced ? ' <span class="muted">(inferida desde Meta)</span>' : "";
+    rows.push(`<div class="tpl-cat-row"><span class="tpl-cat-label">Solicitada al crear${note}</span>${catTagHtml(info.requested, info.requestedLabel)}</div>`);
+  }
+  if (info.correct && info.correct !== info.current) {
+    rows.push(`<div class="tpl-cat-row"><span class="tpl-cat-label">WhatsApp sugiere</span>${catTagHtml(info.correct, info.correctLabel)}</div>`);
+  }
+  const alert = info.hint
+    ? `<div class="tpl-cat-alert ${escapeHtml(info.status)}">${escapeHtml(info.hint)}</div>`
+    : `<div class="tpl-cat-note muted">La categoría de facturación la define Meta al aprobar o reclasificar la plantilla.</div>`;
+  return `<div class="tpl-cat-panel">
+    <h3>Categoría y facturación</h3>
+    <div class="tpl-cat-status">${escapeHtml(info.statusLabel || "")}</div>
+    ${rows.join("")}
+    ${alert}
+  </div>`;
+}
+
 function showTemplate(t) {
   $("templateEmpty").classList.add("hidden");
   const d = $("templateDetail");
@@ -460,7 +563,11 @@ function showTemplate(t) {
   const canSend = (t.status || "").toLowerCase() === "approved";
   d.innerHTML = `
     <h2>${escapeHtml(t.name)}</h2>
-    <span class="status-badge ${cls}">${escapeHtml(t.status || "—")}</span>
+    <div class="tpl-detail-meta">
+      <span class="status-badge ${cls}">${escapeHtml(t.status || "—")}</span>
+      <span class="muted">${escapeHtml(t.language || "")}</span>
+    </div>
+    ${renderCategoryPanel(t.categoryInfo, t)}
     <div class="tpl-preview">
       ${header && header.text ? `<div class="tpl-h">${escapeHtml(header.text)}</div>` : ""}
       <div>${escapeHtml(bodyOf(t))}</div>
@@ -490,7 +597,7 @@ async function createTemplate() {
   const res = await post("/api/templates", payload);
   if (res.ok) {
     closeModals();
-    toast("Plantilla creada. Meta la revisará.", "ok");
+    toast("Plantilla creada como " + (res.requestedCategory || payload.category).toLowerCase() + ". Meta puede asignar otra categoría al aprobarla.", "ok");
     await loadTemplates();
     renderTemplateList();
   } else {
@@ -597,12 +704,31 @@ async function openNewChat(prefillName) {
     return;
   }
   sel.innerHTML = approved
-    .map((t) => `<option value="${escapeHtml(t.name)}">${escapeHtml(t.name)} (${escapeHtml(t.language)})</option>`)
+    .map((t) => {
+      const bill = t.categoryInfo ? t.categoryInfo.billingLabel : String(t.category || "").toLowerCase();
+      const warn = t.categoryInfo && t.categoryInfo.impactsBilling ? " ⚠" : "";
+      return `<option value="${escapeHtml(t.name)}">${escapeHtml(t.name)} · ${escapeHtml(bill)}${warn}</option>`;
+    })
     .join("");
   if (prefillName && approved.some((t) => t.name === prefillName)) sel.value = prefillName;
-  hint.className = "hint";
-  hint.textContent = "Configura los parámetros y envía para abrir la conversación.";
+  updateNewChatCategoryHint();
   renderTemplateFields(tplByName(sel.value));
+}
+
+function updateNewChatCategoryHint() {
+  const t = tplByName($("ncTemplate").value);
+  const hint = $("ncHint");
+  if (!t || !hint) return;
+  const info = t.categoryInfo;
+  if (info && info.impactsBilling && info.hint) {
+    hint.className = "hint warn";
+    hint.textContent = `Facturación actual: ${info.billingLabel}. ${info.hint}`;
+    return;
+  }
+  hint.className = "hint";
+  hint.textContent = info
+    ? `Se facturará como ${info.billingLabel}. Configura los parámetros y envía.`
+    : "Configura los parámetros y envía para abrir la conversación.";
 }
 
 async function sendNewChat() {
@@ -697,15 +823,31 @@ async function loadBilling() {
   if (!res.ok) {
     tbody.innerHTML = `<tr><td colspan="4" class="muted center">No se pudo cargar.</td></tr>`;
     note.textContent = res.error || "";
-    ["bcCost", "bcVolume", "bcMkt", "bcUtil"].forEach((id) => ($(id).textContent = "—"));
+    ["bcCost", "bcVolume", "bcMkt", "bcUtil", "bcAuth"].forEach((id) => ($(id).textContent = "—"));
+    $("billTplAlert").classList.add("hidden");
     return;
   }
 
   const t = res.totals || { byCategory: {} };
+  const byCat = t.byCategory || {};
   $("bcCost").textContent = fmtCost(t.cost);
   $("bcVolume").textContent = fmtNum(t.volume);
-  $("bcMkt").textContent = fmtCost((t.byCategory || {}).MARKETING || 0);
-  $("bcUtil").textContent = fmtCost((t.byCategory || {}).UTILITY || 0);
+  $("bcMkt").textContent = fmtCost(byCat.MARKETING || 0);
+  $("bcUtil").textContent = fmtCost(byCat.UTILITY || 0);
+  $("bcAuth").textContent = fmtCost((byCat.AUTHENTICATION || 0) + (byCat.AUTHENTICATION_INTERNATIONAL || 0));
+
+  const alert = $("billTplAlert");
+  const ts = res.templateSummary || {};
+  if (ts.pendingReclass || ts.reclassified) {
+    alert.classList.remove("hidden");
+    const parts = [];
+    if (ts.pendingReclass) parts.push(`${ts.pendingReclass} plantilla(s) con reclasificación pendiente`);
+    if (ts.reclassified) parts.push(`${ts.reclassified} con categoría distinta a la solicitada`);
+    alert.innerHTML = `<strong>Plantillas:</strong> ${parts.join(" · ")}. Los costos de arriba reflejan la categoría que Meta ya facturó; revisa la pantalla Plantillas para ver solicitudes vs. categoría asignada.`;
+  } else {
+    alert.classList.add("hidden");
+    alert.innerHTML = "";
+  }
 
   if (!res.rows.length) {
     tbody.innerHTML = `<tr><td colspan="4" class="muted center">Sin datos en este periodo.</td></tr>`;
@@ -713,13 +855,25 @@ async function loadBilling() {
     tbody.innerHTML = res.rows
       .map((r) => `<tr>
         <td><span class="country-cell"><span class="flag">${countryFlag(r.country)}</span>${escapeHtml(countryName(r.country))}</span></td>
-        <td><span class="cat-tag ${escapeHtml(r.category)}">${escapeHtml((r.category || "").toLowerCase())}</span></td>
+        <td><span class="cat-tag ${escapeHtml(r.category)}">${escapeHtml(categoryBillingLabel(r.category))}</span></td>
         <td class="num">${fmtNum(r.volume)}</td>
         <td class="num">${fmtCost(r.cost)}</td>
       </tr>`)
       .join("");
   }
-  note.innerHTML = `Los montos están en la moneda de tu WABA. Un costo de <strong>0</strong> suele indicar mensajes de servicio gratuitos o tráfico de número de prueba (no facturado). El costo por plantilla individual requiere activar “Template Insights” en Meta.`;
+  note.innerHTML = `Los montos están en la moneda de tu WABA y usan la <strong>categoría asignada por Meta</strong> (no la que solicitaste al crear la plantilla). Un costo de <strong>0</strong> suele indicar mensajes de servicio gratuitos o tráfico de número de prueba.`;
+}
+
+function categoryBillingLabel(cat) {
+  const key = String(cat || "").toUpperCase();
+  const map = {
+    MARKETING: "Marketing",
+    UTILITY: "Utilidad",
+    AUTHENTICATION: "Autenticación",
+    AUTHENTICATION_INTERNATIONAL: "Autenticación intl.",
+    SERVICE: "Servicio",
+  };
+  return map[key] || key.toLowerCase();
 }
 
 /* ---------- price reference (Meta rate card, Apr 2026, USD) ---------- */
@@ -838,7 +992,15 @@ function bindEvents() {
   $("searchInput").addEventListener("input", (e) => { state.filter = e.target.value; renderConversations(); });
   $("composer").addEventListener("submit", (e) => { e.preventDefault(); sendText($("messageInput").value); });
   $("newChatBtn").addEventListener("click", () => openNewChat());
-  $("ncTemplate").addEventListener("change", (e) => renderTemplateFields(tplByName(e.target.value)));
+  $("ncTemplate").addEventListener("change", (e) => {
+    renderTemplateFields(tplByName(e.target.value));
+    updateNewChatCategoryHint();
+  });
+  $("tplFilter").addEventListener("change", (e) => {
+    state.templateFilter = e.target.value;
+    renderTemplateList();
+  });
+  $("tplSyncBtn").addEventListener("click", syncTemplateCategories);
   $("ncSend").addEventListener("click", sendNewChat);
   $("attachBtn").addEventListener("click", () => showModal("modalMedia"));
   $("detailMediaBtn").addEventListener("click", () => showModal("modalMedia"));

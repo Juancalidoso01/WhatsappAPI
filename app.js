@@ -21,6 +21,7 @@ const Conversation = require('./services/conversation');
 const GraphApi = require('./services/graph-api');
 const Store = require('./services/store');
 const phoneMeta = require('./services/phone-meta');
+const templateCategory = require('./services/template-category');
 const app = express();
 
 const upload = multer({
@@ -73,18 +74,31 @@ app.post('/webhook', webhookJson, (req, res) => {
     req.body.entry.forEach(entry => {
       entry.changes.forEach(change => {
         const value = change.value;
-        if (value) {
-          const senderPhoneNumberId = value.metadata.phone_number_id;
+        if (!value) return;
 
-          // Map of consumer phone -> profile name (from the contacts array)
-          const contactNames = {};
-          (value.contacts || []).forEach(contact => {
-            if (contact.wa_id) {
-              contactNames[contact.wa_id] = contact.profile && contact.profile.name;
-            }
-          });
+        if (change.field === 'template_category_update') {
+          Promise.resolve(Store.updateTemplateCategoryFromWebhook({
+            name: value.message_template_name,
+            language: value.message_template_language,
+            correctCategory: value.correct_category,
+            newCategory: value.new_category,
+            previousCategory: value.previous_category,
+          })).catch(err => console.error('template_category_update error:', err));
+          return;
+        }
 
-          if (value.statuses) {
+        const senderPhoneNumberId = value.metadata && value.metadata.phone_number_id;
+        if (!senderPhoneNumberId) return;
+
+        // Map of consumer phone -> profile name (from the contacts array)
+        const contactNames = {};
+        (value.contacts || []).forEach(contact => {
+          if (contact.wa_id) {
+            contactNames[contact.wa_id] = contact.profile && contact.profile.name;
+          }
+        });
+
+        if (value.statuses) {
             value.statuses.forEach(status => {
               const phone = String(status.recipient_id);
               Promise.resolve(Store.updateMessageStatus(phone, status.id, status.status))
@@ -123,7 +137,6 @@ app.post('/webhook', webhookJson, (req, res) => {
               }
             });
           }
-        }
       });
     });
   }
@@ -145,17 +158,114 @@ app.get('/api/config', (req, res) => {
   });
 });
 
+async function backfillTemplateMeta(templates) {
+  const metaMap = await Store.getAllTemplateMeta();
+  let synced = 0;
+
+  for (const t of templates || []) {
+    const key = `${t.name}|${t.language}`;
+    const local = metaMap[key] || {};
+    if (local.requestedCategory) continue;
+
+    const inferred = templateCategory.inferRequestedCategory(t, local);
+    if (!inferred) continue;
+
+    await Store.setTemplateRequestedCategory(t.name, t.language, inferred, {
+      syncedFrom: 'meta',
+      syncedAt: Date.now(),
+    });
+    metaMap[key] = {
+      ...local,
+      requestedCategory: inferred,
+      syncedFrom: 'meta',
+      syncedAt: Date.now(),
+    };
+    synced++;
+  }
+
+  return { synced, metaMap };
+}
+
+async function enrichTemplatesList(templates, metaMap) {
+  const map = metaMap || await Store.getAllTemplateMeta();
+  return (templates || []).map((t) => {
+    const local = map[`${t.name}|${t.language}`] || {};
+    const categoryInfo = templateCategory.analyzeCategory({
+      category: t.category,
+      correct_category: t.correct_category,
+      requestedCategory: local.requestedCategory,
+      pendingCategory: local.pendingCategory,
+    });
+    return { ...t, categoryInfo, localMeta: local };
+  });
+}
+
 // List WhatsApp message templates from the WABA
 app.get('/api/templates', async (req, res) => {
   if (!config.accessToken || !config.wabaId) {
-    return res.status(200).json({ data: [], warning: 'Falta ACCESS_TOKEN o WABA_ID para gestionar plantillas.' });
+    return res.status(200).json({ data: [], summary: { total: 0 }, warning: 'Falta ACCESS_TOKEN o WABA_ID para gestionar plantillas.' });
   }
   try {
     const result = await GraphApi.listTemplates(config.wabaId);
-    res.json({ data: (result && result.data) || [] });
+    const raw = (result && result.data) || [];
+    const { synced, metaMap } = await backfillTemplateMeta(raw);
+    const data = await enrichTemplatesList(raw, metaMap);
+    res.json({ data, summary: templateCategory.summarizeTemplates(data), synced });
   } catch (err) {
     console.error('listTemplates error:', err.message);
-    res.status(200).json({ data: [], error: String(err.message || err) });
+    res.status(200).json({ data: [], summary: { total: 0 }, error: String(err.message || err) });
+  }
+});
+
+// Re-sync category metadata for all existing templates from Meta
+app.post('/api/templates/sync-categories', async (req, res) => {
+  if (!config.accessToken || !config.wabaId) {
+    return res.status(400).json({ ok: false, error: 'Falta ACCESS_TOKEN o WABA_ID.' });
+  }
+  try {
+    const result = await GraphApi.listTemplates(config.wabaId);
+    const raw = (result && result.data) || [];
+    const metaMap = await Store.getAllTemplateMeta();
+    let synced = 0;
+    let refreshed = 0;
+
+    for (const t of raw) {
+      const key = `${t.name}|${t.language}`;
+      const local = metaMap[key] || {};
+      const inferred = templateCategory.inferRequestedCategory(t, local);
+
+      if (!local.requestedCategory && inferred) {
+        await Store.setTemplateRequestedCategory(t.name, t.language, inferred, {
+          syncedFrom: 'meta',
+          syncedAt: Date.now(),
+        });
+        metaMap[key] = { ...local, requestedCategory: inferred, syncedFrom: 'meta', syncedAt: Date.now() };
+        synced++;
+        continue;
+      }
+
+      if (local.requestedCategory && local.syncedFrom === 'meta' && inferred && inferred !== local.requestedCategory) {
+        await Store.setTemplateRequestedCategory(t.name, t.language, inferred, {
+          syncedFrom: 'meta',
+          syncedAt: Date.now(),
+        });
+        metaMap[key] = { ...local, requestedCategory: inferred, syncedFrom: 'meta', syncedAt: Date.now() };
+        refreshed++;
+      }
+    }
+
+    const data = await enrichTemplatesList(raw, metaMap);
+    res.json({
+      ok: true,
+      synced,
+      refreshed,
+      total: raw.length,
+      data,
+      summary: templateCategory.summarizeTemplates(data),
+    });
+  } catch (err) {
+    console.error('sync-categories error:', err.message);
+    res.status(500).json({ ok: false, error: String(err.message || err) });
   }
 });
 
@@ -174,14 +284,18 @@ app.post('/api/templates', apiJson, async (req, res) => {
   components.push({ type: 'BODY', text: bodyText });
   if (footerText) components.push({ type: 'FOOTER', text: footerText });
 
+  const tplName = String(name).toLowerCase().replace(/[^a-z0-9_]/g, '_');
+  const tplCategory = String(category).toUpperCase();
+
   try {
     const result = await GraphApi.createTemplate(config.wabaId, {
-      name: String(name).toLowerCase().replace(/[^a-z0-9_]/g, '_'),
-      category: String(category).toUpperCase(),
+      name: tplName,
+      category: tplCategory,
       language,
       components,
     });
-    res.json({ ok: true, result });
+    await Store.setTemplateRequestedCategory(tplName, language, tplCategory, { syncedFrom: 'user' });
+    res.json({ ok: true, result, requestedCategory: tplCategory });
   } catch (err) {
     console.error('createTemplate error:', err.message);
     res.status(200).json({ ok: false, error: String(err.message || err) });
@@ -217,10 +331,30 @@ app.get('/api/billing', async (req, res) => {
     });
 
     const rows = Object.values(map).sort((a, b) => b.cost - a.cost || b.volume - a.volume);
-    res.json({ ok: true, days, start, end, rows, totals: { cost: totalCost, volume: totalVolume, byCategory } });
+
+    let templateSummary = { total: 0, pendingReclass: 0, reclassified: 0, withBillingImpact: 0 };
+    try {
+      const tplResult = await GraphApi.listTemplates(config.wabaId);
+      const rawTpl = (tplResult && tplResult.data) || [];
+      const { metaMap } = await backfillTemplateMeta(rawTpl);
+      const enriched = await enrichTemplatesList(rawTpl, metaMap);
+      templateSummary = templateCategory.summarizeTemplates(enriched);
+    } catch (tplErr) {
+      console.error('billing template summary error:', tplErr.message);
+    }
+
+    res.json({
+      ok: true,
+      days,
+      start,
+      end,
+      rows,
+      totals: { cost: totalCost, volume: totalVolume, byCategory },
+      templateSummary,
+    });
   } catch (err) {
     console.error('billing error:', err.message);
-    res.json({ ok: false, error: String(err.message || err), rows: [], totals: { cost: 0, volume: 0, byCategory: {} } });
+    res.json({ ok: false, error: String(err.message || err), rows: [], totals: { cost: 0, volume: 0, byCategory: {} }, templateSummary: { total: 0 } });
   }
 });
 

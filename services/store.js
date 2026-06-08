@@ -12,6 +12,7 @@
  *   wa:convos              ZSET   score=lastActivity, member=phone
  *   wa:convo:<phone>       HASH   { name, phoneNumberId, firstSeen, notes, conversationOrigin, windowExpiresAt }
  *   wa:msgs:<phone>        LIST   JSON messages (oldest -> newest)
+ *   wa:tplmeta             HASH   templateKey -> JSON { requestedCategory, pendingCategory, ... }
  */
 
 "use strict";
@@ -27,6 +28,11 @@ emitter.setMaxListeners(0);
 
 // ---------- In-memory fallback ----------
 const memConversations = new Map();
+const memTemplateMeta = new Map();
+
+function templateKey(name, language) {
+  return `${String(name)}|${String(language || "")}`;
+}
 
 function memGetOrCreate(phone, name, phoneNumberId) {
   let convo = memConversations.get(phone);
@@ -292,6 +298,71 @@ function isPersistent() {
   return Boolean(redis);
 }
 
+async function readTemplateMetaEntry(key) {
+  if (redis) {
+    const raw = await redis.hget(`${PREFIX}tplmeta`, key);
+    return raw ? JSON.parse(raw) : {};
+  }
+  return memTemplateMeta.get(key) || {};
+}
+
+async function writeTemplateMetaEntry(key, data) {
+  if (redis) {
+    await redis.hset(`${PREFIX}tplmeta`, { [key]: JSON.stringify(data) });
+    return;
+  }
+  memTemplateMeta.set(key, data);
+}
+
+async function setTemplateRequestedCategory(name, language, category, extra = {}) {
+  const key = templateKey(name, language);
+  const prev = await readTemplateMetaEntry(key);
+  await writeTemplateMetaEntry(key, {
+    ...prev,
+    requestedCategory: String(category).toUpperCase(),
+    updatedAt: Date.now(),
+    ...extra,
+  });
+}
+
+async function updateTemplateCategoryFromWebhook({
+  name, language, correctCategory, newCategory, previousCategory,
+}) {
+  const key = templateKey(name, language);
+  const prev = await readTemplateMetaEntry(key);
+  const next = { ...prev, updatedAt: Date.now() };
+
+  if (correctCategory && !previousCategory) {
+    next.pendingCategory = String(correctCategory).toUpperCase();
+    if (newCategory) next.pendingFrom = String(newCategory).toUpperCase();
+  }
+  if (previousCategory && newCategory) {
+    next.previousCategory = String(previousCategory).toUpperCase();
+    next.lastAssignedCategory = String(newCategory).toUpperCase();
+    delete next.pendingCategory;
+    delete next.pendingFrom;
+  } else if (newCategory && !correctCategory && !previousCategory) {
+    next.lastAssignedCategory = String(newCategory).toUpperCase();
+  }
+
+  await writeTemplateMetaEntry(key, next);
+}
+
+async function getAllTemplateMeta() {
+  if (redis) {
+    const all = await redis.hgetall(`${PREFIX}tplmeta`);
+    if (!all) return {};
+    const out = {};
+    Object.entries(all).forEach(([k, v]) => {
+      try { out[k] = JSON.parse(v); } catch (_) { /* skip */ }
+    });
+    return out;
+  }
+  const out = {};
+  memTemplateMeta.forEach((v, k) => { out[k] = v; });
+  return out;
+}
+
 module.exports = {
   addMessage,
   updateMessageId,
@@ -304,4 +375,7 @@ module.exports = {
   getMessages,
   subscribe,
   isPersistent,
+  setTemplateRequestedCategory,
+  updateTemplateCategoryFromWebhook,
+  getAllTemplateMeta,
 };
