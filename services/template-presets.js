@@ -10,6 +10,7 @@ const PRESETS = {
     label: "Verificación 3DS — confirmar pago",
     description: "Mensaje de verificación de seguridad antes de aprobar un pago con Tarjeta Punto Pago.",
     name: "punto_pago_3ds_confirmar_pago",
+    templateFlowName: "punto_pago_3ds_confirmar_pago_flow",
     category: "UTILITY",
     language: "es",
     headerText: "Confirma tu pago",
@@ -30,7 +31,7 @@ const PRESETS = {
       bodyText:
         "Hola {{nombre_cliente}},\n\n"
         + "Se requiere tu confirmación para un pago de {{monto}} en {{comercio}} con Tarjeta Punto Pago •••• {{ultimos_4}}.\n\n"
-        + "Toca abajo para aprobar o rechazar. Protege tu cuenta como el 3D Secure de tu banco.",
+        + "Toca el botón para aprobar o rechazar. Este paso protege tu cuenta, como la verificación 3D Secure de tu banco.",
       footerText: "Punto Pago · Verificación de seguridad",
       cta: "Confirmar pago",
     },
@@ -111,12 +112,68 @@ function previewPreset(presetKey, overrides) {
   };
 }
 
+function buildPaymentAuthTemplateSend(txn, screenData, customerName) {
+  const preset = getPreset("punto_pago_autorizacion_pago");
+  if (!preset) return null;
+  const name = customerName || "Cliente";
+  const monto = formatAmount(txn.amount, txn.currency);
+  const comercio = txn.merchant || "Comercio";
+  const ultimos4 = txn.cardLast4 || "0000";
+  return {
+    templateName: preset.templateFlowName || `${preset.name}_flow`,
+    language: preset.language || "es",
+    components: [
+      {
+        type: "body",
+        parameters: [
+          { type: "text", text: name },
+          { type: "text", text: monto },
+          { type: "text", text: comercio },
+          { type: "text", text: ultimos4 },
+        ],
+      },
+      {
+        type: "button",
+        sub_type: "flow",
+        index: "0",
+        parameters: [{
+          type: "action",
+          action: {
+            flow_token: txn.flowToken,
+            flow_action_data: screenData || {},
+          },
+        }],
+      },
+    ],
+  };
+}
+
+async function resolveApprovedPaymentAuthTemplate(GraphApi, wabaId) {
+  const preset = getPreset("punto_pago_autorizacion_pago");
+  if (!preset || !GraphApi || !wabaId) return null;
+  try {
+    const result = await GraphApi.listTemplates(wabaId);
+    const list = (result && result.data) || [];
+    const withFlow = list.find(
+      (t) => t.name === preset.templateFlowName && String(t.status).toUpperCase() === "APPROVED"
+    );
+    if (withFlow) return { name: withFlow.name, language: withFlow.language || preset.language, hasFlowButton: true };
+    const plain = list.find(
+      (t) => t.name === preset.name && String(t.status).toUpperCase() === "APPROVED"
+    );
+    if (plain) return { name: plain.name, language: plain.language || preset.language, hasFlowButton: false };
+  } catch (_) {}
+  return null;
+}
+
 module.exports = {
   PRESETS,
   listPresets,
   getPreset,
   previewPreset,
   buildFlowMessage,
+  buildPaymentAuthTemplateSend,
+  resolveApprovedPaymentAuthTemplate,
   fillNumberedPlaceholders,
   formatAmount,
 };

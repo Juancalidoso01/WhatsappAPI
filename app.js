@@ -677,35 +677,58 @@ app.post('/api/flows/payment-auth/test', apiJson, async (req, res) => {
 
     const { flowId } = await getOrCreatePaymentAuthFlow();
     const screenData = await buildPaymentAuthScreenData(txn);
-    const response = await GraphApi.sendFlowMessage(
-      config.phoneNumberId,
-      String(phone).replace(/\D/g, ''),
-      {
-        flowId,
-        flowToken: txn.flowToken,
-        cta: cta || flowCopy.cta || 'Confirmar pago',
-        bodyText: bodyText || flowCopy.bodyText || `Confirma tu pago de ${templatePresets.formatAmount(txn.amount, txn.currency)} en ${txn.merchant}.`,
-        headerText: headerText || flowCopy.headerText,
-        footerText: footerText || flowCopy.footerText,
-        flowAction: 'navigate',
-        screen: 'AUTH',
-        initialData: screenData,
-        mode: 'draft',
-      }
-    );
+    const normPhone = String(phone).replace(/\D/g, '');
+
+    const approvedTpl = await templatePresets.resolveApprovedPaymentAuthTemplate(GraphApi, config.wabaId);
+    let response;
+    let sendMode = 'interactive_draft';
+
+    if (approvedTpl && approvedTpl.hasFlowButton) {
+      const tplSend = templatePresets.buildPaymentAuthTemplateSend(
+        txn,
+        screenData,
+        customerName || 'Cliente'
+      );
+      response = await GraphApi.sendTemplate(config.phoneNumberId, normPhone, {
+        name: approvedTpl.name,
+        language: approvedTpl.language || 'es',
+        components: tplSend.components,
+      });
+      sendMode = 'template_flow';
+    } else {
+      response = await GraphApi.sendFlowMessage(
+        config.phoneNumberId,
+        normPhone,
+        {
+          flowId,
+          flowToken: txn.flowToken,
+          cta: cta || flowCopy.cta || 'Confirmar pago',
+          bodyText: bodyText || flowCopy.bodyText || `Confirma tu pago de ${templatePresets.formatAmount(txn.amount, txn.currency)} en ${txn.merchant}.`,
+          headerText: headerText || flowCopy.headerText,
+          footerText: footerText || flowCopy.footerText,
+          flowAction: 'navigate',
+          screen: 'AUTH',
+          initialData: screenData,
+          mode: 'draft',
+        }
+      );
+      sendMode = 'interactive_draft';
+    }
 
     await FlowStore.recordSend({
       phone: txn.phone,
       flowId,
       flowToken: txn.flowToken,
       flowName: 'punto_pago_3ds_verificacion',
-      mode: 'draft',
+      mode: sendMode,
     });
 
     res.json({
       ok: true,
       transaction: txn,
       flowId,
+      sendMode,
+      templateName: approvedTpl && approvedTpl.hasFlowButton ? approvedTpl.name : null,
       cardImageUrl: await resolveCardImageUrl(),
       messageId: response.messages && response.messages[0] && response.messages[0].id,
     });
@@ -1100,7 +1123,8 @@ app.post('/api/templates/presets/:key/submit', apiJson, async (req, res) => {
           type: 'FLOW',
           text: String(preset.flowCta).slice(0, 25),
           flow_id: String(flowId),
-          flow_action: 'data_exchange',
+          flow_action: 'navigate',
+          navigate_screen: 'AUTH',
         }],
       });
     } catch (err) {
@@ -1111,7 +1135,9 @@ app.post('/api/templates/presets/:key/submit', apiJson, async (req, res) => {
     }
   }
 
-  const tplName = String(preset.name).toLowerCase().replace(/[^a-z0-9_]/g, '_');
+  const tplName = includeFlow && preset.templateFlowName
+    ? String(preset.templateFlowName).toLowerCase().replace(/[^a-z0-9_]/g, '_')
+    : String(preset.name).toLowerCase().replace(/[^a-z0-9_]/g, '_');
   const tplCategory = String(preset.category || 'UTILITY').toUpperCase();
 
   try {
