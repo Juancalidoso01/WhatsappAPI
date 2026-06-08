@@ -227,38 +227,27 @@ app.post('/api/templates/sync-categories', async (req, res) => {
     const raw = (result && result.data) || [];
     const metaMap = await Store.getAllTemplateMeta();
     let synced = 0;
-    let refreshed = 0;
 
     for (const t of raw) {
       const key = `${t.name}|${t.language}`;
       const local = metaMap[key] || {};
+      if (local.requestedCategory) continue;
+
       const inferred = templateCategory.inferRequestedCategory(t, local);
+      if (!inferred) continue;
 
-      if (!local.requestedCategory && inferred) {
-        await Store.setTemplateRequestedCategory(t.name, t.language, inferred, {
-          syncedFrom: 'meta',
-          syncedAt: Date.now(),
-        });
-        metaMap[key] = { ...local, requestedCategory: inferred, syncedFrom: 'meta', syncedAt: Date.now() };
-        synced++;
-        continue;
-      }
-
-      if (local.requestedCategory && local.syncedFrom === 'meta' && inferred && inferred !== local.requestedCategory) {
-        await Store.setTemplateRequestedCategory(t.name, t.language, inferred, {
-          syncedFrom: 'meta',
-          syncedAt: Date.now(),
-        });
-        metaMap[key] = { ...local, requestedCategory: inferred, syncedFrom: 'meta', syncedAt: Date.now() };
-        refreshed++;
-      }
+      await Store.setTemplateRequestedCategory(t.name, t.language, inferred, {
+        syncedFrom: 'meta',
+        syncedAt: Date.now(),
+      });
+      metaMap[key] = { ...local, requestedCategory: inferred, syncedFrom: 'meta', syncedAt: Date.now() };
+      synced++;
     }
 
     const data = await enrichTemplatesList(raw, metaMap);
     res.json({
       ok: true,
       synced,
-      refreshed,
       total: raw.length,
       data,
       summary: templateCategory.summarizeTemplates(data),

@@ -122,33 +122,18 @@
 
     <!-- ============ SCREEN: TEMPLATES ============ -->
     <section class="screen hidden" id="screenTemplates">
-      <aside class="list-pane wide">
+      <main class="templates-pane">
         <header class="pane-header">
-          <h1>Plantillas</h1>
+          <div>
+            <h1>Plantillas</h1>
+            <p class="muted templates-intro">Todas tus plantillas de WhatsApp. Meta puede asignar una categoría distinta a la solicitada; el comentario indica si aplica.</p>
+          </div>
           <button id="newTemplateBtn" class="btn-primary sm">
             <svg viewBox="0 0 24 24" class="ic"><path d="M12 5v14M5 12h14"/></svg>
             Crear
           </button>
         </header>
-        <div class="tpl-toolbar">
-          <button id="tplSyncBtn" class="btn-ghost sm block" type="button">Actualizar categorías</button>
-          <select id="tplFilter">
-            <option value="all">Todas las plantillas</option>
-            <option value="pending">Reclasificación pendiente</option>
-            <option value="reclassified">Distinta a la solicitada</option>
-            <option value="impact">Con impacto en facturación</option>
-          </select>
-        </div>
-        <div id="tplSummary" class="tpl-summary hidden"></div>
-        <ul id="templateList" class="template-list"></ul>
-      </aside>
-      <main class="chat-pane">
-        <div id="templateEmpty" class="empty-state">
-          <img src="/logo.png" alt="" class="empty-logo" />
-          <h2>Plantillas de WhatsApp</h2>
-          <p>Crea y revisa el estado de aprobación de tus plantillas. Meta puede asignar una categoría distinta a la solicitada; eso afecta el costo por envío.</p>
-        </div>
-        <section id="templateDetail" class="template-detail hidden"></section>
+        <div id="templateList" class="templates-grid"></div>
       </main>
     </section>
 

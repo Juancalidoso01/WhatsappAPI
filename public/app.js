@@ -7,8 +7,6 @@ const state = {
   config: { brandName: "Punto Pago", templatesEnabled: false, hasCredentials: false },
   conversations: [],
   templates: [],
-  templateSummary: null,
-  templateFilter: "all",
   activePhone: null,
   messages: [],
   conversationDetail: null,
@@ -414,33 +412,8 @@ async function sendText(text) {
 async function loadTemplates() {
   const res = await api("/api/templates");
   state.templates = (res && res.data) || [];
-  state.templateSummary = (res && res.summary) || null;
   if (res && res.warning) toast(res.warning, "error");
-  if (res && res.synced > 0) toast(`${res.synced} plantilla(s) existente(s) actualizada(s) con categoría desde Meta.`, "ok");
   return state.templates;
-}
-
-async function syncTemplateCategories() {
-  const btn = $("tplSyncBtn");
-  if (btn) { btn.disabled = true; btn.textContent = "Actualizando…"; }
-  try {
-    const res = await api("/api/templates/sync-categories", { method: "POST" });
-    if (!res.ok) {
-      toast(res.error || "No se pudo actualizar.", "error");
-      return;
-    }
-    state.templates = res.data || [];
-    state.templateSummary = res.summary || null;
-    renderTemplateList();
-    const parts = [];
-    if (res.synced) parts.push(`${res.synced} nueva(s)`);
-    if (res.refreshed) parts.push(`${res.refreshed} actualizada(s)`);
-    toast(parts.length ? `Categorías sincronizadas: ${parts.join(", ")}.` : "Categorías ya estaban al día.", "ok");
-  } catch (_) {
-    toast("Error al sincronizar categorías.", "error");
-  } finally {
-    if (btn) { btn.disabled = false; btn.textContent = "Actualizar categorías"; }
-  }
 }
 
 function catTagHtml(cat, label) {
@@ -450,77 +423,60 @@ function catTagHtml(cat, label) {
   return `<span class="cat-tag ${escapeHtml(key)}">${escapeHtml(text)}</span>`;
 }
 
-function categoryBadgeHtml(info) {
-  if (!info) return catTagHtml(null);
-  let html = catTagHtml(info.billingCategory, info.billingLabel);
-  if (info.status === "pending_reclass") {
-    html += `<span class="cat-warn pending" title="${escapeHtml(info.hint || "")}">Reclasificación</span>`;
-  } else if (info.status === "reclassified") {
-    html += `<span class="cat-warn reclassified" title="${escapeHtml(info.hint || "")}">Distinta</span>`;
-  }
-  return html;
+function categoryComment(t) {
+  const info = t.categoryInfo;
+  if (!info) return "";
+  if (info.hint) return info.hint;
+  if (info.billingLabel) return `Se factura como ${info.billingLabel}.`;
+  return "";
 }
 
-function filteredTemplates() {
-  const f = state.templateFilter;
-  return state.templates.filter((t) => {
-    const info = t.categoryInfo;
-    if (f === "pending") return info && info.status === "pending_reclass";
-    if (f === "reclassified") return info && info.status === "reclassified";
-    if (f === "impact") return info && info.impactsBilling;
-    return true;
-  });
-}
-
-function renderTemplateSummary() {
-  const box = $("tplSummary");
-  const s = state.templateSummary;
-  if (!s || !s.withBillingImpact) {
-    box.classList.add("hidden");
-    box.innerHTML = "";
-    return;
-  }
-  box.classList.remove("hidden");
-  const parts = [];
-  if (s.pendingReclass) parts.push(`${s.pendingReclass} con reclasificación pendiente`);
-  if (s.reclassified) parts.push(`${s.reclassified} con categoría distinta a la solicitada`);
-  box.innerHTML = `<strong>Atención:</strong> ${parts.join(" · ")}. La facturación usa la categoría que Meta asigna, no la que solicitaste al crear.`;
+function renderTemplateCard(t, i) {
+  const header = (t.components || []).find((x) => x.type === "HEADER");
+  const footer = (t.components || []).find((x) => x.type === "FOOTER");
+  const st = (t.status || "").toLowerCase();
+  const cls = st === "approved" ? "approved" : st === "rejected" ? "rejected" : "pending";
+  const info = t.categoryInfo || {};
+  const comment = categoryComment(t);
+  const canSend = st === "approved";
+  return `<article class="tpl-card" data-i="${i}">
+    <div class="tpl-card-head">
+      <div>
+        <h2 class="tpl-card-name">${escapeHtml(t.name)}</h2>
+        <div class="tpl-card-meta">
+          <span class="status-badge ${cls}">${escapeHtml(t.status || "—")}</span>
+          <span class="muted">${escapeHtml(t.language || "")}</span>
+          ${catTagHtml(info.billingCategory, info.billingLabel)}
+        </div>
+      </div>
+      ${canSend ? `<button type="button" class="btn-primary sm tpl-send-btn" data-i="${i}">Enviar</button>` : ""}
+    </div>
+    ${comment ? `<p class="tpl-card-comment">${escapeHtml(comment)}</p>` : ""}
+    <div class="tpl-preview">
+      ${header && header.text ? `<div class="tpl-h">${escapeHtml(header.text)}</div>` : ""}
+      <div>${escapeHtml(bodyOf(t))}</div>
+      ${footer && footer.text ? `<div class="tpl-f">${escapeHtml(footer.text)}</div>` : ""}
+    </div>
+    ${!canSend ? `<p class="tpl-card-note muted">Solo las plantillas aprobadas se pueden enviar.</p>` : ""}
+  </article>`;
 }
 
 function renderTemplateList() {
   const list = $("templateList");
-  renderTemplateSummary();
   if (!state.config.templatesEnabled) {
-    list.innerHTML = `<li class="muted" style="padding:24px;text-align:center">Configura ACCESS_TOKEN y WABA_ID para gestionar plantillas.</li>`;
+    list.innerHTML = `<p class="muted center-msg">Configura ACCESS_TOKEN y WABA_ID para gestionar plantillas.</p>`;
     return;
   }
-  const visible = filteredTemplates();
   if (!state.templates.length) {
-    list.innerHTML = `<li class="muted" style="padding:24px;text-align:center">No hay plantillas. Pulsa “Crear”.</li>`;
+    list.innerHTML = `<p class="muted center-msg">No hay plantillas. Pulsa “Crear”.</p>`;
     return;
   }
-  if (!visible.length) {
-    list.innerHTML = `<li class="muted" style="padding:24px;text-align:center">Ninguna plantilla coincide con este filtro.</li>`;
-    return;
-  }
-  list.innerHTML = visible
-    .map((t) => {
-      const i = state.templates.indexOf(t);
-      const st = (t.status || "").toLowerCase();
-      const cls = st === "approved" ? "approved" : st === "rejected" ? "rejected" : "pending";
-      const info = t.categoryInfo || {};
-      return `<li class="tpl-item" data-i="${i}">
-        <div class="tpl-name">${escapeHtml(t.name)}</div>
-        <div class="tpl-sub">
-          <span class="status-badge ${cls}">${escapeHtml(t.status || "—")}</span>
-          <span>${escapeHtml(t.language || "")}</span>
-          ${categoryBadgeHtml(info)}
-        </div>
-      </li>`;
+  list.innerHTML = state.templates.map((t, i) => renderTemplateCard(t, i)).join("");
+  list.querySelectorAll(".tpl-send-btn").forEach((btn) =>
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      openNewChat(state.templates[btn.dataset.i].name);
     })
-    .join("");
-  list.querySelectorAll(".tpl-item").forEach((el) =>
-    el.addEventListener("click", () => showTemplate(state.templates[el.dataset.i]))
   );
 }
 
@@ -528,55 +484,6 @@ function bodyOf(t) {
   const c = (t.components || []).find((x) => x.type === "BODY");
   return c ? c.text : "";
 }
-function renderCategoryPanel(info, t) {
-  if (!info) return "";
-  const rows = [
-    `<div class="tpl-cat-row"><span class="tpl-cat-label">Facturación (Meta)</span>${catTagHtml(info.billingCategory, info.billingLabel)}</div>`,
-  ];
-  if (info.requested) {
-    const synced = t.localMeta && t.localMeta.syncedFrom === "meta";
-    const note = synced ? ' <span class="muted">(inferida desde Meta)</span>' : "";
-    rows.push(`<div class="tpl-cat-row"><span class="tpl-cat-label">Solicitada al crear${note}</span>${catTagHtml(info.requested, info.requestedLabel)}</div>`);
-  }
-  if (info.correct && info.correct !== info.current) {
-    rows.push(`<div class="tpl-cat-row"><span class="tpl-cat-label">WhatsApp sugiere</span>${catTagHtml(info.correct, info.correctLabel)}</div>`);
-  }
-  const alert = info.hint
-    ? `<div class="tpl-cat-alert ${escapeHtml(info.status)}">${escapeHtml(info.hint)}</div>`
-    : `<div class="tpl-cat-note muted">La categoría de facturación la define Meta al aprobar o reclasificar la plantilla.</div>`;
-  return `<div class="tpl-cat-panel">
-    <h3>Categoría y facturación</h3>
-    <div class="tpl-cat-status">${escapeHtml(info.statusLabel || "")}</div>
-    ${rows.join("")}
-    ${alert}
-  </div>`;
-}
-
-function showTemplate(t) {
-  $("templateEmpty").classList.add("hidden");
-  const d = $("templateDetail");
-  d.classList.remove("hidden");
-  const header = (t.components || []).find((x) => x.type === "HEADER");
-  const footer = (t.components || []).find((x) => x.type === "FOOTER");
-  const st = (t.status || "").toLowerCase();
-  const cls = st === "approved" ? "approved" : st === "rejected" ? "rejected" : "pending";
-  const canSend = (t.status || "").toLowerCase() === "approved";
-  d.innerHTML = `
-    <h2>${escapeHtml(t.name)}</h2>
-    <div class="tpl-detail-meta">
-      <span class="status-badge ${cls}">${escapeHtml(t.status || "—")}</span>
-      <span class="muted">${escapeHtml(t.language || "")}</span>
-    </div>
-    ${renderCategoryPanel(t.categoryInfo, t)}
-    <div class="tpl-preview">
-      ${header && header.text ? `<div class="tpl-h">${escapeHtml(header.text)}</div>` : ""}
-      <div>${escapeHtml(bodyOf(t))}</div>
-      ${footer && footer.text ? `<div class="tpl-f">${escapeHtml(footer.text)}</div>` : ""}
-    </div>
-    ${canSend ? `<button class="btn-primary block" id="tplSendBtn">Enviar a un número</button>` : `<div class="tpl-none" style="margin-top:16px">Solo las plantillas aprobadas se pueden enviar.</div>`}`;
-  if (canSend) $("tplSendBtn").addEventListener("click", () => openNewChat(t.name));
-}
-
 async function createTemplate() {
   const payload = {
     name: $("tpName").value.trim(),
@@ -996,11 +903,6 @@ function bindEvents() {
     renderTemplateFields(tplByName(e.target.value));
     updateNewChatCategoryHint();
   });
-  $("tplFilter").addEventListener("change", (e) => {
-    state.templateFilter = e.target.value;
-    renderTemplateList();
-  });
-  $("tplSyncBtn").addEventListener("click", syncTemplateCategories);
   $("ncSend").addEventListener("click", sendNewChat);
   $("attachBtn").addEventListener("click", () => showModal("modalMedia"));
   $("detailMediaBtn").addEventListener("click", () => showModal("modalMedia"));

@@ -134,12 +134,23 @@ module.exports = class GraphApi {
   }
 
   // --- WhatsApp message templates management (on the WABA) ---
-  static async listTemplates(wabaId, limit = 100) {
+  static async listTemplates(wabaId, pageSize = 100) {
     const api = getApi();
-    return api.call("GET", [`${wabaId}`, "message_templates"], {
-      limit,
-      fields: "name,status,category,correct_category,language,components,quality_score",
-    });
+    const fields = "name,status,category,correct_category,language,components,quality_score";
+    const all = [];
+    let after = null;
+
+    do {
+      const params = { limit: pageSize, fields };
+      if (after) params.after = after;
+      const page = await api.call("GET", [`${wabaId}`, "message_templates"], params);
+      all.push(...((page && page.data) || []));
+      const next = page && page.paging && page.paging.cursors && page.paging.cursors.after;
+      if (!next || next === after || !page.paging || !page.paging.next) break;
+      after = next;
+    } while (all.length < 500);
+
+    return { data: all };
   }
 
   static async createTemplate(wabaId, { name, category, language, components }) {
