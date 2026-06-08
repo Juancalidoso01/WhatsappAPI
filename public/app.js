@@ -101,7 +101,7 @@ function renderConversations() {
             <span class="conv-name">${escapeHtml(c.name)}</span>
             <span class="conv-time">${timeAgo(c.lastActivity)}</span>
           </div>
-          <div class="conv-last">${escapeHtml(prefix + (last.text || ""))}</div>
+          <div class="conv-last">${escapeHtml(prefix + previewText(last))}</div>
         </div>
       </li>`;
     })
@@ -137,6 +137,34 @@ async function loadMessages(phone) {
   } catch (_) {}
 }
 
+function previewText(m) {
+  if (!m) return "";
+  if (m.text) return m.text;
+  if (m.type === "image") return "[imagen]";
+  if (m.type === "audio") return "[nota de voz]";
+  if (m.type === "video") return "[video]";
+  if (m.type === "document") return "[documento]";
+  return "";
+}
+
+function mediaSrc(m) {
+  if (m.mediaId) return `/api/media/${encodeURIComponent(m.mediaId)}`;
+  if (m.media) return m.media;
+  return null;
+}
+
+function renderMedia(m) {
+  const src = mediaSrc(m);
+  if (!src) return "";
+  if (m.type === "image") {
+    return `<img src="${escapeHtml(src)}" alt="" loading="lazy" />`;
+  }
+  if (m.type === "audio") {
+    return `<audio controls preload="metadata" src="${escapeHtml(src)}"></audio>`;
+  }
+  return "";
+}
+
 function statusTick(m) {
   if (m.direction !== "out") return "";
   const map = {
@@ -154,11 +182,12 @@ function renderMessages() {
   box.innerHTML = state.messages
     .map((m) => {
       const tplClass = m.type === "template" ? " tpl" : "";
-      const media = m.media && m.type === "image" ? `<img src="${escapeHtml(m.media)}" alt="" />` : "";
+      const media = renderMedia(m);
+      const caption = m.text ? escapeHtml(m.text) : "";
       const time = new Date(m.timestamp).toLocaleTimeString("es", { hour: "2-digit", minute: "2-digit" });
       return `<div class="msg-row ${m.direction}">
         <div class="bubble${tplClass}">
-          ${media}${escapeHtml(m.text || "")}
+          ${media}${caption}
           <div class="bubble-meta">${time}${statusTick(m)}</div>
         </div>
       </div>`;

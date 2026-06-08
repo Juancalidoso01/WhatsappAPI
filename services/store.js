@@ -46,7 +46,7 @@ function memGetOrCreate(phone, name, phoneNumberId) {
 }
 
 // ---------- Helpers ----------
-function buildMessage({ direction, text, type = "text", status = null, id = null, media = null }) {
+function buildMessage({ direction, text, type = "text", status = null, id = null, media = null, mediaId = null }) {
   const message = {
     id: id || `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     direction,
@@ -56,6 +56,7 @@ function buildMessage({ direction, text, type = "text", status = null, id = null
     timestamp: Date.now(),
   };
   if (media) message.media = media;
+  if (mediaId) message.mediaId = mediaId;
   return message;
 }
 
@@ -70,8 +71,9 @@ async function addMessage({
   status = null,
   id = null,
   media = null,
+  mediaId = null,
 }) {
-  const message = buildMessage({ direction, text, type, status, id, media });
+  const message = buildMessage({ direction, text, type, status, id, media, mediaId });
 
   if (redis) {
     const convoKey = `${PREFIX}convo:${phone}`;

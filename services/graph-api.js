@@ -94,6 +94,17 @@ module.exports = class GraphApi {
     return this.#makeApiCall(undefined, senderPhoneNumberId, requestBody);
   }
 
+  // --- Download media metadata (image, audio, video, document) ---
+  static async getMediaInfo(mediaId) {
+    const url = `https://graph.facebook.com/v21.0/${mediaId}?access_token=${config.accessToken}`;
+    const res = await fetch(url);
+    const json = await res.json();
+    if (json.error) {
+      throw new Error(json.error.error_user_msg || json.error.message || "Error al obtener media");
+    }
+    return json;
+  }
+
   // --- Billing / pricing analytics (cost & volume by country + category) ---
   static async pricingAnalytics(wabaId, accessToken, { start, end, granularity = "DAILY" }) {
     const f = `pricing_analytics.start(${start}).end(${end}).granularity(${granularity}).dimensions(PRICING_CATEGORY,PRICING_TYPE,COUNTRY)`;

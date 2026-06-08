@@ -89,15 +89,8 @@ app.post('/webhook', webhookJson, (req, res) => {
           if (value.messages) {
             value.messages.forEach(rawMessage => {
               // Mirror the incoming message into the local web interface
-              Promise.resolve(Store.addMessage({
-                phone: rawMessage.from,
-                name: contactNames[rawMessage.from],
-                phoneNumberId: senderPhoneNumberId,
-                direction: 'in',
-                text: extractMessageText(rawMessage),
-                type: rawMessage.type,
-                id: rawMessage.id,
-              })).catch(err => console.error('addMessage error:', err));
+              Promise.resolve(mirrorIncomingMessage(rawMessage, contactNames, senderPhoneNumberId))
+                .catch(err => console.error('addMessage error:', err));
 
               // Auto-reply only when the bot is explicitly enabled. By default
               // every conversation is handled manually from the web interface.
@@ -274,6 +267,34 @@ app.post('/api/send-media', apiJson, async (req, res) => {
   }
 });
 
+// Proxy WhatsApp media (images, audio, etc.) for the web interface.
+// Meta URLs expire quickly and require the access token; we fetch on demand.
+app.get('/api/media/:mediaId', async (req, res) => {
+  const mediaId = String(req.params.mediaId || '').trim();
+  if (!mediaId) return res.status(400).json({ error: 'mediaId requerido.' });
+  if (!config.accessToken) return res.status(503).json({ error: 'ACCESS_TOKEN no configurado.' });
+
+  try {
+    const meta = await GraphApi.getMediaInfo(mediaId);
+    if (!meta.url) return res.status(404).json({ error: 'Media no encontrado.' });
+
+    const mediaRes = await fetch(meta.url, {
+      headers: { Authorization: `Bearer ${config.accessToken}` },
+    });
+    if (!mediaRes.ok) {
+      return res.status(502).json({ error: 'No se pudo descargar el archivo de WhatsApp.' });
+    }
+
+    const buffer = Buffer.from(await mediaRes.arrayBuffer());
+    res.setHeader('Content-Type', meta.mime_type || mediaRes.headers.get('content-type') || 'application/octet-stream');
+    res.setHeader('Cache-Control', 'private, max-age=3600');
+    res.send(buffer);
+  } catch (err) {
+    console.error('media proxy error:', err.message);
+    res.status(404).json({ error: String(err.message || err) });
+  }
+});
+
 // List all conversations
 app.get('/api/conversations', async (req, res) => {
   try {
@@ -410,6 +431,24 @@ function verifyRequestSignature(req, res, buf) {
   }
 }
 
+async function mirrorIncomingMessage(rawMessage, contactNames, senderPhoneNumberId) {
+  return Store.addMessage({
+    phone: rawMessage.from,
+    name: contactNames[rawMessage.from],
+    phoneNumberId: senderPhoneNumberId,
+    direction: 'in',
+    text: extractMessageText(rawMessage),
+    type: rawMessage.type,
+    id: rawMessage.id,
+    mediaId: extractMediaId(rawMessage),
+  });
+}
+
+function extractMediaId(rawMessage) {
+  const payload = rawMessage[rawMessage.type];
+  return payload && payload.id ? String(payload.id) : null;
+}
+
 // Build a human-readable text out of any incoming WhatsApp message type
 function extractMessageText(rawMessage) {
   switch (rawMessage.type) {
@@ -424,13 +463,15 @@ function extractMessageText(rawMessage) {
     case 'button':
       return rawMessage.button && rawMessage.button.text;
     case 'image':
-      return '[imagen]';
+      return (rawMessage.image && rawMessage.image.caption) || '';
     case 'audio':
-      return '[audio]';
+      return '';
     case 'video':
-      return '[video]';
+      return (rawMessage.video && rawMessage.video.caption) || '';
     case 'document':
-      return '[documento]';
+      return (rawMessage.document && rawMessage.document.caption)
+        || (rawMessage.document && rawMessage.document.filename)
+        || '';
     case 'location':
       return '[ubicación]';
     default:
