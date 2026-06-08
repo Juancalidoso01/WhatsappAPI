@@ -24,6 +24,9 @@
       <button class="rail-btn" data-screen="bulk" title="Cargas masivas" aria-label="Cargas masivas">
         <svg viewBox="0 0 24 24" fill-rule="evenodd"><path d="M4 6h16v2H4V6zm0 5h10v2H4v-2zm0 5h16v2H4v-2zm12-5h4v2h-4v-2z"/></svg>
       </button>
+      <button class="rail-btn" data-screen="integration" title="Integración API" aria-label="Integración API">
+        <svg viewBox="0 0 24 24" fill-rule="evenodd"><path d="M8 4h8a2 2 0 0 1 2 2v2H6V6a2 2 0 0 1 2-2zm-2 6h12v10a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V10zm4 2v6h2v-6h-2zm4 0v6h2v-6h-2z"/></svg>
+      </button>
       <button class="rail-btn" data-screen="billing" title="Facturación" aria-label="Facturación">
         <svg viewBox="0 0 24 24" fill-rule="evenodd"><path d="M4 4h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2zm0 4v2.2h16V8H4zm2 5.4v2h6v-2H6zm9 0v2h3v-2h-3z"/></svg>
       </button>
@@ -146,7 +149,7 @@
         <header class="pane-header">
           <div>
             <h1>Cargas masivas</h1>
-            <p class="muted bulk-intro">Envía plantillas aprobadas a muchos contactos vía CSV. Meta limita usuarios únicos por día según la integridad de tu línea.</p>
+            <p class="muted bulk-intro">Envía plantillas aprobadas vía CSV o integración API. Cada plantilla define <strong>eventos variables</strong> que puedes inyectar después con un endpoint separado. Meta limita usuarios únicos por día según la integridad de tu línea.</p>
           </div>
         </header>
 
@@ -161,6 +164,7 @@
             <label>Plantilla aprobada
               <select id="bulkTemplate"></select>
             </label>
+            <div id="bulkEventVars" class="bulk-event-vars hidden"></div>
             <label>Archivo CSV
               <input id="bulkCsv" type="file" accept=".csv,text/csv" />
             </label>
@@ -179,6 +183,8 @@
           </section>
         </div>
 
+        <p class="bulk-api-link muted">¿Integras desde tu CRM o ERP? Abre la guía completa en <button type="button" class="link-btn" id="bulkGoIntegration">Integración API</button> (eventos variables en dos fases).</p>
+
         <section id="bulkDetail" class="bulk-detail hidden">
           <header class="bulk-detail-head">
             <div>
@@ -192,11 +198,14 @@
               <button type="button" id="bulkCloseBtn" class="btn-ghost sm">Cerrar</button>
             </div>
           </header>
+          <div id="bulkProgress" class="bulk-progress hidden"></div>
+          <div id="bulkCost" class="bulk-cost hidden"></div>
           <div id="bulkStats" class="bulk-stats"></div>
+          <div id="bulkEventSchema" class="bulk-event-schema hidden"></div>
           <div class="billing-table-wrap">
             <table class="billing-table bulk-rows-table">
               <thead>
-                <tr><th>Teléfono</th><th>Nombre</th><th>Estado</th><th>Error</th><th>Enviado</th></tr>
+                <tr><th>Teléfono</th><th>ID ext.</th><th>Nombre</th><th>Estado</th><th>Error</th><th>Enviado</th></tr>
               </thead>
               <tbody id="bulkRowsBody"></tbody>
             </table>
@@ -204,6 +213,9 @@
         </section>
       </main>
     </section>
+
+    <!-- ============ SCREEN: INTEGRATION API ============ -->
+    <section class="screen hidden" id="screenIntegration"></section>
 
     <!-- ============ SCREEN: BILLING ============ -->
     <section class="screen hidden" id="screenBilling">
@@ -372,6 +384,7 @@
 
   <div id="toast" class="toast hidden"></div>
 
+  <script src="/integration-api.js"></script>
   <script src="/app.js"></script>
 </body>
 </html>

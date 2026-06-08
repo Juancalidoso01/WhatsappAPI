@@ -72,7 +72,7 @@ async function processBatch({ campaignId, templateDef, phoneNumberId }) {
 
   const refreshed = await CampaignStore.getCampaign(campaignId);
   const totals = refreshed.totals || {};
-  const remaining = (totals.pending || 0);
+  const remaining = (totals.pending || 0) + (totals.ready || 0);
 
   if (!stopped && remaining === 0) {
     await CampaignStore.setCampaignStatus(campaignId, "completed", { pauseReason: "" });

@@ -921,6 +921,8 @@ const BULK_STATUS_LABELS = {
   failed: "Fallida",
 };
 const ROW_STATUS_LABELS = {
+  awaiting_vars: "Sin variables",
+  ready: "Listo",
   pending: "Pendiente",
   sent: "Enviado",
   delivered: "Entregado",
@@ -961,6 +963,27 @@ function fillBulkTemplates() {
   sel.innerHTML = approved
     .map((t) => `<option value="${escapeHtml(t.name)}" data-lang="${escapeHtml(t.language)}">${escapeHtml(t.name)} · ${escapeHtml(t.language)}</option>`)
     .join("");
+  if (!sel.dataset.bound) {
+    sel.dataset.bound = "1";
+    sel.addEventListener("change", loadBulkTemplateVars);
+  }
+  loadBulkTemplateVars();
+}
+
+async function loadBulkTemplateVars() {
+  const box = $("bulkEventVars");
+  const tpl = selectedBulkTemplate();
+  if (!tpl.name) { box.classList.add("hidden"); return; }
+  const res = await api(`/api/templates/${encodeURIComponent(tpl.name)}/variables?language=${encodeURIComponent(tpl.language)}`);
+  if (!res.ok || !res.eventVariables || !res.eventVariables.length) {
+    box.innerHTML = `<span class="muted">Esta plantilla no requiere eventos variables.</span>`;
+    box.classList.remove("hidden");
+    return;
+  }
+  box.innerHTML = `<strong>Eventos variables de la plantilla</strong><ul>${res.eventVariables
+    .map((ev) => `<li><code>${escapeHtml(ev.key)}</code> — ${escapeHtml(ev.label)} (${escapeHtml(ev.placeholder)})</li>`)
+    .join("")}</ul><p class="muted" style="margin:8px 0 0">En CSV: columnas extra. Por API: ver guía en <strong>Integración API</strong>.</p>`;
+  box.classList.remove("hidden");
 }
 
 async function loadCampaigns() {
@@ -980,11 +1003,13 @@ function renderCampaignList() {
     .map((c) => {
       const t = c.totals || {};
       const active = c.id === state.activeCampaignId ? " active" : "";
+      const pct = c.progress ? c.progress.percent : 0;
+      const src = c.source === "api" ? "API" : "CSV";
       return `<div class="bulk-camp-item${active}" data-id="${escapeHtml(c.id)}">
         <strong>${escapeHtml(c.name)}</strong>
         <div class="muted" style="font-size:11px;margin-top:4px">
-          ${escapeHtml(c.template)} · ${escapeHtml(BULK_STATUS_LABELS[c.status] || c.status)}
-          · ${t.delivered || 0} entregados / ${t.total || 0}
+          ${escapeHtml(c.template)} · ${src} · ${escapeHtml(BULK_STATUS_LABELS[c.status] || c.status)}
+          · ${pct}% · ${t.delivered || 0}/${t.total || 0} entregados
         </div>
       </div>`;
     })
@@ -1025,7 +1050,8 @@ async function previewBulkCsv() {
     box.textContent = res.error || (res.errors && res.errors.join(" ")) || "No se pudo validar.";
     return;
   }
-  let msg = `${res.rowCount} contacto(s) válidos. Variables: ${(res.varColumns || []).join(", ") || "ninguna"}.`;
+  const evKeys = (res.eventVariables || []).map((e) => e.key).join(", ");
+  let msg = `${res.rowCount} contacto(s) válidos. Eventos: ${evKeys || (res.varColumns || []).join(", ") || "ninguno"}.`;
   if (res.overDailyLimit && res.line) {
     msg += ` Atención: supera el límite diario de Meta (${res.line.dailyUniqueLimitLabel} únicos/24h).`;
   }
@@ -1090,10 +1116,32 @@ async function refreshCampaignDetail() {
   const rowsRes = await api(`/api/campaigns/${encodeURIComponent(id)}/rows?offset=0&limit=200`);
   const c = metaRes.campaign;
   const t = c.totals || {};
+  const prog = c.progress || {};
+  const cost = c.costEstimate || {};
   $("bulkDetailTitle").textContent = c.name;
-  $("bulkDetailMeta").textContent = `${c.template} · ${c.language} · ${BULK_STATUS_LABELS[c.status] || c.status}${c.pauseReason ? " · " + c.pauseReason : ""}`;
+  const srcLabel = c.source === "api" ? "Integración API" : "CSV";
+  $("bulkDetailMeta").textContent = `${c.template} · ${c.language} · ${srcLabel} · ${BULK_STATUS_LABELS[c.status] || c.status}${c.pauseReason ? " · " + c.pauseReason : ""}`;
+
+  const progBox = $("bulkProgress");
+  progBox.classList.remove("hidden");
+  progBox.innerHTML = `
+    <div style="display:flex;justify-content:space-between;font-size:12px;gap:12px;flex-wrap:wrap">
+      <span><strong>Envío:</strong> ${prog.done || 0} / ${prog.total || 0} (${prog.percent || 0}%)</span>
+      <span><strong>Variables:</strong> ${prog.varsReady || 0} / ${prog.total || 0} (${prog.varsPercent || 0}%)</span>
+    </div>
+    <div class="bulk-progress-bar"><div class="bulk-progress-fill" style="width:${prog.percent || 0}%"></div></div>
+    <div class="bulk-progress-bar" style="margin-top:6px"><div class="bulk-progress-fill vars" style="width:${prog.varsPercent || 0}%"></div></div>`;
+
+  const costBox = $("bulkCost");
+  if (cost.estimatedTotalUsd != null) {
+    costBox.classList.remove("hidden");
+    costBox.innerHTML = `<strong>Costo estimado:</strong> ~$${cost.estimatedTotalUsd} USD (${cost.billableEstimate || 0} msgs × $${cost.ratePerMessageUsd} · ${escapeHtml(cost.category || "UTILITY")}). ${escapeHtml(cost.note || "")}`;
+  } else costBox.classList.add("hidden");
+
   $("bulkStats").innerHTML = [
     ["total", "Total"],
+    ["awaiting_vars", "Sin vars"],
+    ["ready", "Listos"],
     ["pending", "Pendientes"],
     ["sent", "Enviados"],
     ["delivered", "Entregados"],
@@ -1101,9 +1149,18 @@ async function refreshCampaignDetail() {
     ["failed", "Errores"],
   ].map(([k, label]) => `<div class="bulk-stat"><span class="n">${t[k] || 0}</span><span class="l">${label}</span></div>`).join("");
 
+  const schemaBox = $("bulkEventSchema");
+  if (c.eventVariables && c.eventVariables.length) {
+    schemaBox.classList.remove("hidden");
+    schemaBox.innerHTML = `<strong>Esquema de eventos variables</strong>: ${c.eventVariables
+      .map((ev) => `<code>${escapeHtml(ev.key)}</code>`)
+      .join(", ")}`;
+  } else schemaBox.classList.add("hidden");
+
   const rows = (rowsRes && rowsRes.rows) || [];
   $("bulkRowsBody").innerHTML = rows.map((r) => `<tr>
     <td>+${escapeHtml(r.phone)}</td>
+    <td class="muted">${escapeHtml(r.externalId || "—")}</td>
     <td>${escapeHtml(r.name || "—")}</td>
     <td><span class="st-${escapeHtml(r.status)}">${escapeHtml(ROW_STATUS_LABELS[r.status] || r.status)}</span></td>
     <td class="muted">${escapeHtml(r.error || "")}</td>
@@ -1149,6 +1206,13 @@ async function initBulkScreen() {
   fillBulkTemplates();
 }
 
+async function initIntegrationScreen() {
+  await loadTemplates();
+  if (window.IntegrationApiModule) {
+    window.IntegrationApiModule.setTemplates(state.templates);
+  }
+}
+
 /* ---------- modals & nav ---------- */
 function showModal(id) { $(id).classList.remove("hidden"); }
 function closeModals() { document.querySelectorAll(".modal").forEach((m) => m.classList.add("hidden")); }
@@ -1158,9 +1222,11 @@ function switchScreen(name) {
   $("screenChats").classList.toggle("hidden", name !== "chats");
   $("screenTemplates").classList.toggle("hidden", name !== "templates");
   $("screenBulk").classList.toggle("hidden", name !== "bulk");
+  $("screenIntegration").classList.toggle("hidden", name !== "integration");
   $("screenBilling").classList.toggle("hidden", name !== "billing");
   if (name === "templates") { loadTemplates().then(renderTemplateList); }
   if (name === "bulk") { initBulkScreen(); }
+  if (name === "integration") { initIntegrationScreen(); }
   if (name === "billing") { loadBilling(); renderPrices(); }
   if (name !== "bulk") stopBulkPolling();
 }
@@ -1207,6 +1273,8 @@ function bindEvents() {
   $("bulkStartBtn").addEventListener("click", startBulkCampaign);
   $("bulkPauseBtn").addEventListener("click", pauseBulkCampaign);
   $("bulkCloseBtn").addEventListener("click", closeCampaignDetail);
+  const bulkGoInt = $("bulkGoIntegration");
+  if (bulkGoInt) bulkGoInt.addEventListener("click", () => switchScreen("integration"));
   $("newTemplateBtn").addEventListener("click", () => showModal("modalTemplate"));
   $("tpCreate").addEventListener("click", createTemplate);
   $("detailTemplateBtn").addEventListener("click", () => openNewChat());

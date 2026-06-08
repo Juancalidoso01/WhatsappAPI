@@ -29,6 +29,9 @@ module.exports = Object.freeze({
   phoneNumberId: process.env.PHONE_NUMBER_ID,
   wabaId: process.env.WABA_ID,
 
+  // Optional key for external systems (header X-API-Key)
+  integrationApiKey: process.env.INTEGRATION_API_KEY || null,
+
   // Branding shown in the web interface
   brandName: process.env.BRAND_NAME || "Punto Pago",
 

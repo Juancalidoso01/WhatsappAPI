@@ -294,6 +294,36 @@ input, textarea, select { font-family: inherit; }
 .bulk-stat .bs-l { font-size: 10px; color: var(--muted); text-transform: uppercase; }
 .bulk-rows-table { font-size: 12px; }
 .bulk-rows-table td { max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bulk-event-vars { margin: 0 0 12px; padding: 10px 12px; border-radius: 10px; background: var(--surface-2); font-size: 12px; }
+.bulk-event-vars ul { margin: 6px 0 0; padding-left: 18px; }
+.bulk-progress { margin: 12px 0 0; }
+.bulk-progress-bar { height: 8px; border-radius: 99px; background: var(--surface-2); overflow: hidden; margin-top: 6px; }
+.bulk-progress-fill { height: 100%; background: var(--brand); border-radius: 99px; transition: width .3s; }
+.bulk-progress-fill.vars { background: #6b5ce7; }
+.bulk-cost { margin: 10px 0; padding: 10px 12px; border-radius: 10px; background: #f0f7ff; font-size: 12px; color: #1a4d8f; }
+.bulk-event-schema { margin: 0 0 12px; font-size: 12px; }
+.bulk-api-docs { margin-top: 16px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 16px; }
+.bulk-api-docs summary { cursor: pointer; font-weight: 600; font-size: 13px; }
+.bulk-api-body { margin-top: 10px; font-size: 12px; line-height: 1.5; }
+.bulk-api-link { margin-top: 14px; font-size: 12px; }
+.link-btn { background: none; border: none; padding: 0; color: var(--brand-600); font-weight: 600; cursor: pointer; text-decoration: underline; font-size: inherit; }
+.integration-pane, #screenIntegration { flex: 1; min-width: 0; display: flex; flex-direction: column; padding: 20px 28px; overflow-y: auto; background: var(--bg); }
+#screenIntegration { max-width: 900px; }
+.integration-intro { margin: 4px 0 0; font-size: 12px; max-width: 640px; }
+.integration-toolbar { display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; margin: 16px 0; }
+.integration-toolbar label { font-size: 12px; font-weight: 600; color: var(--muted); }
+.integration-toolbar select { margin-top: 6px; min-width: 260px; }
+.integration-sections { display: flex; flex-direction: column; gap: 20px; }
+.integration-section { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px 18px; }
+.integration-section h2 { font-size: 15px; margin: 0 0 12px; }
+.integration-section p { font-size: 13px; line-height: 1.55; margin: 0 0 10px; }
+.api-code { margin: 8px 0; padding: 12px; border-radius: 10px; background: var(--surface-2); font-size: 11px; overflow-x: auto; white-space: pre-wrap; line-height: 1.45; }
+.api-ref-table { width: 100%; font-size: 12px; border-collapse: collapse; margin: 10px 0; }
+.api-ref-table th, .api-ref-table td { border: 1px solid var(--border); padding: 8px 10px; text-align: left; }
+.api-ref-table th { background: var(--surface-2); font-weight: 600; }
+.api-live-box { margin-top: 10px; padding: 12px; border-radius: 10px; background: var(--surface-2); font-size: 12px; }
+.api-live-box ul { margin: 8px 0 0; padding-left: 18px; }
+.api-live-box.error { background: #fdecea; color: var(--red); }
 .status-pill { font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 20px; text-transform: uppercase; }
 .status-pill.sent, .status-pill.delivered, .status-pill.read { background: #e3f8ee; color: var(--green); }
 .status-pill.pending { background: var(--surface-2); color: var(--muted); }
@@ -377,7 +407,7 @@ input, textarea, select { font-family: inherit; }
 .bulk-detail { margin-top: 18px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; }
 .bulk-detail-head { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; align-items: flex-start; }
 .bulk-detail-actions { display: flex; gap: 8px; flex-wrap: wrap; }
-.bulk-stats { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; margin: 12px 0; }
+.bulk-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 12px 0; }
 .bulk-stat { background: var(--surface-2); border-radius: 10px; padding: 8px 10px; text-align: center; }
 .bulk-stat .n { display: block; font-size: 18px; font-weight: 700; }
 .bulk-stat .l { font-size: 10px; color: var(--muted); text-transform: uppercase; }

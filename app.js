@@ -26,7 +26,9 @@ const CampaignStore = require('./services/campaign-store');
 const CampaignRunner = require('./services/campaign-runner');
 const { parseCsv } = require('./services/csv-parse');
 const { parseLineHealth } = require('./services/line-health');
-const { validateRowsForTemplate } = require('./services/template-params');
+const { validateRowsForTemplate, extractEventVariables } = require('./services/template-params');
+const campaignMetrics = require('./services/campaign-metrics');
+const { requireIntegrationKey } = require('./services/api-auth');
 const app = express();
 
 const upload = multer({
@@ -55,6 +57,12 @@ app.use(
 
 // Serve the lightweight chat web interface
 app.use(express.static(path.join(__dirname, 'public')));
+
+// Integration API documentation (markdown)
+app.get('/docs/INTEGRACION_API.md', (req, res) => {
+  res.type('text/markdown; charset=utf-8');
+  res.sendFile(path.join(__dirname, 'docs', 'INTEGRACION_API.md'));
+});
 
 // JSON parser that validates the Facebook signature. Scoped to the webhook
 // route only, so requests coming from our own web interface aren't rejected.
@@ -630,6 +638,51 @@ async function findTemplateDefinition(name, language) {
     || list.find((t) => t.name === name);
 }
 
+function enrichCampaign(campaign) {
+  if (!campaign) return null;
+  return {
+    ...campaign,
+    progress: campaignMetrics.progressFromTotals(campaign.totals),
+    costEstimate: campaignMetrics.estimateCost(campaign),
+  };
+}
+
+function resolveEventVariables(tpl, body) {
+  const customKeys = [];
+  if (Array.isArray(body.eventVariables)) {
+    body.eventVariables.forEach((ev) => {
+      if (typeof ev === 'string') customKeys.push(ev);
+      else if (ev && ev.key) customKeys.push(ev.key);
+    });
+  } else if (Array.isArray(body.variableKeys)) {
+    body.variableKeys.forEach((k) => customKeys.push(k));
+  }
+  const slots = extractEventVariables(tpl, customKeys.length ? customKeys : null);
+  if (Array.isArray(body.eventVariables) && body.eventVariables.length) {
+    return body.eventVariables.map((ev, i) => {
+      if (typeof ev === 'string') return { ...slots[i], key: ev, label: ev };
+      return { ...slots[i], ...ev, key: ev.key || slots[i].key, label: ev.label || ev.key || slots[i].label };
+    });
+  }
+  return slots;
+}
+
+async function startCampaignSend(campaign) {
+  const tpl = await findTemplateDefinition(campaign.template, campaign.language);
+  if (!tpl || (tpl.status || '').toLowerCase() !== 'approved') {
+    return { ok: false, error: 'Plantilla no disponible o no aprobada.' };
+  }
+  const promoted = await CampaignStore.promoteReadyToPending(campaign.id);
+  await CampaignStore.setCampaignStatus(campaign.id, 'running', { pauseReason: '' });
+  const result = await CampaignRunner.processBatch({
+    campaignId: campaign.id,
+    templateDef: tpl,
+    phoneNumberId: config.phoneNumberId,
+  });
+  const updated = enrichCampaign(await CampaignStore.getCampaign(campaign.id));
+  return { ok: true, campaign: updated, batch: result, promoted };
+}
+
 // Phone line integrity + daily messaging limit (Meta)
 app.get('/api/line-health', async (req, res) => {
   if (!config.accessToken || !config.phoneNumberId) {
@@ -667,7 +720,8 @@ app.post('/api/campaigns/preview', parseCampaignBody, async (req, res) => {
     return res.json({ ok: false, error: 'La plantilla debe estar aprobada por Meta.' });
   }
 
-  const check = validateRowsForTemplate(tpl, parsed.rows);
+  const eventVariables = resolveEventVariables(tpl, {});
+  const check = validateRowsForTemplate(tpl, parsed.rows, eventVariables);
   if (!check.ok) return res.json({ ok: false, error: check.error, errors: parsed.errors });
 
   let line = null;
@@ -680,6 +734,7 @@ app.post('/api/campaigns/preview', parseCampaignBody, async (req, res) => {
     ok: true,
     rowCount: parsed.rows.length,
     varColumns: parsed.varColumns,
+    eventVariables,
     errors: parsed.errors,
     requiredVars: check.requiredVars,
     preview: parsed.rows.slice(0, 5),
@@ -706,18 +761,21 @@ app.post('/api/campaigns', parseCampaignBody, async (req, res) => {
     return res.json({ ok: false, error: 'La plantilla debe estar aprobada.' });
   }
 
-  const check = validateRowsForTemplate(tpl, parsed.rows);
+  const eventVariables = resolveEventVariables(tpl, {});
+  const check = validateRowsForTemplate(tpl, parsed.rows, eventVariables);
   if (!check.ok) return res.json({ ok: false, error: check.error });
 
   try {
-    const campaign = await CampaignStore.createCampaign({
+    const campaign = enrichCampaign(await CampaignStore.createCampaign({
       name: name || `Carga ${template}`,
       template,
       language: tpl.language || language || 'es',
       templateCategory: tpl.category || null,
       rows: parsed.rows,
       varColumns: parsed.varColumns,
-    });
+      source: 'csv',
+      eventVariables,
+    }));
     res.json({ ok: true, campaign, parseErrors: parsed.errors });
   } catch (err) {
     console.error('create campaign error:', err.message);
@@ -727,7 +785,8 @@ app.post('/api/campaigns', parseCampaignBody, async (req, res) => {
 
 app.get('/api/campaigns', async (req, res) => {
   try {
-    res.json({ ok: true, data: await CampaignStore.listCampaigns() });
+    const data = (await CampaignStore.listCampaigns()).map(enrichCampaign);
+    res.json({ ok: true, data });
   } catch (err) {
     res.status(500).json({ ok: false, error: String(err.message || err), data: [] });
   }
@@ -735,7 +794,7 @@ app.get('/api/campaigns', async (req, res) => {
 
 app.get('/api/campaigns/:id', async (req, res) => {
   try {
-    const campaign = await CampaignStore.getCampaign(req.params.id);
+    const campaign = enrichCampaign(await CampaignStore.getCampaign(req.params.id));
     if (!campaign) return res.status(404).json({ ok: false, error: 'Campaña no encontrada.' });
     res.json({ ok: true, campaign });
   } catch (err) {
@@ -760,27 +819,23 @@ app.post('/api/campaigns/:id/start', async (req, res) => {
   if (!config.phoneNumberId || !config.accessToken) {
     return res.status(400).json({ ok: false, error: 'Falta PHONE_NUMBER_ID o ACCESS_TOKEN.' });
   }
-
-  const tpl = await findTemplateDefinition(campaign.template, campaign.language);
-  if (!tpl || (tpl.status || '').toLowerCase() !== 'approved') {
-    return res.json({ ok: false, error: 'Plantilla no disponible o no aprobada.' });
+  const t = campaign.totals || {};
+  if ((t.awaiting_vars || 0) > 0) {
+    return res.json({
+      ok: false,
+      error: `Hay ${t.awaiting_vars} destinatario(s) sin eventos variables. Complétalos vía API antes de iniciar.`,
+    });
   }
-
-  await CampaignStore.setCampaignStatus(campaign.id, 'running', { pauseReason: '' });
-  const result = await CampaignRunner.processBatch({
-    campaignId: campaign.id,
-    templateDef: tpl,
-    phoneNumberId: config.phoneNumberId,
-  });
-  const updated = await CampaignStore.getCampaign(campaign.id);
-  res.json({ ok: true, campaign: updated, batch: result });
+  const result = await startCampaignSend(campaign);
+  if (!result.ok) return res.json(result);
+  res.json(result);
 });
 
 app.post('/api/campaigns/:id/pause', async (req, res) => {
   const campaign = await CampaignStore.getCampaign(req.params.id);
   if (!campaign) return res.status(404).json({ ok: false, error: 'Campaña no encontrada.' });
   await CampaignStore.setCampaignStatus(campaign.id, 'paused', { pauseReason: 'Pausada manualmente.' });
-  res.json({ ok: true, campaign: await CampaignStore.getCampaign(campaign.id) });
+  res.json({ ok: true, campaign: enrichCampaign(await CampaignStore.getCampaign(campaign.id)) });
 });
 
 app.post('/api/campaigns/:id/tick', async (req, res) => {
@@ -798,7 +853,135 @@ app.post('/api/campaigns/:id/tick', async (req, res) => {
     templateDef: tpl,
     phoneNumberId: config.phoneNumberId,
   });
-  res.json({ ok: true, campaign: await CampaignStore.getCampaign(campaign.id), batch: result });
+  res.json({
+    ok: true,
+    campaign: enrichCampaign(await CampaignStore.getCampaign(campaign.id)),
+    batch: result,
+  });
+});
+
+// Variable event schema for a template (UI + integrations)
+app.get('/api/templates/:name/variables', async (req, res) => {
+  const tpl = await findTemplateDefinition(req.params.name, req.query.language);
+  if (!tpl) return res.status(404).json({ ok: false, error: 'Plantilla no encontrada.' });
+  const eventVariables = resolveEventVariables(tpl, req.query);
+  res.json({
+    ok: true,
+    template: tpl.name,
+    language: tpl.language,
+    category: tpl.category,
+    eventVariables,
+    requiredCount: eventVariables.filter((e) => e.required !== false).length,
+  });
+});
+
+// --- Integration API (external systems) ---
+app.get('/api/integrations/templates/:name/variables', requireIntegrationKey, async (req, res) => {
+  const tpl = await findTemplateDefinition(req.params.name, req.query.language);
+  if (!tpl) return res.status(404).json({ ok: false, error: 'Plantilla no encontrada.' });
+  res.json({
+    ok: true,
+    template: tpl.name,
+    language: tpl.language,
+    category: tpl.category,
+    eventVariables: resolveEventVariables(tpl, {}),
+  });
+});
+
+app.post('/api/integrations/campaigns', requireIntegrationKey, apiJson, async (req, res) => {
+  const { name, template, language, recipients, eventVariables, variableKeys } = req.body || {};
+  if (!template) return res.status(400).json({ ok: false, error: 'Se requiere "template".' });
+  if (!Array.isArray(recipients) || !recipients.length) {
+    return res.status(400).json({ ok: false, error: 'Se requiere "recipients" (array con phone, name, externalId).' });
+  }
+
+  const tpl = await findTemplateDefinition(template, language);
+  if (!tpl) return res.json({ ok: false, error: 'Plantilla no encontrada.' });
+  if ((tpl.status || '').toLowerCase() !== 'approved') {
+    return res.json({ ok: false, error: 'La plantilla debe estar aprobada.' });
+  }
+
+  const evs = resolveEventVariables(tpl, { eventVariables, variableKeys });
+  const rows = recipients.map((r) => ({
+    phone: r.phone,
+    name: r.name || '',
+    externalId: r.externalId || null,
+    vars: [],
+  }));
+
+  try {
+    const campaign = enrichCampaign(await CampaignStore.createCampaign({
+      name: name || `API ${template}`,
+      template,
+      language: tpl.language || language || 'es',
+      templateCategory: tpl.category || null,
+      rows,
+      varColumns: evs.map((e) => e.key),
+      source: 'api',
+      eventVariables: evs,
+    }));
+    res.status(201).json({
+      ok: true,
+      campaign,
+      nextStep: `POST /api/integrations/campaigns/${campaign.id}/events con las variables por destinatario.`,
+    });
+  } catch (err) {
+    console.error('integration create campaign:', err.message);
+    res.status(500).json({ ok: false, error: String(err.message || err) });
+  }
+});
+
+app.post('/api/integrations/campaigns/:id/recipients', requireIntegrationKey, apiJson, async (req, res) => {
+  const recipients = req.body && req.body.recipients;
+  if (!Array.isArray(recipients) || !recipients.length) {
+    return res.status(400).json({ ok: false, error: 'Se requiere "recipients".' });
+  }
+  const result = await CampaignStore.addRecipients(req.params.id, recipients);
+  if (!result.ok) return res.status(404).json(result);
+  res.json({
+    ok: true,
+    added: result.added,
+    campaign: enrichCampaign(await CampaignStore.getCampaign(req.params.id)),
+  });
+});
+
+app.post('/api/integrations/campaigns/:id/events', requireIntegrationKey, apiJson, async (req, res) => {
+  const events = req.body && (req.body.events || req.body.variables);
+  if (!Array.isArray(events) || !events.length) {
+    return res.status(400).json({ ok: false, error: 'Se requiere "events": [{ phone|externalId, variables: { key: value } }].' });
+  }
+  const result = await CampaignStore.applyVariableEvents(req.params.id, events);
+  if (!result.ok) return res.status(404).json(result);
+  res.json({
+    ok: true,
+    results: result.results,
+    campaign: enrichCampaign(await CampaignStore.getCampaign(req.params.id)),
+  });
+});
+
+app.get('/api/integrations/campaigns/:id', requireIntegrationKey, async (req, res) => {
+  const campaign = enrichCampaign(await CampaignStore.getCampaign(req.params.id));
+  if (!campaign) return res.status(404).json({ ok: false, error: 'Campaña no encontrada.' });
+  res.json({ ok: true, campaign });
+});
+
+app.post('/api/integrations/campaigns/:id/start', requireIntegrationKey, async (req, res) => {
+  const campaign = await CampaignStore.getCampaign(req.params.id);
+  if (!campaign) return res.status(404).json({ ok: false, error: 'Campaña no encontrada.' });
+  if (!config.phoneNumberId || !config.accessToken) {
+    return res.status(400).json({ ok: false, error: 'Falta PHONE_NUMBER_ID o ACCESS_TOKEN.' });
+  }
+  const t = campaign.totals || {};
+  if ((t.awaiting_vars || 0) > 0) {
+    return res.json({
+      ok: false,
+      error: `${t.awaiting_vars} destinatario(s) aún sin variables completas.`,
+      awaitingVars: t.awaiting_vars,
+    });
+  }
+  const result = await startCampaignSend(campaign);
+  if (!result.ok) return res.json(result);
+  res.json(result);
 });
 
 app.get('/api/campaigns/:id/export', async (req, res) => {
