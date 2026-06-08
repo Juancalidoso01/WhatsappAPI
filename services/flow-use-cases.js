@@ -33,7 +33,7 @@ const USE_CASES = [
     id: "pagos",
     label: "Pagos y cobranza",
     icon: "payment",
-    description: "Consultar saldo, elegir método de pago, confirmar comprobantes, autorizar pagos en comercio y programar recordatorios.",
+    description: "Consultar saldo, elegir método de pago, confirmar comprobantes, verificación 3DS para aprobar pagos y programar recordatorios.",
     samples: ["payment_auth"],
     status: "available",
     featured: true,

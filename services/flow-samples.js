@@ -182,17 +182,23 @@ const PAYMENT_AUTH_FLOW = {
   screens: [
     {
       id: "AUTH",
-      title: "Autorizar pago",
+      title: "Verificación de pago",
       data: {
         merchant: { type: "string", __example__: "Supermercado XO" },
-        amount: { type: "string", __example__: "$45.90" },
-        card_label: { type: "string", __example__: "Tarjeta •••• 4821" },
+        amount: { type: "string", __example__: "USD 45.90" },
+        card_label: { type: "string", __example__: "Tarjeta Punto Pago •••• 4821" },
         card_image: { type: "string", __example__: "https://example.com/card.png" },
         when: { type: "string", __example__: "8 jun 2026, 14:32" },
       },
       layout: {
         type: "SingleColumnLayout",
         children: [
+          { type: "TextSubheading", text: "Punto Pago" },
+          { type: "TextHeading", text: "Confirma tu transacción" },
+          {
+            type: "TextBody",
+            text: "Por tu seguridad, valida este pago antes de procesarlo. Es el mismo paso de verificación que conoces como 3D Secure.",
+          },
           {
             type: "Image",
             src: "${data.card_image}",
@@ -201,11 +207,14 @@ const PAYMENT_AUTH_FLOW = {
             width: 280,
             height: 175,
           },
-          { type: "TextHeading", text: "¿Autorizas este pago?" },
           { type: "TextBody", text: "Comercio: ${data.merchant}" },
           { type: "TextBody", text: "Monto: ${data.amount}" },
           { type: "TextBody", text: "${data.card_label}" },
-          { type: "TextBody", text: "${data.when}" },
+          { type: "TextBody", text: "Fecha: ${data.when}" },
+          {
+            type: "TextCaption",
+            text: "Si no reconoces esta compra, elige Rechazar y contáctanos de inmediato.",
+          },
           {
             type: "Form",
             name: "form",
@@ -213,11 +222,11 @@ const PAYMENT_AUTH_FLOW = {
               {
                 type: "RadioButtonsGroup",
                 name: "decision",
-                label: "Tu respuesta",
+                label: "¿Apruebas este pago?",
                 required: true,
                 "data-source": [
-                  { id: "authorize", title: "Autorizar pago" },
-                  { id: "deny", title: "Rechazar" },
+                  { id: "authorize", title: "Aprobar transacción" },
+                  { id: "deny", title: "Rechazar transacción" },
                 ],
               },
             ],
@@ -236,17 +245,20 @@ const PAYMENT_AUTH_FLOW = {
       terminal: true,
       success: true,
       data: {
-        result_title: { type: "string", __example__: "Pago autorizado" },
-        result_body: { type: "string", __example__: "El comercio recibirá la confirmación." },
+        result_title: { type: "string", __example__: "Pago aprobado" },
+        result_body: { type: "string", __example__: "El comercio procesará tu pago en breve." },
         decision: { type: "string", __example__: "authorize" },
         merchant: { type: "string", __example__: "Supermercado XO" },
-        amount: { type: "string", __example__: "$45.90" },
+        amount: { type: "string", __example__: "USD 45.90" },
       },
       layout: {
         type: "SingleColumnLayout",
         children: [
+          { type: "TextSubheading", text: "Punto Pago" },
           { type: "TextHeading", text: "${data.result_title}" },
           { type: "TextBody", text: "${data.result_body}" },
+          { type: "TextBody", text: "Comercio: ${data.merchant}" },
+          { type: "TextBody", text: "Monto: ${data.amount}" },
           {
             type: "Footer",
             label: "Cerrar",
@@ -296,12 +308,12 @@ const SAMPLES = {
     flow_json: QUOTE_FLOW,
   },
   payment_auth: {
-    name: "punto_pago_autorizacion_pago",
+    name: "punto_pago_3ds_verificacion",
     categories: ["OTHER"],
     publish: false,
-    description: "Autorización de pago dinámica: comercio, monto, imagen de tarjeta, autorizar/rechazar.",
+    description: "Verificación 3DS Punto Pago: confirma o rechaza un pago con tarjeta antes de procesarlo.",
     defaultScreen: "AUTH",
-    defaultCta: "Revisar pago",
+    defaultCta: "Confirmar pago",
     flowAction: "data_exchange",
     dynamic: true,
     flow_json: PAYMENT_AUTH_FLOW,

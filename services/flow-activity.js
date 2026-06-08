@@ -4,7 +4,7 @@ const FlowStore = require("./flow-store");
 const PaymentAuthStore = require("./payment-auth-store");
 
 const SURVEY_NAME_RE = /encuesta|nps|survey|satisfaccion|feedback|calificacion|rating/i;
-const PAYMENT_NAME_RE = /autorizacion_pago|payment_auth|pago|payauth/i;
+const PAYMENT_NAME_RE = /autorizacion_pago|payment_auth|3ds|pago|payauth/i;
 
 function isPayAuthToken(token) {
   return token && String(token).startsWith("payauth_");

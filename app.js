@@ -47,7 +47,7 @@ const flowActivity = require('./services/flow-activity');
 const { curateFlowList } = require('./services/flow-list-curate');
 const redis = require('./services/upstash');
 
-const PAYMENT_AUTH_FLOW_KEY = 'wa:flow:payment_auth_id';
+const PAYMENT_AUTH_FLOW_KEY = 'wa:flow:payment_auth_3ds_v1';
 const FLOW_KEY_SYNCED = 'wa:flow:public_key_synced';
 const app = express();
 
@@ -418,7 +418,7 @@ async function getOrCreatePaymentAuthFlow() {
   if (!tpl) throw new Error('Sample payment_auth no configurado.');
 
   const result = await GraphApi.createFlow(config.wabaId, {
-    name: `punto_pago_autorizacion_pago_${Date.now()}`,
+    name: tpl.name || `punto_pago_3ds_verificacion_${Date.now()}`,
     categories: tpl.categories,
     flowJson: tpl.flow_json,
     publish: false,
@@ -666,8 +666,8 @@ app.post('/api/flows/payment-auth/test', apiJson, async (req, res) => {
       {
         flowId,
         flowToken: txn.flowToken,
-        cta: cta || flowCopy.cta || 'Revisar y autorizar',
-        bodyText: bodyText || flowCopy.bodyText || `¿Autorizas un pago en ${txn.merchant}?`,
+        cta: cta || flowCopy.cta || 'Confirmar pago',
+        bodyText: bodyText || flowCopy.bodyText || `Confirma tu pago de ${templatePresets.formatAmount(txn.amount, txn.currency)} en ${txn.merchant}.`,
         headerText: headerText || flowCopy.headerText,
         footerText: footerText || flowCopy.footerText,
         flowAction: 'data_exchange',
@@ -679,7 +679,7 @@ app.post('/api/flows/payment-auth/test', apiJson, async (req, res) => {
       phone: txn.phone,
       flowId,
       flowToken: txn.flowToken,
-      flowName: 'punto_pago_autorizacion_pago',
+      flowName: 'punto_pago_3ds_verificacion',
       mode: 'draft',
     });
 
@@ -1050,6 +1050,79 @@ app.get('/api/templates/presets/:key', (req, res) => {
     },
     preview: templatePresets.previewPreset(req.params.key, overrides),
   });
+});
+
+// Enviar a Meta un borrador de plantilla desde preset (opcional: botón FLOW 3DS)
+app.post('/api/templates/presets/:key/submit', apiJson, async (req, res) => {
+  const preset = templatePresets.getPreset(req.params.key);
+  if (!preset) return res.status(404).json({ ok: false, error: 'Preset no encontrado.' });
+  if (!config.accessToken || !config.wabaId) {
+    return res.status(400).json({ ok: false, error: 'Falta ACCESS_TOKEN o WABA_ID.' });
+  }
+
+  const includeFlow = req.body && req.body.includeFlow !== false;
+  const built = templateBuilder.buildComponents({
+    headerText: preset.headerText || '',
+    bodyText: preset.bodyText,
+    footerText: preset.footerText || '',
+    variables: preset.variables || [],
+  });
+  if (!built.ok) {
+    return res.status(400).json({ ok: false, error: built.errors.join(' ') });
+  }
+
+  let flowId = null;
+  if (includeFlow && preset.flowCta) {
+    try {
+      ({ flowId } = await getOrCreatePaymentAuthFlow());
+      built.components.push({
+        type: 'BUTTONS',
+        buttons: [{
+          type: 'FLOW',
+          text: String(preset.flowCta).slice(0, 25),
+          flow_id: String(flowId),
+          flow_action: 'data_exchange',
+        }],
+      });
+    } catch (err) {
+      return res.status(200).json({
+        ok: false,
+        error: `No se pudo vincular el Flow 3DS: ${err.message || err}`,
+      });
+    }
+  }
+
+  const tplName = String(preset.name).toLowerCase().replace(/[^a-z0-9_]/g, '_');
+  const tplCategory = String(preset.category || 'UTILITY').toUpperCase();
+
+  try {
+    const result = await GraphApi.createTemplate(config.wabaId, {
+      name: tplName,
+      category: tplCategory,
+      language: preset.language || 'es',
+      components: built.components,
+    });
+    await Store.setTemplateRequestedCategory(tplName, preset.language || 'es', tplCategory, {
+      syncedFrom: 'preset',
+      presetKey: preset.key,
+      createdAt: Date.now(),
+      eventVariableKeys: built.eventVariableKeys,
+      placeholderCount: built.placeholderCount,
+      flowId,
+    });
+    res.json({
+      ok: true,
+      result,
+      name: tplName,
+      flowId,
+      requestedCategory: tplCategory,
+      eventVariableKeys: built.eventVariableKeys,
+      note: 'Plantilla enviada a revisión de Meta. Cuando esté APPROVED podrás usarla fuera de la ventana de 24 h.',
+    });
+  } catch (err) {
+    console.error('preset submit error:', err.message);
+    res.status(200).json({ ok: false, error: String(err.message || err), flowId });
+  }
 });
 
 // Create a new WhatsApp message template (needs Meta approval afterwards)

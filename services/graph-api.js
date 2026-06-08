@@ -370,7 +370,7 @@ module.exports = class GraphApi {
 
     const interactive = {
       type: "flow",
-      body: { text: bodyText || "Completa el siguiente formulario." },
+      body: { text: bodyText || "Confirma tu pago para continuar con la transacción." },
       action: { name: "flow", parameters },
     };
     if (headerText) interactive.header = { type: "text", text: headerText };

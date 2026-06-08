@@ -1849,32 +1849,38 @@ function getPayAuthFlowData() {
 function renderFlowPhonePreview(container, screen, data) {
   if (!container) return;
   const d = data || getPayAuthFlowData();
-  const title = screen === "RESULT" ? "Resultado" : "Autorizar pago";
+  const title = screen === "RESULT" ? "Resultado" : "Verificación de pago";
   let bodyHtml = "";
   let footerLabel = "Confirmar";
 
   if (screen === "AUTH") {
     bodyHtml = `
+      <p class="flow-phone-brand">Punto Pago</p>
+      <h3>Confirma tu transacción</h3>
+      <p class="flow-phone-security">Por tu seguridad, valida este pago antes de procesarlo. Es el mismo paso de verificación que conoces como 3D Secure.</p>
       <img class="flow-phone-img" src="${escapeHtml(d.card_image)}" alt="Tarjeta" onerror="this.src='/assets/punto-pago-card.png'" />
-      <h3>¿Autorizas este pago?</h3>
       <p>Comercio: ${escapeHtml(d.merchant)}</p>
       <p>Monto: ${escapeHtml(d.amount)}</p>
       <p>${escapeHtml(d.card_label)}</p>
-      <p>${escapeHtml(d.when)}</p>
+      <p>Fecha: ${escapeHtml(d.when)}</p>
+      <p class="flow-phone-caption">Si no reconoces esta compra, elige Rechazar y contáctanos de inmediato.</p>
       <div class="flow-phone-radio">
-        <label class="selected"><span class="dot"></span> Autorizar pago</label>
-        <label><span class="dot"></span> Rechazar</label>
+        <label class="selected"><span class="dot"></span> Aprobar transacción</label>
+        <label><span class="dot"></span> Rechazar transacción</label>
       </div>`;
   } else {
     bodyHtml = `
-      <h3>Pago autorizado</h3>
-      <p>${escapeHtml(d.merchant)} recibirá la confirmación del pago.</p>
+      <p class="flow-phone-brand">Punto Pago</p>
+      <h3>Pago aprobado</h3>
+      <p>El comercio procesará tu pago en breve.</p>
+      <p>Comercio: ${escapeHtml(d.merchant)}</p>
       <p>Monto: ${escapeHtml(d.amount)}</p>`;
     footerLabel = "Cerrar";
   }
 
+  container.className = "flow-phone flow-phone-pp";
   container.innerHTML = `
-    <div class="flow-phone-nav">
+    <div class="flow-phone-nav flow-phone-nav-pp">
       <span class="flow-phone-cancel">Cancelar</span>
       <span class="flow-phone-title">${escapeHtml(title)}</span>
       <span class="flow-phone-menu">⋯</span>
@@ -1956,11 +1962,19 @@ function renderFlowDetailPreview(performance) {
         <div class="flows-preview-col"><div id="flowDetailWaPreview"></div></div>
         <div class="flows-preview-col"><div id="flowDetailFlowPreview"></div></div>
       </div>`;
-    const fm = { headerText: "Alerta de transacción", footerText: "Punto Pago · Mensaje automático", flowCta: "Revisar y autorizar" };
+    const fm = {
+      headerText: "Confirma tu pago",
+      footerText: "Punto Pago · Verificación de seguridad",
+      flowCta: "Confirmar pago",
+    };
     const ov = tplPreviewOverrides();
     renderWaMessagePreview($("flowDetailWaPreview"), {
       headerText: fm.headerText,
-      bodyText: `Hay un pago pendiente de ${ov.monto} en ${ov.comercio} con tu tarjeta Punto Pago •••• ${ov.ultimos_4}. ¿Autorizas esta transacción?`,
+      bodyText:
+        `Hola ${ov.nombre_cliente},\n\n`
+        + `Se requiere tu confirmación para un pago de ${ov.monto} en ${ov.comercio} `
+        + `con Tarjeta Punto Pago •••• ${ov.ultimos_4}.\n\n`
+        + "Toca abajo para aprobar o rechazar. Protege tu cuenta como el 3D Secure de tu banco.",
       footerText: fm.footerText,
       flowCta: fm.flowCta,
     });
@@ -2418,7 +2432,7 @@ async function sendPaymentAuthTest() {
     cardLast4: ($("payAuthCard4") || {}).value.trim(),
   });
   if (!res.ok) { toast(res.error || "No se pudo enviar.", "error"); return; }
-  toast("Autorización de pago enviada. Revisa WhatsApp.", "ok");
+  toast("Verificación de pago enviada. Revisa WhatsApp.", "ok");
   await loadPaymentAuthPanel();
   await loadFlowActivity();
   if (res.flowId) {
@@ -2620,9 +2634,9 @@ async function selectFlow(id) {
   }
 
   await loadFlowDetail(id);
-  if (f && f.name && f.name.includes("autorizacion")) {
+  if (f && f.name && (f.name.includes("autorizacion") || f.name.includes("3ds"))) {
     $("flowSendScreen").value = "AUTH";
-    $("flowSendCta").value = "Revisar y autorizar";
+    $("flowSendCta").value = "Confirmar pago";
   }
 }
 

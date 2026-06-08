@@ -798,6 +798,34 @@ input, textarea, select { font-family: inherit; }
 }
 .flow-phone-managed { padding: 8px; text-align: center; font-size: 10px; color: #8696a0; background: #f0f2f5; }
 
+/* Punto Pago — Flow 3DS branding */
+.flow-phone-pp { border: 1px solid #e8eaf6; }
+.flow-phone-nav-pp {
+  background: linear-gradient(135deg, #4f5be8 0%, #6366f1 100%);
+  border-bottom: none; color: #fff;
+}
+.flow-phone-nav-pp .flow-phone-cancel { color: rgba(255,255,255,.92); }
+.flow-phone-nav-pp .flow-phone-title { color: #fff; }
+.flow-phone-nav-pp .flow-phone-menu { color: rgba(255,255,255,.75); }
+.flow-phone-brand {
+  margin: 0 0 6px; font-size: 11px; font-weight: 700; letter-spacing: .06em;
+  text-transform: uppercase; color: #4f5be8;
+}
+.flow-phone-security {
+  padding: 10px 12px; margin-bottom: 12px; border-radius: 10px;
+  background: #eef2ff; color: #3730a3; font-size: 13px; line-height: 1.45;
+}
+.flow-phone-caption { font-size: 12px; color: #667781; margin-top: 4px; }
+.flow-phone-pp .flow-phone-radio label.selected {
+  border-color: #4f5be8; background: #eef2ff;
+}
+.flow-phone-pp .flow-phone-radio label.selected .dot {
+  border-color: #4f5be8; box-shadow: inset 0 0 0 4px #4f5be8;
+}
+.flow-phone-pp .flow-phone-footer button {
+  background: linear-gradient(135deg, #1fb56b 0%, #17a35d 100%);
+}
+
 @media (max-width: 900px) {
   .flows-dual-preview, .flows-stats-grid { grid-template-columns: 1fr 1fr; }
   .flows-split-detail { grid-template-columns: 1fr; }

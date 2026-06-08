@@ -5,7 +5,7 @@ const PaymentAuthStore = require("./payment-auth-store");
 
 function isPaymentAuthFlow(flow) {
   const name = String((flow && flow.name) || "").toLowerCase();
-  return name.includes("autorizacion_pago") || name.includes("payment_auth");
+  return name.includes("autorizacion_pago") || name.includes("payment_auth") || name.includes("3ds");
 }
 
 async function getFlowPerformance(flowId, flowMeta) {

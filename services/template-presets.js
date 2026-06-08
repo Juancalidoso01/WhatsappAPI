@@ -7,31 +7,32 @@
 const PRESETS = {
   punto_pago_autorizacion_pago: {
     key: "punto_pago_autorizacion_pago",
-    label: "Autorización de pago en comercio",
-    description: "Alerta de transacción con botón al Flow de autorizar/rechazar. Categoría Utilidad.",
-    name: "punto_pago_autorizacion_pago",
+    label: "Verificación 3DS — confirmar pago",
+    description: "Mensaje de verificación de seguridad antes de aprobar un pago con Tarjeta Punto Pago.",
+    name: "punto_pago_3ds_confirmar_pago",
     category: "UTILITY",
     language: "es",
-    headerText: "Alerta de transacción",
+    headerText: "Confirma tu pago",
     bodyText:
       "Hola {{1}},\n\n"
-      + "Hay un pago pendiente de {{2}} en {{3}} con tu tarjeta Punto Pago •••• {{4}}.\n\n"
-      + "¿Autorizas esta transacción? Toca el botón para revisar los detalles y confirmar.",
-    footerText: "Punto Pago · Mensaje automático",
+      + "Se requiere tu confirmación para un pago de {{2}} en {{3}} con Tarjeta Punto Pago •••• {{4}}.\n\n"
+      + "Toca el botón para aprobar o rechazar. Este paso protege tu cuenta, como la verificación 3D Secure de tu banco.",
+    footerText: "Punto Pago · Verificación de seguridad",
     variables: [
       { key: "nombre_cliente", example: "Juan Pablo" },
       { key: "monto", example: "USD 45.90" },
       { key: "comercio", example: "Supermercado XO" },
       { key: "ultimos_4", example: "4821" },
     ],
-    flowCta: "Revisar y autorizar",
+    flowCta: "Confirmar pago",
     flowMessage: {
-      headerText: "Alerta de transacción",
+      headerText: "Confirma tu pago",
       bodyText:
-        "Hay un pago pendiente de {{monto}} en {{comercio}} con tu tarjeta Punto Pago •••• {{ultimos_4}}.\n\n"
-        + "¿Autorizas esta transacción?",
-      footerText: "Punto Pago · Mensaje automático",
-      cta: "Revisar y autorizar",
+        "Hola {{nombre_cliente}},\n\n"
+        + "Se requiere tu confirmación para un pago de {{monto}} en {{comercio}} con Tarjeta Punto Pago •••• {{ultimos_4}}.\n\n"
+        + "Toca abajo para aprobar o rechazar. Protege tu cuenta como el 3D Secure de tu banco.",
+      footerText: "Punto Pago · Verificación de seguridad",
+      cta: "Confirmar pago",
     },
   },
 };

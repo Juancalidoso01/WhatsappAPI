@@ -51,7 +51,7 @@ async function handlePaymentAuth(decryptedBody) {
       screen: "RESULT",
       data: {
         result_title: "Solicitud expirada",
-        result_body: "Esta autorización ya no está disponible. Solicita un nuevo enlace.",
+        result_body: "Esta verificación ya no está disponible. Solicita un nuevo enlace desde Punto Pago.",
         decision: "expired",
         merchant: "—",
         amount: "—",
@@ -94,10 +94,10 @@ async function handlePaymentAuth(decryptedBody) {
       version,
       screen: "RESULT",
       data: {
-        result_title: authorized ? "Pago autorizado" : "Pago rechazado",
+        result_title: authorized ? "Pago aprobado" : "Transacción rechazada",
         result_body: authorized
-          ? `${txn.merchant} recibirá la confirmación del pago.`
-          : "La operación fue cancelada. Si no fuiste tú, contacta a soporte.",
+          ? "El comercio procesará tu pago en breve. Recibirás la confirmación por los canales habituales."
+          : "El pago no se procesó. Si no reconoces esta compra, contáctanos de inmediato.",
         decision,
         merchant: txn.merchant,
         amount: `$${resolved ? resolved.amount : txn.amount} ${txn.currency}`,
