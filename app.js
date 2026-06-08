@@ -172,6 +172,42 @@ app.post('/api/templates', apiJson, async (req, res) => {
   }
 });
 
+// Billing: cost & volume by country and message category (pricing_analytics)
+app.get('/api/billing', async (req, res) => {
+  if (!config.accessToken || !config.wabaId) {
+    return res.json({ ok: false, error: 'Falta ACCESS_TOKEN o WABA_ID.', rows: [], totals: { cost: 0, volume: 0, byCategory: {} } });
+  }
+  const days = Math.min(Math.max(parseInt(req.query.days, 10) || 30, 1), 90);
+  const end = Math.floor(Date.now() / 1000);
+  const start = end - days * 86400;
+
+  try {
+    const data = await GraphApi.pricingAnalytics(config.wabaId, config.accessToken, { start, end });
+    const points = [];
+    (data || []).forEach((d) => (d.data_points || []).forEach((p) => points.push(p)));
+
+    const map = {};
+    let totalCost = 0;
+    let totalVolume = 0;
+    const byCategory = {};
+    points.forEach((p) => {
+      const key = `${p.country}|${p.pricing_category}`;
+      if (!map[key]) map[key] = { country: p.country, category: p.pricing_category, volume: 0, cost: 0 };
+      map[key].volume += p.volume || 0;
+      map[key].cost += p.cost || 0;
+      totalCost += p.cost || 0;
+      totalVolume += p.volume || 0;
+      byCategory[p.pricing_category] = (byCategory[p.pricing_category] || 0) + (p.cost || 0);
+    });
+
+    const rows = Object.values(map).sort((a, b) => b.cost - a.cost || b.volume - a.volume);
+    res.json({ ok: true, days, start, end, rows, totals: { cost: totalCost, volume: totalVolume, byCategory } });
+  } catch (err) {
+    console.error('billing error:', err.message);
+    res.json({ ok: false, error: String(err.message || err), rows: [], totals: { cost: 0, volume: 0, byCategory: {} } });
+  }
+});
+
 // Start a conversation (or message outside the 24h window) using a template
 app.post('/api/send-template', apiJson, async (req, res) => {
   const { phone, name, template, language, components } = req.body || {};

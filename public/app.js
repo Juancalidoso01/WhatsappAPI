@@ -448,6 +448,53 @@ async function simulate() {
   openConversation(phone, $("simName").value.trim() || phone);
 }
 
+/* ---------- billing ---------- */
+function countryFlag(cc) {
+  if (!cc || cc.length !== 2) return "";
+  return String.fromCodePoint(...[...cc.toUpperCase()].map((c) => 127397 + c.charCodeAt(0)));
+}
+function fmtCost(n) {
+  const v = Number(n) || 0;
+  return v === 0 ? "0" : v.toLocaleString("es", { minimumFractionDigits: 2, maximumFractionDigits: 4 });
+}
+function fmtNum(n) { return (Number(n) || 0).toLocaleString("es"); }
+
+async function loadBilling() {
+  const days = $("billRange").value;
+  const tbody = $("billRows");
+  tbody.innerHTML = `<tr><td colspan="4" class="muted center">Sincronizando…</td></tr>`;
+  let res;
+  try { res = await api(`/api/billing?days=${days}`); } catch (_) { res = { ok: false, error: "Error de red" }; }
+
+  const note = $("billNote");
+  if (!res.ok) {
+    tbody.innerHTML = `<tr><td colspan="4" class="muted center">No se pudo cargar.</td></tr>`;
+    note.textContent = res.error || "";
+    ["bcCost", "bcVolume", "bcMkt", "bcUtil"].forEach((id) => ($(id).textContent = "—"));
+    return;
+  }
+
+  const t = res.totals || { byCategory: {} };
+  $("bcCost").textContent = fmtCost(t.cost);
+  $("bcVolume").textContent = fmtNum(t.volume);
+  $("bcMkt").textContent = fmtCost((t.byCategory || {}).MARKETING || 0);
+  $("bcUtil").textContent = fmtCost((t.byCategory || {}).UTILITY || 0);
+
+  if (!res.rows.length) {
+    tbody.innerHTML = `<tr><td colspan="4" class="muted center">Sin datos en este periodo.</td></tr>`;
+  } else {
+    tbody.innerHTML = res.rows
+      .map((r) => `<tr>
+        <td><span class="flag">${countryFlag(r.country)}</span>${escapeHtml(r.country)}</td>
+        <td><span class="cat-tag ${escapeHtml(r.category)}">${escapeHtml((r.category || "").toLowerCase())}</span></td>
+        <td class="num">${fmtNum(r.volume)}</td>
+        <td class="num">${fmtCost(r.cost)}</td>
+      </tr>`)
+      .join("");
+  }
+  note.innerHTML = `Los montos están en la moneda de tu WABA. Un costo de <strong>0</strong> suele indicar mensajes de servicio gratuitos o tráfico de número de prueba (no facturado). El costo por plantilla individual requiere activar “Template Insights” en Meta.`;
+}
+
 /* ---------- modals & nav ---------- */
 function showModal(id) { $(id).classList.remove("hidden"); }
 function closeModals() { document.querySelectorAll(".modal").forEach((m) => m.classList.add("hidden")); }
@@ -456,7 +503,9 @@ function switchScreen(name) {
   document.querySelectorAll(".rail-btn").forEach((b) => b.classList.toggle("active", b.dataset.screen === name));
   $("screenChats").classList.toggle("hidden", name !== "chats");
   $("screenTemplates").classList.toggle("hidden", name !== "templates");
+  $("screenBilling").classList.toggle("hidden", name !== "billing");
   if (name === "templates") { loadTemplates().then(renderTemplateList); }
+  if (name === "billing") { loadBilling(); }
 }
 
 /* ---------- polling ---------- */
@@ -484,6 +533,8 @@ function bindEvents() {
   $("mdSend").addEventListener("click", sendMedia);
   $("simBtn").addEventListener("click", () => showModal("modalSim"));
   $("simSend").addEventListener("click", simulate);
+  $("billSync").addEventListener("click", loadBilling);
+  $("billRange").addEventListener("change", loadBilling);
   $("newTemplateBtn").addEventListener("click", () => showModal("modalTemplate"));
   $("tpCreate").addEventListener("click", createTemplate);
   $("detailTemplateBtn").addEventListener("click", () => openNewChat());

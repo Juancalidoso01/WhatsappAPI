@@ -94,6 +94,18 @@ module.exports = class GraphApi {
     return this.#makeApiCall(undefined, senderPhoneNumberId, requestBody);
   }
 
+  // --- Billing / pricing analytics (cost & volume by country + category) ---
+  static async pricingAnalytics(wabaId, accessToken, { start, end, granularity = "DAILY" }) {
+    const f = `pricing_analytics.start(${start}).end(${end}).granularity(${granularity}).dimensions(PRICING_CATEGORY,PRICING_TYPE,COUNTRY)`;
+    const url = `https://graph.facebook.com/v21.0/${wabaId}?fields=${encodeURIComponent(f)}&access_token=${accessToken}`;
+    const res = await fetch(url);
+    const json = await res.json();
+    if (json.error) {
+      throw new Error(json.error.error_user_msg || json.error.message || "Error de Graph API");
+    }
+    return json.pricing_analytics ? json.pricing_analytics.data || [] : [];
+  }
+
   // --- WhatsApp message templates management (on the WABA) ---
   static async listTemplates(wabaId, limit = 100) {
     const api = getApi();
