@@ -154,13 +154,23 @@
         <header class="pane-header">
           <div>
             <h1>Plantillas</h1>
-            <p class="muted templates-intro">Listado compacto de todas tus plantillas. La fecha de creación aplica a las hechas desde aquí; el resto muestra la última actualización que reporta Meta.</p>
+            <p class="muted templates-intro">Mensajes aprobados por Meta y borradores listos para solicitar. Toca un borrador para ver cómo se verá en WhatsApp.</p>
           </div>
           <button id="newTemplateBtn" class="btn-primary sm">
             <svg viewBox="0 0 24 24" class="ic"><path d="M12 5v14M5 12h14"/></svg>
-            Crear
+            Crear nueva
           </button>
         </header>
+
+        <section class="tpl-drafts-section" id="tplDraftsSection">
+          <div class="tpl-drafts-head">
+            <h2 class="section-title">Borradores Punto Pago</h2>
+            <p class="muted sm">Listos para revisar y enviar a Meta cuando te gusten.</p>
+          </div>
+          <div id="tplPresetCards" class="tpl-preset-cards">Cargando borradores…</div>
+        </section>
+
+        <h2 class="section-title tpl-approved-title">Plantillas en tu cuenta</h2>
         <div id="templateList" class="templates-table-wrap"></div>
       </main>
     </section>
@@ -363,134 +373,196 @@
     <!-- ============ SCREEN: FLOWS ============ -->
     <section class="screen hidden" id="screenFlows">
       <main class="flows-pane">
-        <header class="pane-header">
+        <header class="pane-header flows-header">
           <div>
-            <h1>WhatsApp Flows</h1>
-            <p class="muted flows-intro">Formularios interactivos dentro del chat. El cliente completa pantallas y la respuesta llega al webhook.</p>
+            <h1>Flows</h1>
+            <p class="muted flows-intro">Formularios dentro del chat de WhatsApp. Prueba casos reales, gestiona los tuyos o crea uno nuevo.</p>
           </div>
         </header>
 
-        <div id="flowsCapability" class="flows-capability muted">Comprobando compatibilidad…</div>
-
-        <details class="flows-panel flows-endpoint-collapsed">
-          <summary class="section-title">Endpoint dinámico (avanzado)</summary>
-          <p class="muted sm">Solo para lógica en servidor (cotizaciones, catálogos). Los Flows del constructor son estáticos.</p>
-          <div class="flows-endpoint-row">
-            <code id="flowEndpointUri" class="flows-endpoint-url">—</code>
-            <button type="button" id="flowEndpointSetupBtn" class="btn-primary sm">Registrar clave en Meta</button>
-          </div>
-          <p id="flowEndpointHint" class="muted sm"></p>
-        </details>
-
-        <section class="flows-panel flows-payment-auth" id="flowsPaymentAuthPanel">
-          <h2 class="section-title">Prueba: autorización de pago</h2>
-          <p class="muted sm">Simula “¿Autorizas pago en comercio X?” con imagen de tarjeta. Requiere endpoint dinámico registrado.</p>
-          <div class="fb-payauth-preview">
-            <img id="payAuthCardImg" src="/assets/punto-pago-card.png" alt="Tarjeta Punto Pago" />
-            <span id="payAuthCardHint" class="muted sm"></span>
-          </div>
-          <div class="row">
-            <label>Teléfono
-              <input id="payAuthPhone" type="text" placeholder="50763163152" value="50763163152" />
-            </label>
-            <label>Comercio
-              <input id="payAuthMerchant" type="text" placeholder="Supermercado XO" value="Supermercado XO" />
-            </label>
-            <label>Monto (USD)
-              <input id="payAuthAmount" type="text" placeholder="45.90" value="45.90" />
-            </label>
-            <label>Últimos 4 dígitos tarjeta
-              <input id="payAuthCard4" type="text" placeholder="4821" value="4821" maxlength="4" />
-            </label>
-          </div>
-          <div class="flows-actions">
-            <button type="button" id="payAuthSendBtn" class="btn-primary sm">Enviar autorización de prueba</button>
-          </div>
-          <div id="payAuthRecent" class="fb-payauth-recent muted sm"></div>
-        </section>
-
-        <section class="flows-panel flows-builder" id="flowsBuilderPanel">
-          <div class="flows-builder-head">
-            <h2 class="section-title">Constructor de Flows</h2>
-            <p class="muted sm">Arma pantallas y campos sin escribir código. Se crea en borrador en Meta para que pruebes antes de publicar.</p>
-          </div>
-
-          <div class="fb-meta row">
-            <label>Nombre interno
-              <input id="fbName" type="text" placeholder="encuesta_nps_marzo" maxlength="80" />
-            </label>
-            <label>Categoría Meta
-              <select id="fbCategory"></select>
-            </label>
-            <label>Texto del botón (CTA)
-              <input id="fbCta" type="text" placeholder="Abrir" value="Abrir" />
-            </label>
-          </div>
-
-          <div class="fb-screens-head">
-            <h3 class="fb-subtitle">Pantallas</h3>
-            <div class="fb-screen-add">
-              <button type="button" id="fbAddForm" class="btn-ghost sm">+ Formulario</button>
-              <button type="button" id="fbAddMessage" class="btn-ghost sm">+ Mensaje</button>
-              <button type="button" id="fbAddConfirm" class="btn-ghost sm">+ Confirmación</button>
-            </div>
-          </div>
-          <div id="fbScreens" class="fb-screens"></div>
-
-          <div class="flows-builder-foot">
-            <div id="fbPreview" class="fb-preview muted sm"></div>
-            <div class="flows-actions">
-              <button type="button" id="fbCreateBtn" class="btn-primary sm">Crear borrador en Meta</button>
-            </div>
-          </div>
-        </section>
-
-        <details class="flows-panel">
-          <summary class="section-title">Ejemplos rápidos (opcional)</summary>
-          <label>Plantilla
-            <select id="flowSampleSelect"></select>
-          </label>
-          <p id="flowSampleDesc" class="muted sm"></p>
-          <button type="button" id="flowCreateBtn" class="btn-ghost sm">Crear ejemplo en Meta</button>
-        </details>
-
-        <div class="flows-grid">
-          <section class="flows-panel wide" style="grid-column: 1 / -1;">
-            <h2 class="section-title">Flows en tu cuenta <span class="muted" id="flowsListHint"></span></h2>
-            <div id="flowsList" class="flows-list muted">Cargando…</div>
-          </section>
+        <div id="flowsStatusBar" class="flows-status-bar">
+          <span id="flowsStatusDot" class="flows-status-dot"></span>
+          <span id="flowsStatusText" class="flows-status-text">Comprobando conexión…</span>
+          <button type="button" id="flowsConfigBtn" class="link-btn sm">Configuración</button>
         </div>
 
-        <section class="flows-panel flows-send hidden" id="flowsSendPanel">
-          <h2 class="section-title">Enviar Flow: <span id="flowsSendName">—</span></h2>
-          <p class="muted sm">Requiere ventana de 24 h (conversación activa). Flows en borrador se envían en modo <code>draft</code>.</p>
-          <div class="row">
-            <label>Teléfono (solo dígitos)
-              <input id="flowSendPhone" type="text" placeholder="50761234567" />
-            </label>
-            <label>Texto del mensaje
-              <input id="flowSendBody" type="text" placeholder="Completa el formulario" />
-            </label>
+        <nav class="flows-tabs" id="flowsTabs">
+          <button type="button" class="flows-tab active" data-flows-tab="probar">Probar</button>
+          <button type="button" class="flows-tab" data-flows-tab="mis">Mis Flows</button>
+          <button type="button" class="flows-tab" data-flows-tab="crear">Crear</button>
+          <button type="button" class="flows-tab" data-flows-tab="actividad">Actividad</button>
+        </nav>
+
+        <!-- Tab: Probar -->
+        <section class="flows-tab-panel" id="flowsPanelProbar">
+          <div class="flows-hero-card flows-hero-wide">
+            <div class="flows-hero-copy">
+              <span class="flows-hero-badge">Caso Punto Pago</span>
+              <h2>Autorización de pago</h2>
+              <p class="muted">Así lo verá tu cliente: primero el mensaje en el chat, luego el formulario con la tarjeta.</p>
+            </div>
           </div>
-          <div class="row">
-            <label>Botón CTA
-              <input id="flowSendCta" type="text" placeholder="Abrir" />
-            </label>
-            <label>Pantalla inicial
-              <input id="flowSendScreen" type="text" placeholder="WELCOME_SCREEN" />
-            </label>
+
+          <div class="flows-dual-preview">
+            <div class="flows-preview-col">
+              <p class="preview-step">① Mensaje en WhatsApp</p>
+              <div id="payAuthWaPreview" class="wa-preview-phone wa-preview-compact" aria-label="Vista previa mensaje"></div>
+            </div>
+            <div class="flows-preview-col">
+              <p class="preview-step">② Formulario (como en el teléfono)</p>
+              <div class="flow-screen-tabs" id="payAuthScreenTabs">
+                <button type="button" class="flow-screen-tab active" data-screen="AUTH">Autorizar</button>
+                <button type="button" class="flow-screen-tab" data-screen="RESULT">Resultado</button>
+              </div>
+              <div id="payAuthFlowPreview" class="flow-phone" aria-label="Vista previa del Flow"></div>
+            </div>
           </div>
-          <div class="flows-actions">
-            <button type="button" id="flowSendBtn" class="btn-primary sm">Enviar Flow</button>
-            <button type="button" id="flowPublishBtn" class="btn-ghost sm">Publicar Flow</button>
-            <a id="flowPreviewLink" class="btn-ghost sm hidden" href="#" target="_blank" rel="noopener">Vista previa Meta</a>
+
+          <section class="flows-panel flows-payment-auth" id="flowsPaymentAuthPanel">
+            <h3 class="fb-subtitle">Datos de prueba</h3>
+            <div class="flows-form-grid">
+              <label>Teléfono
+                <input id="payAuthPhone" type="text" placeholder="50763163152" value="50763163152" />
+              </label>
+              <label>Nombre del cliente
+                <input id="payAuthCustomerName" type="text" placeholder="Juan Pablo" value="Juan Pablo" />
+              </label>
+              <label>Comercio
+                <input id="payAuthMerchant" type="text" placeholder="Supermercado XO" value="Supermercado XO" />
+              </label>
+              <label>Monto (USD)
+                <input id="payAuthAmount" type="text" placeholder="45.90" value="45.90" />
+              </label>
+              <label>Últimos 4 dígitos
+                <input id="payAuthCard4" type="text" placeholder="4821" value="4821" maxlength="4" />
+              </label>
+              <label class="flows-upload-label">Imagen de tarjeta
+                <input id="payAuthCardImage" type="file" accept="image/jpeg,image/png,image/webp" />
+                <span class="muted sm">PNG o JPG · se muestra dentro del formulario</span>
+              </label>
+            </div>
+            <div class="flows-actions">
+              <button type="button" id="payAuthSendBtn" class="btn-primary sm">Enviar prueba a WhatsApp</button>
+              <button type="button" id="payAuthOpenTplBtn" class="btn-ghost sm">Ver plantilla del mensaje</button>
+            </div>
+            <div id="payAuthRecent" class="fb-payauth-recent muted sm"></div>
+          </section>
+        </section>
+
+        <!-- Tab: Mis Flows -->
+        <section class="flows-tab-panel hidden" id="flowsPanelMis">
+          <div class="flows-split flows-split-detail">
+            <section class="flows-panel flows-list-panel">
+              <h2 class="section-title">Tus Flows <span class="muted" id="flowsListHint"></span></h2>
+              <p class="muted sm">Toca uno para ver desempeño y actividad.</p>
+              <div id="flowsList" class="flows-list muted">Cargando…</div>
+            </section>
+
+            <section class="flows-panel flows-detail hidden" id="flowsDetailPanel">
+              <div class="flows-detail-head">
+                <div>
+                  <h2 class="section-title" id="flowsDetailName">—</h2>
+                  <span id="flowsDetailStatus" class="flow-status">—</span>
+                </div>
+                <a id="flowPreviewLink" class="btn-ghost sm hidden" href="#" target="_blank" rel="noopener">Abrir en Meta</a>
+              </div>
+
+              <div id="flowsStatsCards" class="flows-stats-grid"></div>
+
+              <nav class="flows-detail-tabs" id="flowsDetailTabs">
+                <button type="button" class="flows-detail-tab active" data-detail-tab="preview">Vista previa</button>
+                <button type="button" class="flows-detail-tab" data-detail-tab="sends">Envíos</button>
+                <button type="button" class="flows-detail-tab" data-detail-tab="responses">Respuestas</button>
+              </nav>
+
+              <div id="flowsDetailPreview" class="flows-detail-pane"></div>
+              <div id="flowsDetailSends" class="flows-detail-pane hidden"></div>
+              <div id="flowsDetailResponses" class="flows-detail-pane hidden"></div>
+
+              <details class="flows-send-collapsed">
+                <summary>Enviar a un contacto</summary>
+                <div class="flows-form-grid" style="margin-top:12px">
+                  <label>Teléfono
+                    <input id="flowSendPhone" type="text" placeholder="50761234567" />
+                  </label>
+                  <label>Texto del mensaje
+                    <input id="flowSendBody" type="text" placeholder="Completa el formulario" />
+                  </label>
+                  <label>Texto del botón
+                    <input id="flowSendCta" type="text" placeholder="Abrir" />
+                  </label>
+                  <label>Pantalla inicial
+                    <input id="flowSendScreen" type="text" placeholder="WELCOME_SCREEN" />
+                  </label>
+                </div>
+                <div class="flows-actions">
+                  <button type="button" id="flowSendBtn" class="btn-primary sm">Enviar</button>
+                  <button type="button" id="flowPublishBtn" class="btn-ghost sm">Publicar</button>
+                </div>
+              </details>
+            </section>
+
+            <section class="flows-panel flows-empty-detail" id="flowsEmptyDetail">
+              <p class="muted center-msg">Selecciona un Flow para ver estadísticas, vista previa y envíos.</p>
+            </section>
           </div>
         </section>
 
-        <section class="flows-panel">
-          <h2 class="section-title">Respuestas recibidas</h2>
-          <div id="flowsResponses" class="flows-responses muted">Sin respuestas aún.</div>
-          <button type="button" id="flowRefreshResponses" class="btn-ghost sm">Actualizar</button>
+        <!-- Tab: Crear -->
+        <section class="flows-tab-panel hidden" id="flowsPanelCrear">
+          <section class="flows-panel">
+            <h2 class="section-title">Empezar desde un ejemplo</h2>
+            <p class="muted sm">Plantillas prearmadas que puedes crear en Meta con un clic.</p>
+            <div id="flowSampleCards" class="flow-sample-cards"></div>
+          </section>
+
+          <section class="flows-panel flows-builder" id="flowsBuilderPanel">
+            <div class="flows-builder-head">
+              <h2 class="section-title">Constructor visual</h2>
+              <p class="muted sm">Arma pantallas y campos sin código. Se guarda como borrador en Meta.</p>
+            </div>
+
+            <div class="flows-form-grid fb-meta">
+              <label>Nombre interno
+                <input id="fbName" type="text" placeholder="encuesta_nps_marzo" maxlength="80" />
+              </label>
+              <label>Categoría
+                <select id="fbCategory"></select>
+              </label>
+              <label>Texto del botón
+                <input id="fbCta" type="text" placeholder="Abrir" value="Abrir" />
+              </label>
+            </div>
+
+            <div class="fb-screens-head">
+              <h3 class="fb-subtitle">Pantallas</h3>
+              <div class="fb-screen-add">
+                <button type="button" id="fbAddForm" class="btn-ghost sm">+ Formulario</button>
+                <button type="button" id="fbAddMessage" class="btn-ghost sm">+ Mensaje</button>
+                <button type="button" id="fbAddConfirm" class="btn-ghost sm">+ Confirmación</button>
+              </div>
+            </div>
+            <div id="fbScreens" class="fb-screens"></div>
+
+            <div class="flows-builder-foot">
+              <div id="fbPreview" class="fb-preview muted sm"></div>
+              <div class="flows-actions">
+                <button type="button" id="fbCreateBtn" class="btn-primary sm">Crear borrador en Meta</button>
+              </div>
+            </div>
+          </section>
+        </section>
+
+        <!-- Tab: Actividad -->
+        <section class="flows-tab-panel hidden" id="flowsPanelActividad">
+          <section class="flows-panel">
+            <div class="flows-panel-head-row">
+              <h2 class="section-title">Respuestas recibidas</h2>
+              <button type="button" id="flowRefreshResponses" class="btn-ghost sm">Actualizar</button>
+            </div>
+            <p class="muted sm">Cuando alguien completa un Flow, la respuesta aparece aquí.</p>
+            <div id="flowsResponses" class="flows-responses muted">Sin respuestas aún.</div>
+          </section>
         </section>
       </main>
     </section>
@@ -628,10 +700,67 @@
     </div>
   </div>
 
+  <div id="modalTplDraft" class="modal hidden">
+    <div class="modal-card modal-card-wide">
+      <h3 id="tplDraftTitle">Borrador</h3>
+      <p id="tplDraftDesc" class="muted sm"></p>
+      <div class="tpl-draft-layout">
+        <div class="tpl-draft-fields">
+          <p class="muted sm">Ajusta los datos de ejemplo para ver cómo llegará el mensaje.</p>
+          <label>Nombre del cliente
+            <input id="tplPreviewName" type="text" value="Juan Pablo" />
+          </label>
+          <label>Monto
+            <input id="tplPreviewAmount" type="text" value="45.90" />
+          </label>
+          <label>Comercio
+            <input id="tplPreviewMerchant" type="text" value="Supermercado XO" />
+          </label>
+          <label>Últimos 4 dígitos
+            <input id="tplPreviewCard4" type="text" value="4821" maxlength="4" />
+          </label>
+        </div>
+        <div id="tplDraftWaPreview" class="wa-preview-phone" aria-label="Vista previa WhatsApp"></div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-ghost" data-close>Cerrar</button>
+        <button type="button" id="tplDraftCreateBtn" class="btn-primary">Solicitar en Meta</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="modalFlowsConfig" class="modal hidden">
+    <div class="modal-card">
+      <h3>Configuración de Flows</h3>
+      <p class="muted sm">Opciones técnicas. Solo necesitas esto si usas formularios con datos en tiempo real (como autorización de pago).</p>
+      <div class="flows-config-block">
+        <strong>Estado del servidor</strong>
+        <p id="flowsConfigStatus" class="muted sm">—</p>
+      </div>
+      <div class="flows-config-block">
+        <strong>Conexión con Meta</strong>
+        <p id="flowEndpointHint" class="muted sm">—</p>
+        <button type="button" id="flowEndpointSetupBtn" class="btn-primary sm">Sincronizar con Meta</button>
+      </div>
+      <details class="flows-config-advanced">
+        <summary>Detalles técnicos</summary>
+        <code id="flowEndpointUri" class="flows-endpoint-url">—</code>
+      </details>
+      <div class="modal-actions">
+        <button class="btn-ghost" data-close>Cerrar</button>
+      </div>
+    </div>
+  </div>
+
   <div id="modalTemplate" class="modal hidden">
     <div class="modal-card modal-card-wide">
       <h3>Crear plantilla</h3>
-      <p class="muted">Tras crearla, Meta la revisa (minutos a horas). Si usas variables (<code>{{1}}</code>, <code>{{2}}</code>…), define claves para la API y ejemplos — Meta los exige al crear la plantilla.</p>
+          <p class="muted">Tras crearla, Meta la revisa (minutos a horas). Si usas variables (<code>{{1}}</code>, <code>{{2}}</code>…), define claves para la API y ejemplos — Meta los exige al crear la plantilla.</p>
+          <label>Borrador Punto Pago
+            <select id="tpPresetSelect">
+              <option value="">— plantilla en blanco —</option>
+            </select>
+          </label>
       <label>Nombre (sin espacios)
         <input id="tpName" type="text" placeholder="recordatorio_pago" />
       </label>
@@ -679,6 +808,7 @@
       </label>
 
       <div id="tpPreview" class="tp-preview muted">Vista previa de la plantilla…</div>
+      <div id="tpWaPreviewModal" class="wa-preview-phone wa-preview-compact" aria-label="Vista previa WhatsApp"></div>
       <div id="tpHint" class="hint"></div>
       <div class="modal-actions">
         <button class="btn-ghost" data-close>Cancelar</button>

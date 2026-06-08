@@ -607,17 +607,200 @@ input, textarea, select { font-family: inherit; }
 .tp-emoji-btn { border: 1px solid var(--border); background: var(--surface); border-radius: 8px; padding: 4px 8px; font-size: 16px; cursor: pointer; line-height: 1; }
 .tp-emoji-btn:hover { background: var(--surface-2); }
 .tp-preview { font-size: 12px; line-height: 1.5; padding: 10px 12px; border-radius: 10px; background: #f0f7ff; margin-bottom: 10px; white-space: pre-wrap; }
+
+/* WhatsApp-style template preview */
+.tpl-drafts-section { margin: 8px 0 24px; }
+.tpl-drafts-head { margin-bottom: 12px; }
+.tpl-approved-title { margin: 0 0 10px; font-size: 15px; }
+.tpl-preset-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
+.tpl-preset-card {
+  text-align: left;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 14px 16px;
+  cursor: pointer;
+  transition: border-color .15s, box-shadow .15s;
+}
+.tpl-preset-card:hover { border-color: var(--green); box-shadow: 0 4px 16px rgba(0,0,0,.06); }
+.tpl-preset-card:focus-visible { outline: 2px solid var(--green); outline-offset: 2px; }
+.tpl-preset-card h3 { margin: 0 0 6px; font-size: 14px; }
+.tpl-preset-card p { margin: 0; font-size: 12px; color: var(--muted); line-height: 1.45; }
+.tpl-preset-card .tpl-card-meta { display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
+.tpl-preset-tag { font-size: 10px; padding: 2px 8px; border-radius: 999px; background: var(--surface-2); color: var(--muted); }
+.tpl-draft-layout { display: grid; grid-template-columns: 240px 1fr; gap: 16px; align-items: start; margin: 12px 0; }
+.tpl-draft-fields label { display: block; margin-bottom: 10px; font-size: 12px; }
+.tpl-draft-fields input { width: 100%; margin-top: 4px; }
+@media (max-width: 720px) { .tpl-draft-layout { grid-template-columns: 1fr; } }
+
+.wa-preview-phone {
+  max-width: 320px;
+  margin: 0 auto;
+  border-radius: 18px;
+  overflow: hidden;
+  box-shadow: 0 8px 28px rgba(0,0,0,.12);
+  background: #e5ddd5;
+  font-family: system-ui, -apple-system, sans-serif;
+}
+.wa-preview-compact { max-width: 280px; }
+.wa-preview-top {
+  background: #075e54;
+  color: #fff;
+  padding: 10px 12px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.wa-preview-body { padding: 14px 12px 16px; min-height: 120px; }
+.wa-preview-bubble {
+  background: #fff;
+  border-radius: 8px 8px 8px 2px;
+  padding: 8px 10px 6px;
+  box-shadow: 0 1px 1px rgba(0,0,0,.08);
+  font-size: 13px;
+  line-height: 1.45;
+  color: #111;
+  white-space: pre-wrap;
+}
+.wa-preview-header { font-weight: 700; margin-bottom: 6px; font-size: 13px; }
+.wa-preview-footer { margin-top: 8px; font-size: 11px; color: #667781; }
+.wa-preview-time { text-align: right; font-size: 10px; color: #667781; margin-top: 4px; }
+.wa-preview-cta {
+  margin-top: 8px;
+  border-top: 1px solid #e9edef;
+  padding-top: 8px;
+  text-align: center;
+  color: #00a5f4;
+  font-weight: 600;
+  font-size: 13px;
+}
+.wa-preview-note { padding: 8px 12px 12px; font-size: 10px; color: #667781; text-align: center; }
+
+.fb-payauth-layout { display: grid; grid-template-columns: 1fr 300px; gap: 16px; align-items: start; }
+@media (max-width: 900px) {
+  .tpl-studio-grid, .fb-payauth-layout, .flows-hero-card, .flows-split, .flows-form-grid { grid-template-columns: 1fr; }
+  .wa-preview-phone { margin: 0; }
+}
 @media (max-width: 520px) {
   .tp-var-row { grid-template-columns: 36px 1fr 1fr; }
   .tp-var-row .tp-insert, .tp-var-row .tp-remove { grid-column: span 1; }
 }
 
 /* ---------- WhatsApp Flows ---------- */
-.flows-pane { flex: 1; min-width: 0; display: flex; flex-direction: column; padding: 20px 28px; overflow-y: auto; background: var(--bg); max-width: 1100px; }
-.flows-intro { margin: 4px 0 0; font-size: 12px; max-width: 620px; }
-.flows-capability { margin: 12px 0; padding: 12px 14px; border-radius: 12px; background: var(--surface-2); font-size: 12px; line-height: 1.55; }
-.flows-capability.ok { background: #e3f8ee; color: #1d6b42; }
-.flows-capability.warn { background: #fff6e0; color: #7a5a00; }
+.flows-pane { flex: 1; min-width: 0; display: flex; flex-direction: column; padding: 20px 28px; overflow-y: auto; background: var(--bg); max-width: 960px; }
+.flows-intro { margin: 4px 0 0; font-size: 13px; max-width: 560px; line-height: 1.5; }
+.flows-status-bar {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  margin: 12px 0 14px; padding: 10px 14px; border-radius: 12px;
+  background: var(--surface); border: 1px solid var(--border); font-size: 13px;
+}
+.flows-status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); flex-shrink: 0; }
+.flows-status-dot.ok { background: #22c55e; }
+.flows-status-dot.warn { background: #f59e0b; }
+.flows-status-dot.err { background: #ef4444; }
+.flows-status-text { flex: 1; min-width: 0; }
+.flows-tabs { display: flex; gap: 4px; margin-bottom: 16px; border-bottom: 1px solid var(--border); padding-bottom: 0; }
+.flows-tab {
+  background: none; border: none; border-bottom: 2px solid transparent;
+  padding: 10px 16px; font-size: 13px; font-weight: 600; color: var(--muted);
+  cursor: pointer; margin-bottom: -1px;
+}
+.flows-tab:hover { color: var(--text); }
+.flows-tab.active { color: var(--green); border-bottom-color: var(--green); }
+.flows-tab-panel { animation: flowsFade .2s ease; }
+@keyframes flowsFade { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+.flows-hero-card {
+  padding: 18px 20px; border-radius: 14px;
+  background: linear-gradient(135deg, #f0fdf4 0%, #fff 60%);
+  border: 1px solid #bbf7d0;
+}
+.flows-hero-wide { grid-template-columns: 1fr; margin-bottom: 16px; }
+.flows-dual-preview { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 16px; align-items: start; }
+.flows-preview-col { min-width: 0; }
+.preview-step { font-size: 12px; font-weight: 600; margin: 0 0 10px; color: var(--muted); }
+.flow-screen-tabs { display: flex; gap: 4px; margin-bottom: 8px; }
+.flow-screen-tab {
+  background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px;
+  padding: 6px 12px; font-size: 12px; cursor: pointer;
+}
+.flow-screen-tab.active { background: #dcfce7; border-color: #86efac; color: #166534; font-weight: 600; }
+.flows-upload-label input[type=file] { margin-top: 6px; font-size: 12px; }
+.flows-split-detail { grid-template-columns: 280px 1fr; }
+.flows-empty-detail { display: flex; align-items: center; justify-content: center; min-height: 320px; }
+.flows-detail.hidden, .flows-empty-detail.hidden { display: none; }
+.flows-detail-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 14px; }
+.flows-stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 16px; }
+.flow-stat-card { background: var(--surface-2); border-radius: 12px; padding: 12px; text-align: center; }
+.flow-stat-card .n { display: block; font-size: 22px; font-weight: 700; line-height: 1.2; }
+.flow-stat-card .l { display: block; font-size: 11px; color: var(--muted); margin-top: 4px; }
+.flows-detail-tabs { display: flex; gap: 4px; margin-bottom: 12px; border-bottom: 1px solid var(--border); }
+.flows-detail-tab {
+  background: none; border: none; border-bottom: 2px solid transparent; padding: 8px 14px;
+  font-size: 12px; font-weight: 600; color: var(--muted); cursor: pointer; margin-bottom: -1px;
+}
+.flows-detail-tab.active { color: var(--green); border-bottom-color: var(--green); }
+.flows-detail-pane { min-height: 200px; margin-bottom: 14px; }
+.flows-send-collapsed summary { cursor: pointer; font-size: 13px; font-weight: 600; color: var(--muted); }
+.flow-activity-list { font-size: 12px; line-height: 1.6; max-height: 280px; overflow-y: auto; }
+.flow-activity-row { padding: 8px 0; border-bottom: 1px solid var(--border); }
+
+/* WhatsApp Flow phone mockup */
+.flow-phone {
+  max-width: 300px; margin: 0 auto; border-radius: 16px; overflow: hidden;
+  box-shadow: 0 8px 28px rgba(0,0,0,.14); background: #fff; font-family: system-ui, -apple-system, sans-serif;
+}
+.flow-phone-nav {
+  display: grid; grid-template-columns: 72px 1fr 32px; align-items: center;
+  padding: 12px 14px; border-bottom: 1px solid #e9edef; font-size: 13px;
+}
+.flow-phone-cancel { color: #00a5f4; font-weight: 500; }
+.flow-phone-title { text-align: center; font-weight: 600; font-size: 14px; }
+.flow-phone-menu { text-align: right; color: #667781; font-size: 18px; line-height: 1; }
+.flow-phone-body { padding: 16px 18px 8px; min-height: 280px; }
+.flow-phone-body h3 { margin: 0 0 10px; font-size: 17px; font-weight: 700; }
+.flow-phone-body p { margin: 0 0 8px; font-size: 14px; color: #3b4a54; line-height: 1.45; }
+.flow-phone-img { width: 100%; max-height: 160px; object-fit: contain; border-radius: 8px; margin-bottom: 14px; background: #f6f6f6; }
+.flow-phone-radio { margin: 16px 0; }
+.flow-phone-radio label {
+  display: flex; align-items: center; gap: 10px; padding: 12px 14px; margin-bottom: 8px;
+  border: 1px solid #e9edef; border-radius: 10px; font-size: 14px; cursor: default;
+}
+.flow-phone-radio label.selected { border-color: #00a5f4; background: #f0f9ff; }
+.flow-phone-radio .dot {
+  width: 18px; height: 18px; border-radius: 50%; border: 2px solid #8696a0; flex-shrink: 0;
+}
+.flow-phone-radio label.selected .dot { border-color: #00a5f4; box-shadow: inset 0 0 0 4px #00a5f4; }
+.flow-phone-footer { padding: 12px 18px 16px; border-top: 1px solid #e9edef; }
+.flow-phone-footer button {
+  width: 100%; padding: 12px; border: none; border-radius: 24px; background: #1fb56b;
+  color: #fff; font-size: 15px; font-weight: 600; cursor: default;
+}
+.flow-phone-managed { padding: 8px; text-align: center; font-size: 10px; color: #8696a0; background: #f0f2f5; }
+
+@media (max-width: 900px) {
+  .flows-dual-preview, .flows-stats-grid { grid-template-columns: 1fr 1fr; }
+  .flows-split-detail { grid-template-columns: 1fr; }
+}
+@media (max-width: 560px) {
+  .flows-dual-preview, .flows-stats-grid { grid-template-columns: 1fr; }
+}
+.flows-hero-badge { display: inline-block; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: #166534; background: #dcfce7; padding: 3px 8px; border-radius: 999px; margin-bottom: 8px; }
+.flows-hero-copy h2 { margin: 0 0 8px; font-size: 18px; }
+.flows-steps { margin: 12px 0 0; padding-left: 18px; line-height: 1.6; }
+.flows-form-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+.flows-split { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; align-items: start; }
+.flows-panel-head-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.flow-sample-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; margin-top: 10px; }
+.flow-sample-card {
+  background: var(--surface-2); border: 1px solid var(--border); border-radius: 12px;
+  padding: 12px 14px; text-align: left; cursor: pointer;
+}
+.flow-sample-card:hover { border-color: var(--green); }
+.flow-sample-card strong { display: block; font-size: 13px; margin-bottom: 4px; }
+.flow-sample-card span { font-size: 11px; color: var(--muted); line-height: 1.4; }
+.flows-config-block { margin: 14px 0; }
+.flows-config-advanced { margin-top: 12px; font-size: 12px; }
+.flows-config-advanced summary { cursor: pointer; color: var(--muted); margin-bottom: 8px; }
+.flows-capability { display: none; }
 .flows-grid { display: grid; grid-template-columns: 280px 1fr; gap: 14px; margin-bottom: 14px; }
 .flows-panel { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 16px 18px; margin-bottom: 14px; }
 .flows-panel.wide { min-width: 0; }

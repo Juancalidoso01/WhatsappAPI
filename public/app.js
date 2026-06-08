@@ -17,6 +17,13 @@ const state = {
   flowCapability: null,
   activeFlowId: null,
   flowSamples: [],
+  templatePresets: [],
+  activeTemplatePreset: "punto_pago_autorizacion_pago",
+  flowsTab: "probar",
+  payAuthFlowScreen: "AUTH",
+  cardImageUrl: null,
+  flowsDetailTab: "preview",
+  activeFlowPerformance: null,
   activePhone: null,
   messages: [],
   conversationDetail: null,
@@ -589,6 +596,174 @@ function tpDefaultVars() {
   ];
 }
 
+function brandDisplayName() {
+  const ws = state.config.workspace || {};
+  return ws.displayName || state.config.brandName || "Punto Pago";
+}
+
+function tplPreviewOverrides() {
+  return {
+    nombre_cliente: ($("tplPreviewName") || {}).value || ($("payAuthCustomerName") || {}).value || "Juan Pablo",
+    monto: formatPreviewAmount(($("tplPreviewAmount") || {}).value || ($("payAuthAmount") || {}).value || "45.90"),
+    comercio: ($("tplPreviewMerchant") || {}).value || ($("payAuthMerchant") || {}).value || "Supermercado XO",
+    ultimos_4: ($("tplPreviewCard4") || {}).value || ($("payAuthCard4") || {}).value || "4821",
+  };
+}
+
+function formatPreviewAmount(raw) {
+  const n = Number.parseFloat(String(raw || "0").replace(",", "."));
+  if (Number.isNaN(n)) return `USD ${raw}`;
+  return `USD ${n.toFixed(2)}`;
+}
+
+function renderWaMessagePreview(container, data) {
+  if (!container || !data) return;
+  const now = new Date();
+  const time = now.toLocaleTimeString("es", { hour: "2-digit", minute: "2-digit" });
+  const header = data.headerText ? `<div class="wa-preview-header">${escapeHtml(data.headerText)}</div>` : "";
+  const footer = data.footerText ? `<div class="wa-preview-footer">${escapeHtml(data.footerText)}</div>` : "";
+  const cta = data.flowCta || data.cta
+    ? `<div class="wa-preview-cta">${escapeHtml(data.flowCta || data.cta)}</div>`
+    : "";
+  container.innerHTML = `
+    <div class="wa-preview-top">${escapeHtml(brandDisplayName())}</div>
+    <div class="wa-preview-body">
+      <div class="wa-preview-bubble">
+        ${header}
+        <div>${escapeHtml(data.bodyText || "—")}</div>
+        ${footer}
+        <div class="wa-preview-time">${time}</div>
+        ${cta}
+      </div>
+    </div>
+    <div class="wa-preview-note">Vista previa · el Flow se abre al tocar el botón</div>`;
+}
+
+async function loadTemplatePresets() {
+  const res = await api("/api/templates/presets");
+  state.templatePresets = (res && res.presets) || [];
+  const tpSel = $("tpPresetSelect");
+  if (tpSel) {
+    tpSel.innerHTML = `<option value="">— plantilla en blanco —</option>`
+      + state.templatePresets.map((p) => `<option value="${escapeHtml(p.key)}">${escapeHtml(p.label)}</option>`).join("");
+  }
+  renderTplPresetCards();
+}
+
+function renderTplPresetCards() {
+  const box = $("tplPresetCards");
+  if (!box) return;
+  if (!state.templatePresets.length) {
+    box.innerHTML = `<p class="muted">No hay borradores disponibles.</p>`;
+    return;
+  }
+  box.innerHTML = state.templatePresets.map((p) => `
+    <button type="button" class="tpl-preset-card" data-preset="${escapeHtml(p.key)}">
+      <h3>${escapeHtml(p.label)}</h3>
+      <p>${escapeHtml(p.description || "")}</p>
+      <div class="tpl-card-meta">
+        <span class="tpl-preset-tag">Borrador</span>
+        <span class="tpl-preset-tag">${escapeHtml(String(p.category || "UTILITY").toLowerCase())}</span>
+        ${p.variableCount ? `<span class="tpl-preset-tag">${p.variableCount} variables</span>` : ""}
+      </div>
+    </button>`).join("");
+  box.querySelectorAll(".tpl-preset-card").forEach((btn) =>
+    btn.addEventListener("click", () => openTplDraftModal(btn.dataset.preset))
+  );
+}
+
+async function openTplDraftModal(key) {
+  state.activeTemplatePreset = key || state.activeTemplatePreset;
+  const preset = state.templatePresets.find((p) => p.key === key);
+  if ($("payAuthCustomerName") && $("tplPreviewName")) {
+    $("tplPreviewName").value = $("payAuthCustomerName").value.trim() || "Juan Pablo";
+    $("tplPreviewAmount").value = ($("payAuthAmount") || {}).value || "45.90";
+    $("tplPreviewMerchant").value = ($("payAuthMerchant") || {}).value || "Supermercado XO";
+    $("tplPreviewCard4").value = ($("payAuthCard4") || {}).value || "4821";
+  }
+  if ($("tplDraftTitle")) $("tplDraftTitle").textContent = preset ? preset.label : "Borrador";
+  if ($("tplDraftDesc")) $("tplDraftDesc").textContent = preset ? preset.description : "";
+  await updateTplDraftPreview();
+  showModal("modalTplDraft");
+}
+
+async function updateTplDraftPreview() {
+  const key = state.activeTemplatePreset;
+  if (!key) return;
+  const res = await fetchPresetPreview(key, tplPreviewOverrides());
+  if (!res) return;
+  renderWaMessagePreview($("tplDraftWaPreview"), {
+    headerText: res.preview.headerText,
+    bodyText: res.preview.bodyText,
+    footerText: res.preview.footerText,
+    flowCta: res.preview.flowCta,
+  });
+  updatePayAuthPreview();
+}
+
+async function fetchPresetPreview(key, overrides) {
+  const q = new URLSearchParams(overrides || tplPreviewOverrides()).toString();
+  const res = await api(`/api/templates/presets/${encodeURIComponent(key)}?${q}`);
+  return (res && res.ok) ? res : null;
+}
+
+async function updatePayAuthPreview() {
+  const res = await fetchPresetPreview("punto_pago_autorizacion_pago", tplPreviewOverrides());
+  if (!res || !res.preset || !res.preset.flowMessage) return;
+  const fm = res.preset.flowMessage;
+  const ov = tplPreviewOverrides();
+  const body = fm.bodyText
+    .replace(/\{\{\s*monto\s*\}\}/g, ov.monto)
+    .replace(/\{\{\s*comercio\s*\}\}/g, ov.comercio)
+    .replace(/\{\{\s*ultimos_4\s*\}\}/g, ov.ultimos_4)
+    .replace(/\{\{\s*nombre_cliente\s*\}\}/g, ov.nombre_cliente);
+  renderWaMessagePreview($("payAuthWaPreview"), {
+    headerText: fm.headerText,
+    bodyText: body,
+    footerText: fm.footerText,
+    flowCta: fm.cta,
+  });
+}
+
+async function initTemplateStudio() {
+  await loadTemplatePresets();
+}
+
+function applyPresetToForm(preset) {
+  if (!preset) return;
+  if ($("tpName")) $("tpName").value = preset.name || "";
+  if ($("tpCategory")) $("tpCategory").value = preset.category || "UTILITY";
+  if ($("tpLang")) $("tpLang").value = preset.language || "es";
+  if ($("tpHeader")) $("tpHeader").value = preset.headerText || "";
+  if ($("tpBody")) $("tpBody").value = preset.bodyText || "";
+  if ($("tpFooter")) $("tpFooter").value = preset.footerText || "";
+  renderTpVarList(preset.variables || []);
+  updateTpPreview();
+}
+
+async function loadTemplatePresetIntoModal(key) {
+  const res = await api(`/api/templates/presets/${encodeURIComponent(key)}`);
+  if (!res || !res.ok || !res.preset) return;
+  applyPresetToForm(res.preset);
+}
+
+function setFlowsTab(tab) {
+  state.flowsTab = tab;
+  document.querySelectorAll(".flows-tab").forEach((b) =>
+    b.classList.toggle("active", b.dataset.flowsTab === tab)
+  );
+  const panels = { probar: "flowsPanelProbar", mis: "flowsPanelMis", crear: "flowsPanelCrear", actividad: "flowsPanelActividad" };
+  Object.entries(panels).forEach(([key, id]) => {
+    const el = $(id);
+    if (el) el.classList.toggle("hidden", key !== tab);
+  });
+  if (tab === "mis") {
+    const hasFlow = Boolean(state.activeFlowId);
+    if ($("flowsDetailPanel")) $("flowsDetailPanel").classList.toggle("hidden", !hasFlow);
+    if ($("flowsEmptyDetail")) $("flowsEmptyDetail").classList.toggle("hidden", hasFlow);
+  }
+}
+
 function collectTpVariables() {
   const rows = $("tpVarList").querySelectorAll(".tp-var-row");
   return Array.from(rows).map((row, i) => ({
@@ -688,6 +863,22 @@ function updateTpPreview() {
   if (ph.length && !seqOk) lines.push("⚠ Los placeholders del cuerpo deben ser {{1}}, {{2}}… en orden.");
   preview.textContent = lines.join("\n");
   updateTpFieldCounts();
+
+  const waBox = $("tpWaPreviewModal");
+  if (waBox) {
+    const byIndex = {};
+    vars.forEach((v, i) => { byIndex[i + 1] = v.example || `{{${i + 1}}}`; });
+    const filledBody = body.replace(/\{\{\s*(\d+)\s*\}\}/g, (_, n) => byIndex[Number(n)] ?? `{{${n}}}`);
+    const ctaSel = $("tpPresetSelect");
+    const presetKey = ctaSel && ctaSel.value ? ctaSel.value : "";
+    const preset = state.templatePresets.find((p) => p.key === presetKey);
+    renderWaMessagePreview(waBox, {
+      headerText: header,
+      bodyText: filledBody,
+      footerText: footer,
+      flowCta: preset ? preset.flowCta : "",
+    });
+  }
 }
 
 function renderTpEmojiBar() {
@@ -702,18 +893,26 @@ function renderTpEmojiBar() {
   );
 }
 
-async function initTemplateModal() {
+async function initTemplateModal(presetKey) {
   const meta = await api("/api/templates/create-meta");
   if (meta.ok) {
     tpState.limits = meta.limits || tpState.limits;
     tpState.emojis = meta.emojis || [];
   }
+  await loadTemplatePresets();
   $("tpHint").textContent = "";
   $("tpHint").className = "hint";
-  if (!$("tpBody").value.trim()) {
-    $("tpBody").value = "Hola {{1}}, tu saldo pendiente es {{2}}. Vence el {{3}}. 📅";
+  const key = presetKey || "";
+  if (key) {
+    if ($("tpPresetSelect")) $("tpPresetSelect").value = key;
+    await loadTemplatePresetIntoModal(key);
+  } else {
+    if ($("tpPresetSelect")) $("tpPresetSelect").value = "";
+    if (!$("tpBody").value.trim()) {
+      $("tpBody").value = "Hola {{1}}, tu saldo pendiente es {{2}}. Vence el {{3}}. 📅";
+      renderTpVarList(tpDefaultVars());
+    }
   }
-  renderTpVarList(tpDefaultVars());
   renderTpEmojiBar();
   updateTpPreview();
 }
@@ -1587,6 +1786,172 @@ async function initWorkspaceScreen() {
 /* ---------- WhatsApp Flows ---------- */
 const FLOW_STATUS_LABELS = { DRAFT: "Borrador", PUBLISHED: "Publicado", DEPRECATED: "Deprecado", BLOCKED: "Bloqueado", THROTTLED: "Limitado" };
 
+function getPayAuthFlowData() {
+  const amount = formatPreviewAmount(($("payAuthAmount") || {}).value || "45.90");
+  const card4 = ($("payAuthCard4") || {}).value || "4821";
+  const merchant = ($("payAuthMerchant") || {}).value || "Supermercado XO";
+  const now = new Date().toLocaleString("es-PA", { dateStyle: "medium", timeStyle: "short" });
+  const cardImg = state.cardImageUrl || "/assets/punto-pago-card.png";
+  return {
+    merchant,
+    amount,
+    card_label: `Tarjeta Punto Pago •••• ${card4}`,
+    card_image: cardImg + (String(cardImg).includes("?") ? "&" : "?") + "t=" + Date.now(),
+    when: now,
+  };
+}
+
+function renderFlowPhonePreview(container, screen, data) {
+  if (!container) return;
+  const d = data || getPayAuthFlowData();
+  const title = screen === "RESULT" ? "Resultado" : "Autorizar pago";
+  let bodyHtml = "";
+  let footerLabel = "Confirmar";
+
+  if (screen === "AUTH") {
+    bodyHtml = `
+      <img class="flow-phone-img" src="${escapeHtml(d.card_image)}" alt="Tarjeta" onerror="this.src='/assets/punto-pago-card.png'" />
+      <h3>¿Autorizas este pago?</h3>
+      <p>Comercio: ${escapeHtml(d.merchant)}</p>
+      <p>Monto: ${escapeHtml(d.amount)}</p>
+      <p>${escapeHtml(d.card_label)}</p>
+      <p>${escapeHtml(d.when)}</p>
+      <div class="flow-phone-radio">
+        <label class="selected"><span class="dot"></span> Autorizar pago</label>
+        <label><span class="dot"></span> Rechazar</label>
+      </div>`;
+  } else {
+    bodyHtml = `
+      <h3>Pago autorizado</h3>
+      <p>${escapeHtml(d.merchant)} recibirá la confirmación del pago.</p>
+      <p>Monto: ${escapeHtml(d.amount)}</p>`;
+    footerLabel = "Cerrar";
+  }
+
+  container.innerHTML = `
+    <div class="flow-phone-nav">
+      <span class="flow-phone-cancel">Cancelar</span>
+      <span class="flow-phone-title">${escapeHtml(title)}</span>
+      <span class="flow-phone-menu">⋯</span>
+    </div>
+    <div class="flow-phone-body">${bodyHtml}</div>
+    <div class="flow-phone-footer"><button type="button">${escapeHtml(footerLabel)}</button></div>
+    <div class="flow-phone-managed">Administrado por ${escapeHtml(brandDisplayName())}</div>`;
+}
+
+function updatePayAuthFlowPreview() {
+  renderFlowPhonePreview($("payAuthFlowPreview"), state.payAuthFlowScreen, getPayAuthFlowData());
+}
+
+async function uploadPayAuthCardImage(file) {
+  if (!file) return;
+  const fd = new FormData();
+  fd.append("image", file);
+  const res = await postForm("/api/flows/payment-auth/card-image", fd);
+  if (!res.ok) { toast(res.error || "No se pudo subir la imagen.", "error"); return; }
+  state.cardImageUrl = res.cardImageUrl;
+  toast("Imagen de tarjeta actualizada.", "ok");
+  updatePayAuthFlowPreview();
+}
+
+function renderFlowStatsCards(stats, isPaymentAuth) {
+  const box = $("flowsStatsCards");
+  if (!box || !stats) return;
+  const cards = [
+    [stats.sent, "Enviados"],
+    [stats.opened, "Abiertos"],
+    [stats.responded, "Completados"],
+    [`${stats.completionRate || 0}%`, "Tasa completado"],
+  ];
+  if (isPaymentAuth) {
+    cards[2] = [stats.authorized, "Autorizados"];
+    cards[3] = [stats.denied, "Rechazados"];
+  }
+  box.innerHTML = cards.map(([n, l]) =>
+    `<div class="flow-stat-card"><span class="n">${escapeHtml(String(n))}</span><span class="l">${escapeHtml(l)}</span></div>`
+  ).join("");
+}
+
+function setFlowsDetailTab(tab) {
+  state.flowsDetailTab = tab;
+  document.querySelectorAll(".flows-detail-tab").forEach((b) =>
+    b.classList.toggle("active", b.dataset.detailTab === tab)
+  );
+  ["preview", "sends", "responses"].forEach((t) => {
+    const el = $("flowsDetail" + t.charAt(0).toUpperCase() + t.slice(1));
+    if (el) el.classList.toggle("hidden", t !== tab);
+  });
+}
+
+function renderFlowActivityList(rows, emptyMsg) {
+  if (!rows || !rows.length) return `<p class="muted sm">${escapeHtml(emptyMsg)}</p>`;
+  return `<div class="flow-activity-list">${rows.map((r) => {
+    if (r.sentAt) {
+      return `<div class="flow-activity-row">📤 +${escapeHtml(r.phone)} · ${escapeHtml(new Date(r.sentAt).toLocaleString("es"))}${r.mode ? ` · ${escapeHtml(r.mode)}` : ""}</div>`;
+    }
+    if (r.receivedAt) {
+      const decision = r.responseJson && (r.responseJson.decision || (r.responseJson.payload && r.responseJson.payload.decision));
+      return `<div class="flow-activity-row">✅ +${escapeHtml(r.phone)} · ${escapeHtml(new Date(r.receivedAt).toLocaleString("es"))}${decision ? ` · ${escapeHtml(decision)}` : ""}</div>`;
+    }
+    if (r.merchant) {
+      const st = r.decision ? (r.decision === "authorize" ? "autorizado" : "rechazado") : "pendiente";
+      return `<div class="flow-activity-row">💳 ${escapeHtml(r.merchant)} · $${escapeHtml(r.amount)} · ${escapeHtml(st)}</div>`;
+    }
+    return "";
+  }).join("")}</div>`;
+}
+
+function renderFlowDetailPreview(performance) {
+  const box = $("flowsDetailPreview");
+  if (!box) return;
+  if (performance.isPaymentAuth) {
+    box.innerHTML = `
+      <p class="muted sm" style="margin-bottom:10px">Así ve el cliente el mensaje y el formulario.</p>
+      <div class="flows-dual-preview">
+        <div class="flows-preview-col"><div id="flowDetailWaPreview"></div></div>
+        <div class="flows-preview-col"><div id="flowDetailFlowPreview"></div></div>
+      </div>`;
+    const fm = { headerText: "Alerta de transacción", footerText: "Punto Pago · Mensaje automático", flowCta: "Revisar y autorizar" };
+    const ov = tplPreviewOverrides();
+    renderWaMessagePreview($("flowDetailWaPreview"), {
+      headerText: fm.headerText,
+      bodyText: `Hay un pago pendiente de ${ov.monto} en ${ov.comercio} con tu tarjeta Punto Pago •••• ${ov.ultimos_4}. ¿Autorizas esta transacción?`,
+      footerText: fm.footerText,
+      flowCta: fm.flowCta,
+    });
+    renderFlowPhonePreview($("flowDetailFlowPreview"), "AUTH", getPayAuthFlowData());
+  } else {
+    box.innerHTML = `<p class="muted sm">Vista previa disponible para Flows de autorización de pago. Usa «Abrir en Meta» para ver otros.</p>`;
+  }
+}
+
+async function loadFlowDetail(id) {
+  const perfRes = await api(`/api/flows/${encodeURIComponent(id)}/performance`);
+  if (!perfRes.ok) return;
+  state.activeFlowPerformance = perfRes;
+  const f = state.flows.find((x) => x.id === id) || perfRes.flow || {};
+  $("flowsDetailName").textContent = f.name || id;
+  const st = (f.status || "").toUpperCase();
+  const stEl = $("flowsDetailStatus");
+  if (stEl) {
+    stEl.textContent = FLOW_STATUS_LABELS[st] || st || "—";
+    stEl.className = "flow-status " + st;
+  }
+  renderFlowStatsCards(perfRes.stats, perfRes.isPaymentAuth);
+  $("flowsDetailSends").innerHTML = renderFlowActivityList(perfRes.recentSends, "Aún no hay envíos registrados.");
+  const respRows = perfRes.isPaymentAuth && perfRes.recentPayAuth.length
+    ? perfRes.recentPayAuth
+    : perfRes.recentResponses;
+  $("flowsDetailResponses").innerHTML = renderFlowActivityList(
+    respRows,
+    "Aún no hay respuestas. Cuando alguien complete el Flow, aparecerá aquí."
+  );
+  renderFlowDetailPreview(perfRes);
+  setFlowsDetailTab(state.flowsDetailTab || "preview");
+  $("flowsDetailPanel").classList.remove("hidden");
+  $("flowsEmptyDetail").classList.add("hidden");
+}
+
 const fbState = {
   schema: null,
   screens: [
@@ -1890,15 +2255,10 @@ async function createFlowFromBuilder() {
 }
 
 async function loadPaymentAuthPanel() {
-  const res = await api("/api/flows/payment-auth/config");
-  const img = $("payAuthCardImg");
-  const hint = $("payAuthCardHint");
-  if (res.ok && res.cardImageUrl && img) {
-    img.src = res.cardImageUrl;
-    if (hint) {
-      hint.textContent = res.note || "";
-    }
-  }
+  const cfg = await api("/api/flows/payment-auth/config");
+  if (cfg.ok && cfg.cardImageUrl) state.cardImageUrl = cfg.cardImageUrl;
+  await updatePayAuthPreview();
+  updatePayAuthFlowPreview();
   const recent = await api("/api/flows/payment-auth/recent");
   const box = $("payAuthRecent");
   if (!box) return;
@@ -1918,6 +2278,7 @@ async function sendPaymentAuthTest() {
   if (!phone) { toast("Ingresa un teléfono.", "error"); return; }
   const res = await post("/api/flows/payment-auth/test", {
     phone,
+    customerName: ($("payAuthCustomerName") || {}).value.trim(),
     merchant: ($("payAuthMerchant") || {}).value.trim(),
     amount: ($("payAuthAmount") || {}).value.trim(),
     cardLast4: ($("payAuthCard4") || {}).value.trim(),
@@ -1925,50 +2286,59 @@ async function sendPaymentAuthTest() {
   if (!res.ok) { toast(res.error || "No se pudo enviar.", "error"); return; }
   toast("Autorización de pago enviada. Revisa WhatsApp.", "ok");
   await loadPaymentAuthPanel();
-  if (res.flowId) selectFlow(res.flowId);
+  if (res.flowId) {
+    await selectFlow(res.flowId);
+    setFlowsTab("mis");
+  }
 }
 
 async function loadFlowCapability() {
   const res = await api("/api/flows/capability");
   state.flowCapability = res;
-  const box = $("flowsCapability");
-  if (!box) return;
+  const dot = $("flowsStatusDot");
+  const text = $("flowsStatusText");
+  const cfgStatus = $("flowsConfigStatus");
+  if (!dot || !text) return;
+
   if (!res.hasCredentials) {
-    box.className = "flows-capability warn";
-    box.innerHTML = "<strong>Sin credenciales.</strong> Configura ACCESS_TOKEN, WABA_ID y PHONE_NUMBER_ID.";
+    dot.className = "flows-status-dot err";
+    text.textContent = "Sin conexión a WhatsApp. Configura las credenciales del servidor.";
+    if (cfgStatus) cfgStatus.textContent = "Credenciales no configuradas.";
     return;
   }
-  const cls = res.canListFlows ? (res.testNumberLikely ? "warn" : "ok") : "warn";
-  box.className = `flows-capability ${cls}`;
-  const notes = (res.notes || []).map((n) => `<li>${escapeHtml(n)}</li>`).join("");
-  box.innerHTML = `
-    <strong>${res.canListFlows ? "Flows API disponible" : "Flows API no accesible"}</strong>
-    ${res.testNumberLikely ? " · <em>Posible número de prueba Meta</em>" : ""}
-    ${res.flowCount != null ? ` · ${res.flowCount} flow(s) en la cuenta` : ""}
-    ${res.error ? `<div style="margin-top:6px">${escapeHtml(res.error)}</div>` : ""}
-    <ul style="margin:8px 0 0;padding-left:18px">${notes}</ul>`;
+
+  const ok = res.canListFlows;
+  dot.className = `flows-status-dot ${ok ? "ok" : "warn"}`;
+  const count = res.flowCount != null ? `${res.flowCount} Flow${res.flowCount === 1 ? "" : "s"} en tu cuenta` : "Flows disponibles";
+  text.textContent = ok ? `Conectado · ${count}` : "Conexión parcial. Revisa Configuración.";
+  if (cfgStatus) {
+    cfgStatus.textContent = ok
+      ? `Servidor listo. ${count}.`
+      : (res.error || "No se pudo verificar la API de Flows.");
+  }
 }
 
 async function loadFlowSamples() {
   const res = await api("/api/flows/samples");
   state.flowSamples = (res && res.samples) || [];
-  const sel = $("flowSampleSelect");
-  if (!sel) return;
-  sel.innerHTML = state.flowSamples
-    .map((s) => `<option value="${escapeHtml(s.key)}">${escapeHtml(s.name)}</option>`)
-    .join("");
-  updateFlowSampleDesc();
+  renderFlowSampleCards();
 }
 
-function updateFlowSampleDesc() {
-  const sel = $("flowSampleSelect");
-  const key = sel ? sel.value : "hello";
-  const s = state.flowSamples.find((x) => x.key === key);
-  if ($("flowSampleDesc")) {
-    $("flowSampleDesc").textContent = s
-      ? `${s.description}${s.dynamic ? " Requiere endpoint dinámico configurado." : ""}`
-      : "";
+function renderFlowSampleCards() {
+  const box = $("flowSampleCards");
+  if (!box) return;
+  if (!state.flowSamples.length) {
+    box.innerHTML = `<p class="muted sm">No hay ejemplos disponibles.</p>`;
+    return;
   }
+  box.innerHTML = state.flowSamples.map((s) => `
+    <button type="button" class="flow-sample-card" data-sample="${escapeHtml(s.key)}" title="${escapeHtml(s.description || "")}">
+      <strong>${escapeHtml(s.name || s.key)}</strong>
+      <span>${escapeHtml(s.description || "")}${s.dynamic ? " · Datos en vivo" : ""}</span>
+    </button>`).join("");
+  box.querySelectorAll(".flow-sample-card").forEach((btn) =>
+    btn.addEventListener("click", () => createFlowSampleKey(btn.dataset.sample))
+  );
 }
 
 async function loadFlowEndpointSetup() {
@@ -1978,15 +2348,25 @@ async function loadFlowEndpointSetup() {
   if (!uriEl) return;
   if (res.ok && res.endpointUri) {
     uriEl.textContent = res.endpointUri;
-    hint.textContent = res.warning
-      ? res.warning
-      : `Clave: ${res.keySource || "—"}. Pulsa “Registrar clave en Meta” antes de flows dinámicos.`;
-    if (res.warning) hint.style.color = "var(--red)";
-    else hint.style.color = "";
+    if (hint) {
+      hint.textContent = res.warning
+        ? res.warning
+        : "Servidor conectado. Pulsa «Sincronizar con Meta» si es la primera vez.";
+      hint.style.color = res.warning ? "var(--red)" : "";
+    }
   } else {
-    uriEl.textContent = "Configura PUBLIC_BASE_URL en el servidor";
-    hint.textContent = "Sin URL pública no se puede usar data_exchange.";
+    uriEl.textContent = "No configurado";
+    if (hint) {
+      hint.textContent = "El servidor necesita una URL pública para formularios con datos en vivo.";
+      hint.style.color = "";
+    }
   }
+}
+
+async function openFlowsConfigModal() {
+  await loadFlowEndpointSetup();
+  await loadFlowCapability();
+  showModal("modalFlowsConfig");
 }
 
 async function setupFlowEndpoint() {
@@ -2028,9 +2408,8 @@ function renderFlowsList() {
 async function selectFlow(id) {
   state.activeFlowId = id;
   renderFlowsList();
-  $("flowsSendPanel").classList.remove("hidden");
+  setFlowsTab("mis");
   const f = state.flows.find((x) => x.id === id);
-  $("flowsSendName").textContent = f ? f.name : id;
 
   const detail = await api(`/api/flows/${encodeURIComponent(id)}`);
   state.activeFlowDetail = detail.ok ? detail.flow : null;
@@ -2041,31 +2420,43 @@ async function selectFlow(id) {
   } else if ($("flowPreviewLink")) {
     $("flowPreviewLink").classList.add("hidden");
   }
+
+  await loadFlowDetail(id);
+  if (f && f.name && f.name.includes("autorizacion")) {
+    $("flowSendScreen").value = "AUTH";
+    $("flowSendCta").value = "Revisar y autorizar";
+  }
 }
 
-async function createFlowSample() {
-  const sample = $("flowSampleSelect").value || "hello";
-  const s = state.flowSamples.find((x) => x.key === sample);
+async function createFlowSampleKey(sample) {
+  const key = sample || "hello";
+  const s = state.flowSamples.find((x) => x.key === key);
   if (s && s.dynamic) {
     const setup = await api("/api/flows/endpoint/setup");
     if (!setup.endpointUri) {
-      toast("Configura PUBLIC_BASE_URL antes de crear un Flow dinámico.", "error");
+      toast("Primero configura el servidor en Configuración.", "error");
+      openFlowsConfigModal();
       return;
     }
   }
-  const res = await post("/api/flows", { sample });
+  const res = await post("/api/flows", { sample: key });
   if (!res.ok) { toast(res.error || "No se pudo crear el Flow.", "error"); return; }
   if (res.validation_errors && res.validation_errors.length) {
-    toast(res.validation_errors[0].message || res.error || "Flow JSON inválido.", "error");
+    toast(res.validation_errors[0].message || res.error || "Flow inválido.", "error");
     return;
   }
-  toast(res.endpointUri ? "Flow dinámico creado con endpoint." : "Flow creado en Meta.", "ok");
+  toast("Flow creado en Meta.", "ok");
   await loadFlows();
+  setFlowsTab("mis");
   if (res.flow && res.flow.id) {
     if (res.defaultScreen) $("flowSendScreen").value = res.defaultScreen;
     if (res.defaultCta) $("flowSendCta").value = res.defaultCta;
     selectFlow(res.flow.id);
   }
+}
+
+async function createFlowSample() {
+  await createFlowSampleKey(($("flowSampleSelect") || {}).value || "hello");
 }
 
 async function sendActiveFlow() {
@@ -2086,6 +2477,7 @@ async function sendActiveFlow() {
     return;
   }
   toast(`Flow enviado (modo ${res.mode || "published"}).`, "ok");
+  if (state.activeFlowId) await loadFlowDetail(state.activeFlowId);
 }
 
 async function publishActiveFlow() {
@@ -2114,6 +2506,7 @@ async function loadFlowResponses() {
 }
 
 async function initFlowsScreen() {
+  setFlowsTab(state.flowsTab || "probar");
   await Promise.all([
     loadFlowCapability(),
     initFlowBuilder(),
@@ -2138,7 +2531,10 @@ function switchScreen(name) {
   $("screenWorkspace").classList.toggle("hidden", name !== "workspace");
   $("screenFlows").classList.toggle("hidden", name !== "flows");
   $("screenBilling").classList.toggle("hidden", name !== "billing");
-  if (name === "templates") { loadTemplates().then(renderTemplateList); }
+  if (name === "templates") {
+    loadTemplates().then(renderTemplateList);
+    initTemplateStudio();
+  }
   if (name === "bulk") { initBulkScreen(); }
   if (name === "integration") { initIntegrationScreen(); }
   if (name === "workspace") { initWorkspaceScreen(); }
@@ -2220,6 +2616,70 @@ function bindEvents() {
     if (wrap && !wrap.contains(e.target)) toggleWorkspaceFlyout(false);
   });
   $("newTemplateBtn").addEventListener("click", () => { initTemplateModal(); showModal("modalTemplate"); });
+  const tplDraftCreateBtn = $("tplDraftCreateBtn");
+  if (tplDraftCreateBtn) {
+    tplDraftCreateBtn.addEventListener("click", () => {
+      const key = state.activeTemplatePreset;
+      closeModals();
+      initTemplateModal(key).then(() => showModal("modalTemplate"));
+    });
+  }
+  ["tplPreviewName", "tplPreviewAmount", "tplPreviewMerchant", "tplPreviewCard4"].forEach((id) => {
+    const el = $(id);
+    if (el) el.addEventListener("input", () => {
+      updateTplDraftPreview();
+      updatePayAuthPreview();
+      updatePayAuthFlowPreview();
+    });
+  });
+  const tpPresetSelect = $("tpPresetSelect");
+  if (tpPresetSelect) {
+    tpPresetSelect.addEventListener("change", async () => {
+      const key = tpPresetSelect.value;
+      if (key) await loadTemplatePresetIntoModal(key);
+      else {
+        $("tpName").value = "";
+        $("tpHeader").value = "";
+        $("tpBody").value = "";
+        $("tpFooter").value = "";
+        renderTpVarList([{ key: "", example: "" }]);
+      }
+      updateTpPreview();
+    });
+  }
+  const payAuthOpenTplBtn = $("payAuthOpenTplBtn");
+  if (payAuthOpenTplBtn) {
+    payAuthOpenTplBtn.addEventListener("click", () => openTplDraftModal("punto_pago_autorizacion_pago"));
+  }
+  document.querySelectorAll(".flows-tab").forEach((btn) =>
+    btn.addEventListener("click", () => setFlowsTab(btn.dataset.flowsTab))
+  );
+  const flowsConfigBtn = $("flowsConfigBtn");
+  if (flowsConfigBtn) flowsConfigBtn.addEventListener("click", openFlowsConfigModal);
+  ["payAuthCustomerName", "payAuthMerchant", "payAuthAmount", "payAuthCard4"].forEach((id) => {
+    const el = $(id);
+    if (el) el.addEventListener("input", () => { updatePayAuthPreview(); updatePayAuthFlowPreview(); });
+  });
+  const payAuthCardImage = $("payAuthCardImage");
+  if (payAuthCardImage) {
+    payAuthCardImage.addEventListener("change", (e) => {
+      const f = e.target.files && e.target.files[0];
+      if (f) uploadPayAuthCardImage(f);
+      e.target.value = "";
+    });
+  }
+  document.querySelectorAll(".flow-screen-tab").forEach((btn) =>
+    btn.addEventListener("click", () => {
+      state.payAuthFlowScreen = btn.dataset.screen || "AUTH";
+      document.querySelectorAll(".flow-screen-tab").forEach((b) =>
+        b.classList.toggle("active", b.dataset.screen === state.payAuthFlowScreen)
+      );
+      updatePayAuthFlowPreview();
+    })
+  );
+  document.querySelectorAll(".flows-detail-tab").forEach((btn) =>
+    btn.addEventListener("click", () => setFlowsDetailTab(btn.dataset.detailTab))
+  );
   $("tpCreate").addEventListener("click", createTemplate);
   $("tpAddVar").addEventListener("click", () => {
     const vars = collectTpVariables();
@@ -2240,8 +2700,8 @@ function bindEvents() {
   if ($("fbAddMessage")) $("fbAddMessage").addEventListener("click", () => fbAddScreen("message"));
   if ($("fbAddConfirm")) $("fbAddConfirm").addEventListener("click", () => fbAddScreen("confirm"));
   if ($("fbCreateBtn")) $("fbCreateBtn").addEventListener("click", createFlowFromBuilder);
+  if ($("flowCreateBtn")) $("flowCreateBtn").addEventListener("click", createFlowSample);
   if ($("payAuthSendBtn")) $("payAuthSendBtn").addEventListener("click", sendPaymentAuthTest);
-  $("flowSampleSelect").addEventListener("change", updateFlowSampleDesc);
   $("detailTemplateBtn").addEventListener("click", () => openNewChat());
   $("detailToggle").addEventListener("click", () => $("detailPane").classList.toggle("collapsed"));
   $("detailNotes").addEventListener("blur", saveNotes);

@@ -3,6 +3,7 @@
 const config = require("./config");
 const FlowStore = require("./flow-store");
 const PaymentAuthStore = require("./payment-auth-store");
+const CardImageStore = require("./card-image-store");
 const { PRODUCTS, productTitle } = require("./flow-quote");
 
 function isPaymentAuthToken(flowToken) {
@@ -23,6 +24,10 @@ function formatWhen(ts) {
 
 function cardImageUrl() {
   return config.cardImageUrl || "https://via.placeholder.com/640x400.png?text=Punto+Pago";
+}
+
+async function resolveCardImageUrl() {
+  return CardImageStore.resolveCardImageUrl();
 }
 
 async function handlePaymentAuth(decryptedBody) {
@@ -56,6 +61,7 @@ async function handlePaymentAuth(decryptedBody) {
 
   if (action === "INIT") {
     await FlowStore.recordEndpointEvent({ type: "init", channel: "payment_auth", flowToken });
+    const img = await resolveCardImageUrl();
     return {
       version,
       screen: "AUTH",
@@ -63,7 +69,7 @@ async function handlePaymentAuth(decryptedBody) {
         merchant: txn.merchant,
         amount: `$${txn.amount} ${txn.currency}`,
         card_label: `Tarjeta Punto Pago •••• ${txn.cardLast4}`,
-        card_image: cardImageUrl(),
+        card_image: img,
         when: formatWhen(txn.createdAt),
       },
     };
@@ -99,6 +105,7 @@ async function handlePaymentAuth(decryptedBody) {
     };
   }
 
+  const img = await resolveCardImageUrl();
   return {
     version,
     screen: "AUTH",
@@ -106,7 +113,7 @@ async function handlePaymentAuth(decryptedBody) {
       merchant: txn.merchant,
       amount: `$${txn.amount} ${txn.currency}`,
       card_label: `Tarjeta Punto Pago •••• ${txn.cardLast4}`,
-      card_image: cardImageUrl(),
+      card_image: img,
       when: formatWhen(txn.createdAt),
     },
   };
@@ -176,4 +183,4 @@ async function handleFlowRequest(decryptedBody) {
   return handleQuoteFlow(decryptedBody);
 }
 
-module.exports = { handleFlowRequest, isPaymentAuthToken, cardImageUrl };
+module.exports = { handleFlowRequest, isPaymentAuthToken, cardImageUrl, resolveCardImageUrl };

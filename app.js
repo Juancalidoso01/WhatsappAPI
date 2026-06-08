@@ -37,8 +37,11 @@ const flowSamples = require('./services/flow-samples');
 const flowBuilder = require('./services/flow-builder');
 const FlowKeys = require('./services/flow-keys');
 const { decryptRequest, encryptResponse, FlowEndpointException } = require('./services/flow-encryption');
-const { handleFlowRequest, cardImageUrl } = require('./services/flow-endpoint-handler');
+const { handleFlowRequest, cardImageUrl, resolveCardImageUrl } = require('./services/flow-endpoint-handler');
 const PaymentAuthStore = require('./services/payment-auth-store');
+const templatePresets = require('./services/template-presets');
+const flowPerformance = require('./services/flow-performance');
+const CardImageStore = require('./services/card-image-store');
 const redis = require('./services/upstash');
 
 const PAYMENT_AUTH_FLOW_KEY = 'wa:flow:payment_auth_id';
@@ -57,6 +60,11 @@ const csvUpload = multer({
 const avatarUpload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 512 * 1024 },
+});
+
+const cardImageUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 1024 * 1024 },
 });
 
 // Safety net: keep the server alive if a WhatsApp API call fails (e.g. when
@@ -435,13 +443,9 @@ app.get('/api/flows/capability', async (req, res) => {
     ok: false,
     hasCredentials: Boolean(config.accessToken && config.wabaId && config.phoneNumberId),
     canListFlows: false,
-    testNumberLikely: false,
-    notes: [],
+    flowCount: 0,
   };
-  if (!base.hasCredentials) {
-    base.notes.push('Configura ACCESS_TOKEN, WABA_ID y PHONE_NUMBER_ID.');
-    return res.json(base);
-  }
+  if (!base.hasCredentials) return res.json(base);
 
   try {
     const result = await GraphApi.listFlows(config.wabaId);
@@ -450,24 +454,7 @@ app.get('/api/flows/capability', async (req, res) => {
     base.flowCount = (result.data || []).length;
   } catch (err) {
     base.error = String(err.message || err);
-    base.notes.push('No se pudo listar Flows. Verifica permisos whatsapp_business_management.');
   }
-
-  try {
-    const line = parseLineHealth(await GraphApi.getPhoneLineHealth(config.phoneNumberId));
-    base.line = line;
-    const phone = String(line.displayPhone || '');
-    base.testNumberLikely = /555|test|0000/i.test(phone) || (line.verifiedName || '').toLowerCase().includes('test');
-  } catch (_) {}
-
-  base.notes.push(
-    'Número de prueba Meta: puedes crear Flows y probarlos en borrador (mode draft) dentro de la ventana de 24 h.',
-    'Enviar Flows publicados masivamente requiere WABA verificada y nombre de display aprobado.',
-    'Si ves error 139000 (Integrity), completa verificación de negocio en Meta Business.',
-    config.publicBaseUrl
-      ? `Endpoint dinámico disponible en ${config.publicBaseUrl}/api/flows/endpoint (sample quote).`
-      : 'Para Flows dinámicos configura PUBLIC_BASE_URL y registra la clave en la pantalla Flows.',
-  );
 
   res.json(base);
 });
@@ -528,13 +515,43 @@ app.post('/api/flows/build', apiJson, async (req, res) => {
   }
 });
 
-app.get('/api/flows/payment-auth/config', (req, res) => {
+app.get('/api/flows/payment-auth/config', async (req, res) => {
+  const img = await resolveCardImageUrl();
   res.json({
     ok: true,
-    cardImageUrl: cardImageUrl(),
-    hasPublicBaseUrl: Boolean(config.publicBaseUrl),
-    note: 'Reemplaza public/assets/punto-pago-card.png con tu imagen real o define CARD_IMAGE_URL.',
+    cardImageUrl: img,
+    hasCustomCard: Boolean(await CardImageStore.get()),
+    previewScreens: ["AUTH", "RESULT"],
   });
+});
+
+app.get('/api/flows/payment-auth/card-image', async (req, res) => {
+  const stored = await CardImageStore.get();
+  if (stored && stored.data) {
+    const buf = Buffer.from(stored.data, "base64");
+    res.setHeader("Content-Type", stored.mimeType || "image/png");
+    res.setHeader("Cache-Control", "public, max-age=300");
+    return res.send(buf);
+  }
+  res.redirect(302, cardImageUrl());
+});
+
+app.post('/api/flows/payment-auth/card-image', (req, res, next) => {
+  cardImageUpload.single('image')(req, res, (err) => {
+    if (err) return res.status(400).json({ ok: false, error: err.message || 'Archivo inválido.' });
+    next();
+  });
+}, async (req, res) => {
+  if (!req.file || !req.file.buffer) {
+    return res.status(400).json({ ok: false, error: 'Se requiere una imagen.' });
+  }
+  const mime = req.file.mimetype || 'image/png';
+  if (!/^image\//.test(mime)) {
+    return res.status(400).json({ ok: false, error: 'Solo se permiten imágenes.' });
+  }
+  await CardImageStore.save({ buffer: req.file.buffer, mimeType: mime });
+  const url = await resolveCardImageUrl();
+  res.json({ ok: true, cardImageUrl: url });
 });
 
 app.get('/api/flows/payment-auth/recent', async (req, res) => {
@@ -546,7 +563,7 @@ app.get('/api/flows/payment-auth/recent', async (req, res) => {
 });
 
 app.post('/api/flows/payment-auth/test', apiJson, async (req, res) => {
-  const { phone, merchant, amount, cardLast4, currency, bodyText, cta } = req.body || {};
+  const { phone, merchant, amount, cardLast4, currency, customerName, bodyText, headerText, footerText, cta } = req.body || {};
   if (!phone) return res.status(400).json({ ok: false, error: 'Se requiere "phone".' });
   if (!config.phoneNumberId || !config.accessToken || !config.wabaId) {
     return res.status(400).json({ ok: false, error: 'Faltan credenciales de WhatsApp.' });
@@ -561,6 +578,14 @@ app.post('/api/flows/payment-auth/test', apiJson, async (req, res) => {
       cardLast4: cardLast4 || '4821',
     });
 
+    const flowCopy = templatePresets.buildFlowMessage('punto_pago_autorizacion_pago', {
+      merchant: txn.merchant,
+      amount: txn.amount,
+      currency: txn.currency,
+      cardLast4: txn.cardLast4,
+      customerName: customerName || 'Cliente',
+    }) || {};
+
     const { flowId } = await getOrCreatePaymentAuthFlow();
     const response = await GraphApi.sendFlowMessage(
       config.phoneNumberId,
@@ -568,8 +593,10 @@ app.post('/api/flows/payment-auth/test', apiJson, async (req, res) => {
       {
         flowId,
         flowToken: txn.flowToken,
-        cta: cta || 'Revisar pago',
-        bodyText: bodyText || `¿Autorizas un pago en ${txn.merchant}?`,
+        cta: cta || flowCopy.cta || 'Revisar y autorizar',
+        bodyText: bodyText || flowCopy.bodyText || `¿Autorizas un pago en ${txn.merchant}?`,
+        headerText: headerText || flowCopy.headerText,
+        footerText: footerText || flowCopy.footerText,
         flowAction: 'data_exchange',
         mode: 'draft',
       }
@@ -586,7 +613,7 @@ app.post('/api/flows/payment-auth/test', apiJson, async (req, res) => {
       ok: true,
       transaction: txn,
       flowId,
-      cardImageUrl: cardImageUrl(),
+      cardImageUrl: await resolveCardImageUrl(),
       messageId: response.messages && response.messages[0] && response.messages[0].id,
     });
   } catch (err) {
@@ -613,6 +640,20 @@ app.get('/api/flows/responses', async (req, res) => {
     res.json({ ok: true, data: await FlowStore.listResponses({ limit }) });
   } catch (err) {
     res.status(500).json({ ok: false, error: String(err.message || err), data: [] });
+  }
+});
+
+app.get('/api/flows/:id/performance', async (req, res) => {
+  if (!config.accessToken) return res.status(400).json({ ok: false, error: 'Falta ACCESS_TOKEN.' });
+  try {
+    let flowMeta = { id: req.params.id, name: '' };
+    try {
+      flowMeta = await GraphApi.getFlow(req.params.id, 'id,name,status,endpoint_uri');
+    } catch (_) {}
+    const performance = await flowPerformance.getFlowPerformance(req.params.id, flowMeta);
+    res.json({ ok: true, ...performance, flow: flowMeta });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: String(err.message || err) });
   }
 });
 
@@ -879,6 +920,34 @@ app.get('/api/templates/create-meta', (req, res) => {
     emojis: templateBuilder.COMMON_EMOJIS,
     limits: templateBuilder.LIMITS,
     placeholderHelp: "Usa {{1}}, {{2}}… en el texto. Cada variable necesita clave API y ejemplo para Meta.",
+  });
+});
+
+app.get('/api/templates/presets', (req, res) => {
+  res.json({ ok: true, presets: templatePresets.listPresets() });
+});
+
+app.get('/api/templates/presets/:key', (req, res) => {
+  const preset = templatePresets.getPreset(req.params.key);
+  if (!preset) return res.status(404).json({ ok: false, error: 'Preset no encontrado.' });
+  const overrides = req.query || {};
+  res.json({
+    ok: true,
+    preset: {
+      key: preset.key,
+      label: preset.label,
+      description: preset.description,
+      name: preset.name,
+      category: preset.category,
+      language: preset.language,
+      headerText: preset.headerText,
+      bodyText: preset.bodyText,
+      footerText: preset.footerText,
+      variables: preset.variables,
+      flowCta: preset.flowCta,
+      flowMessage: preset.flowMessage,
+    },
+    preview: templatePresets.previewPreset(req.params.key, overrides),
   });
 });
 

@@ -116,6 +116,18 @@ async function listSends({ limit = 50 } = {}) {
   return mem.sends.slice(0, limit);
 }
 
+async function listEndpointEvents({ limit = 50 } = {}) {
+  if (redis) {
+    const ids = await redis.zrange(EVENT_LIST, 0, limit - 1, { rev: true });
+    const rows = await Promise.all((ids || []).map(async (id) => {
+      const raw = await redis.get(`${PREFIX}event:${id}`);
+      return parseRedisJson(raw);
+    }));
+    return rows.filter(Boolean);
+  }
+  return mem.events.slice(0, limit);
+}
+
 module.exports = {
   saveResponse,
   recordSend,
@@ -123,4 +135,5 @@ module.exports = {
   getStats,
   listResponses,
   listSends,
+  listEndpointEvents,
 };
