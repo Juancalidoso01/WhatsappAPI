@@ -1,0 +1,17 @@
+{
+  "chats": { "label": "Диалоги", "short": "Чаты", "title": "Диалоги" },
+  "templates": { "label": "Шаблоны", "short": "Шаблоны", "title": "Шаблоны" },
+  "bulk": { "label": "Массовые рассылки", "short": "Массовые", "title": "Массовые рассылки" },
+  "integration": { "label": "Интеграция API", "short": "API", "title": "Интеграция API" },
+  "flows": { "label": "WhatsApp Flows", "short": "Flows", "title": "WhatsApp Flows" },
+  "billing": { "label": "Биллинг", "short": "Расходы", "title": "Биллинг" },
+  "workspace": { "label": "Рабочее пространство", "short": "Профиль", "title": "Рабочее пространство" },
+  "collapse": "Свернуть меню",
+  "mainMenu": "Главное меню",
+  "flyout": {
+    "profile": "Профиль WhatsApp",
+    "workspace": "Рабочее пространство",
+    "reports": "Отчёты",
+    "language": "Язык портала"
+  }
+}

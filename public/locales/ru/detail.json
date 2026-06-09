@@ -1,0 +1,63 @@
+{
+  "leadAlert": "Клиент написал. Заполните квалификацию лида.",
+  "leadTitle": "Квалификация лида",
+  "leadHint": "Если клиент пишет, классифицируйте контакт для коммерческой команды.",
+  "activityTitle": "Активность в WhatsApp",
+  "channelsTitle": "Email и приложение Android",
+  "channelsHint": "WhatsApp не предоставляет эти данные. Заполняйте только если есть из другого канала.",
+  "fields": {
+    "name": "Имя",
+    "company": "Компания",
+    "type": "Тип",
+    "userType": "Пользователь",
+    "location": "Местоположение",
+    "owner": "Ответственный",
+    "email": "Электронная почта",
+    "phone": "Телефон",
+    "userId": "ID пользователя",
+    "signedUp": "Дата регистрации",
+    "lastOpenedEmail": "Последнее открытие письма"
+  },
+  "placeholders": {
+    "name": "Имя контакта",
+    "company": "Компания или организация",
+    "location": "Город, страна…",
+    "owner": "Агент или владелец лида",
+    "email": "email@example.com",
+    "userId": "Внутренний или CRM ID",
+    "lastOpenedEmail": "Дата или ссылка"
+  },
+  "activity": {
+    "whatsapp": "Номер WhatsApp",
+    "firstSeen": "Первый контакт",
+    "lastSeen": "Последний визит",
+    "lastContacted": "Последний исходящий",
+    "lastHeardFrom": "Последний ответ клиента"
+  },
+  "androidNa": "Недоступно через WhatsApp",
+  "android": {
+    "lastSeen": "Последний раз в Android",
+    "sessions": "Сессии Android",
+    "appVersion": "Версия приложения Android",
+    "device": "Устройство Android",
+    "osVersion": "Версия ОС Android",
+    "sdkVersion": "Версия SDK Android"
+  },
+  "types": {
+    "": "Без классификации",
+    "prospecto": "Проспект",
+    "cliente": "Клиент",
+    "lead_caliente": "Горячий лид",
+    "lead_frio": "Холодный лид",
+    "soporte": "Поддержка",
+    "otro": "Другое"
+  },
+  "userTypes": {
+    "": "Не указано",
+    "titular": "Владелец",
+    "beneficiario": "Бенефициар",
+    "representante": "Представитель",
+    "empleado": "Сотрудник",
+    "otro": "Другое"
+  }
+}

@@ -2,6 +2,9 @@
 
 const POLL_MS = 6000;
 const DAY_MS = 24 * 60 * 60 * 1000;
+const t = (key, vars) => (window.I18n ? I18n.t(key, vars) : key);
+const LEAD_TYPE_VALUES = ["", "prospecto", "cliente", "lead_caliente", "lead_frio", "soporte", "otro"];
+const LEAD_USER_VALUES = ["", "titular", "beneficiario", "representante", "empleado", "otro"];
 
 const state = {
   config: { brandName: "Punto Pago", templatesEnabled: false, hasCredentials: false },
@@ -78,10 +81,11 @@ function initials(name) {
 function timeAgo(ts) {
   if (!ts) return "";
   const d = Date.now() - ts;
-  if (d < 60000) return "ahora";
+  if (d < 60000) return t("common.now");
   if (d < 3600000) return Math.floor(d / 60000) + "m";
   if (d < DAY_MS) return Math.floor(d / 3600000) + "h";
-  return new Date(ts).toLocaleDateString("es", { day: "2-digit", month: "2-digit" });
+  const loc = I18n.getLocale();
+  return new Date(ts).toLocaleDateString(loc === "ru" ? "ru" : loc === "en" ? "en" : "es", { day: "2-digit", month: "2-digit" });
 }
 let toastTimer;
 function toast(msg, kind = "") {
@@ -97,6 +101,7 @@ async function init() {
   try {
     state.config = await api("/api/config");
   } catch (_) {}
+  await initI18n();
   applyBranding();
   initSidebar();
   initLeadFormOptions();
@@ -110,14 +115,36 @@ async function init() {
   });
 }
 
+async function initI18n() {
+  if (!window.I18n) return;
+  const loc = I18n.resolveInitial(
+    localStorage.getItem("pp-locale"),
+    state.config.workspace && state.config.workspace.portalLanguage
+  );
+  await I18n.bootstrap(loc);
+  await I18n.ensureScreen("chats", loc);
+  const sel = $("wsPortalLang");
+  if (sel) sel.value = loc;
+  document.addEventListener("localechange", onLocaleChange);
+}
+
+async function onLocaleChange() {
+  initLeadFormOptions();
+  if (state.activePhone && state.conversationDetail) renderDetailPanel();
+  renderConversations();
+  if (state.currentScreen === "templates" && state.templates.length) renderTemplateList();
+  if (state.workspace) fillWorkspaceForms(state.workspace);
+  setWorkspaceTab(state.workspaceTab || "profile");
+}
+
 function applyBranding() {
   const ws = state.config.workspace || {};
   const name = ws.displayName || state.config.brandName || "Punto Pago";
-  document.title = name + " · WhatsApp";
+  document.title = name + " · " + t("common.brandSub");
   const dot = $("connDot");
   if (dot) {
     dot.className = "conn-dot " + (state.config.persistent ? "online" : "offline");
-    dot.title = state.config.persistent ? "Persistencia activa" : "Modo memoria";
+    dot.title = state.config.persistent ? t("common.persistentOn") : t("common.persistentOff");
   }
   if ($("sidebarBrandName")) $("sidebarBrandName").textContent = name;
   updateWorkspaceHubPreview(name, ws.hasProfilePhoto);
@@ -130,7 +157,7 @@ function avatarSrc(hasPhoto) {
 function updateWorkspaceHubPreview(name, hasPhoto) {
   const portal = $("wsPortalPhoto");
   const src = avatarSrc(hasPhoto);
-  const status = state.config.persistent ? "En línea · datos persistentes" : "Modo memoria";
+  const status = state.config.persistent ? t("common.online") : t("common.memory");
   ["wsFlyoutName", "wsHubName"].forEach((id) => { if ($(id)) $(id).textContent = name; });
   ["wsFlyoutStatus", "wsHubStatus"].forEach((id) => { if ($(id)) $(id).textContent = status; });
   ["wsFlyoutAvatar", "wsHubAvatar", "wsMobileAvatar"].forEach((id) => { if ($(id)) $(id).src = src; });
@@ -163,7 +190,7 @@ function renderConversations() {
   list.innerHTML = items
     .map((c) => {
       const last = c.lastMessage || {};
-      const prefix = last.direction === "out" ? "Tú: " : "";
+      const prefix = last.direction === "out" ? t("common.you") + ": " : "";
       return `<li class="conv ${c.phone === state.activePhone ? "active" : ""}" data-phone="${escapeHtml(c.phone)}" data-name="${escapeHtml(c.name)}">
         <div class="avatar">${escapeHtml(initials(c.name))}</div>
         <div class="conv-body">
@@ -242,50 +269,42 @@ async function loadConversationDetail(phone) {
 }
 
 const TYPE_LABELS = {
-  text: "Texto",
-  image: "Imagen",
-  audio: "Audio",
-  video: "Video",
-  document: "Documento",
-  template: "Plantilla",
-  sticker: "Sticker",
-  interactive: "Interactivo",
+  text: "modals.msgTypes.text",
+  image: "modals.msgTypes.image",
+  audio: "modals.msgTypes.audio",
+  video: "modals.msgTypes.video",
+  document: "modals.msgTypes.document",
+  template: "modals.msgTypes.template",
+  sticker: "modals.msgTypes.sticker",
+  interactive: "modals.msgTypes.interactive",
 };
+
+function msgTypeLabel(type) {
+  const key = TYPE_LABELS[type];
+  return key ? t(key) : type;
+}
 
 const DEFAULT_LEAD_OPTIONS = {
-  types: [
-    { value: "", label: "Sin clasificar" },
-    { value: "prospecto", label: "Prospecto" },
-    { value: "cliente", label: "Cliente" },
-    { value: "lead_caliente", label: "Lead caliente" },
-    { value: "lead_frio", label: "Lead frío" },
-    { value: "soporte", label: "Soporte" },
-    { value: "otro", label: "Otro" },
-  ],
-  userTypes: [
-    { value: "", label: "Sin definir" },
-    { value: "titular", label: "Titular" },
-    { value: "beneficiario", label: "Beneficiario" },
-    { value: "representante", label: "Representante" },
-    { value: "empleado", label: "Empleado" },
-    { value: "otro", label: "Otro" },
-  ],
+  types: LEAD_TYPE_VALUES.map((v) => ({ value: v, label: v })),
+  userTypes: LEAD_USER_VALUES.map((v) => ({ value: v, label: v })),
 };
 
-function initLeadFormOptions(options) {
-  const opts = options || state.leadOptions || DEFAULT_LEAD_OPTIONS;
-  state.leadOptions = opts;
+function initLeadFormOptions() {
   const typeSel = $("leadType");
   const userSel = $("leadUserType");
-  if (typeSel && !typeSel.options.length) {
-    typeSel.innerHTML = (opts.types || DEFAULT_LEAD_OPTIONS.types)
-      .map((o) => `<option value="${escapeHtml(o.value)}">${escapeHtml(o.label)}</option>`)
-      .join("");
+  if (typeSel) {
+    const cur = typeSel.value;
+    typeSel.innerHTML = LEAD_TYPE_VALUES.map((v) =>
+      `<option value="${escapeHtml(v)}">${escapeHtml(t("detail.types." + v))}</option>`
+    ).join("");
+    if (cur) typeSel.value = cur;
   }
-  if (userSel && !userSel.options.length) {
-    userSel.innerHTML = (opts.userTypes || DEFAULT_LEAD_OPTIONS.userTypes)
-      .map((o) => `<option value="${escapeHtml(o.value)}">${escapeHtml(o.label)}</option>`)
-      .join("");
+  if (userSel) {
+    const cur = userSel.value;
+    userSel.innerHTML = LEAD_USER_VALUES.map((v) =>
+      `<option value="${escapeHtml(v)}">${escapeHtml(t("detail.userTypes." + v))}</option>`
+    ).join("");
+    if (cur) userSel.value = cur;
   }
 }
 
@@ -294,11 +313,11 @@ function renderDetailActivityKv(lead) {
   if (!box || !lead) return;
   const r = lead.readonly || {};
   const rows = [
-    ["Número de WhatsApp", r.whatsappNumber || "—"],
-    ["Primera vez visto", r.firstSeenLabel || "—"],
-    ["Última vez visto", r.lastSeenLabel || "—"],
-    ["Último contacto (enviado)", r.lastContactedLabel || "—"],
-    ["Última respuesta del cliente", r.lastHeardFromLabel || "—"],
+    [t("detail.activity.whatsapp"), r.whatsappNumber || "—"],
+    [t("detail.activity.firstSeen"), r.firstSeenLabel || "—"],
+    [t("detail.activity.lastSeen"), r.lastSeenLabel || "—"],
+    [t("detail.activity.lastContacted"), r.lastContactedLabel || "—"],
+    [t("detail.activity.lastHeardFrom"), r.lastHeardFromLabel || "—"],
   ];
   box.innerHTML = rows.map(([k, v]) =>
     `<div class="detail-kv-row"><dt>${escapeHtml(k)}</dt><dd>${escapeHtml(v)}</dd></div>`
@@ -308,14 +327,14 @@ function renderDetailActivityKv(lead) {
 function renderDetailAndroidKv(lead) {
   const box = $("detailAndroidKv");
   if (!box || !lead) return;
-  const na = "No disponible vía WhatsApp";
+  const na = t("detail.androidNa");
   const rows = [
-    ["Última vez en Android", na],
-    ["Sesiones Android", na],
-    ["Versión app Android", na],
-    ["Dispositivo Android", na],
-    ["Versión SO Android", na],
-    ["Versión SDK Android", na],
+    [t("detail.android.lastSeen"), na],
+    [t("detail.android.sessions"), na],
+    [t("detail.android.appVersion"), na],
+    [t("detail.android.device"), na],
+    [t("detail.android.osVersion"), na],
+    [t("detail.android.sdkVersion"), na],
   ];
   box.innerHTML = rows.map(([k, v]) =>
     `<div class="detail-kv-row"><dt>${escapeHtml(k)}</dt><dd>${escapeHtml(v)}</dd></div>`
@@ -324,7 +343,7 @@ function renderDetailAndroidKv(lead) {
 
 function renderDetailLeadForm(lead) {
   if (!lead) return;
-  initLeadFormOptions(lead.options);
+  initLeadFormOptions();
   const e = lead.editable || {};
   const setIfIdle = (id, val) => {
     const el = $(id);
@@ -452,12 +471,12 @@ function renderDetailPanel() {
   const stats = d.stats || {};
   const typeLines = Object.entries(stats.byType || {})
     .sort((a, b) => b[1] - a[1])
-    .map(([t, n]) => `<div class="detail-stat"><span>${escapeHtml(TYPE_LABELS[t] || t)}</span><span>${n}</span></div>`)
+    .map(([typeKey, n]) => `<div class="detail-stat"><span>${escapeHtml(msgTypeLabel(typeKey))}</span><span>${n}</span></div>`)
     .join("");
   $("detailStats").innerHTML = `
-    <div class="detail-stat"><span>Total mensajes</span><span>${stats.total || 0}</span></div>
-    <div class="detail-stat"><span>Entrantes</span><span>${stats.in || 0}</span></div>
-    <div class="detail-stat"><span>Salientes</span><span>${stats.out || 0}</span></div>
+    <div class="detail-stat"><span>${escapeHtml(t("chats.statsTotal"))}</span><span>${stats.total || 0}</span></div>
+    <div class="detail-stat"><span>${escapeHtml(t("chats.statsIn"))}</span><span>${stats.in || 0}</span></div>
+    <div class="detail-stat"><span>${escapeHtml(t("chats.statsOut"))}</span><span>${stats.out || 0}</span></div>
     ${typeLines}`;
 
   if (d.lead) {
@@ -2588,12 +2607,12 @@ function setWorkspaceTab(tab) {
     if (panel) panel.classList.toggle("hidden", id !== tab);
   });
   const titles = {
-    profile: "Perfil WhatsApp",
-    workspace: "Espacio de trabajo",
-    reports: "Informes",
-    language: "Idioma del portal",
+    profile: t("workspace.pageTitles.profile"),
+    workspace: t("workspace.pageTitles.workspace"),
+    reports: t("workspace.pageTitles.reports"),
+    language: t("workspace.pageTitles.language"),
   };
-  if ($("wsPageTitle")) $("wsPageTitle").textContent = titles[tab] || "Espacio de trabajo";
+  if ($("wsPageTitle")) $("wsPageTitle").textContent = titles[tab] || t("workspace.title");
 }
 
 async function loadWorkspace() {
@@ -2617,12 +2636,16 @@ function fillWorkspaceForms(res) {
   if ($("wsWorkspaceName")) $("wsWorkspaceName").value = w.workspaceName || "";
   if ($("wsDisplayName")) $("wsDisplayName").value = w.displayName || "";
   if ($("wsPortalPhoto")) $("wsPortalPhoto").src = w.avatarUrl ? avatarSrc(true) : "/logo.png";
+  const langSel = $("wsPortalLang");
+  if (langSel && w.portalLanguage) langSel.value = w.portalLanguage;
   if ($("wsWaPhoto")) {
     if (wa.profile_picture_url) {
       $("wsWaPhoto").src = wa.profile_picture_url;
-      if ($("wsWaPhotoHint")) $("wsWaPhotoHint").textContent = "Foto actual sincronizada desde Meta.";
+      if ($("wsWaPhotoHint")) $("wsWaPhotoHint").textContent = t("workspace.waPhotoSynced");
     } else if (wa.error) {
       if ($("wsWaPhotoHint")) $("wsWaPhotoHint").textContent = wa.error;
+    } else if ($("wsWaPhotoHint")) {
+      $("wsWaPhotoHint").textContent = t("workspace.waPhotoHintConnect");
     }
   }
   const status = $("wsSystemStatus");
@@ -2635,6 +2658,23 @@ function fillWorkspaceForms(res) {
       `<li>Última actualización: ${w.updatedAt ? new Date(w.updatedAt).toLocaleString("es") : "—"}</li>`,
     ].filter(Boolean).join("");
   }
+}
+
+async function savePortalLanguage() {
+  const sel = $("wsPortalLang");
+  if (!sel) return;
+  const loc = sel.value;
+  if (!I18n.LOCALES.includes(loc)) return;
+  await I18n.setLocale(loc, { force: true });
+  await I18n.ensureScreen(state.currentScreen || "chats", loc);
+  const res = await patch("/api/workspace", { portalLanguage: loc });
+  if (!res.ok) {
+    toast(res.error || "No se pudo guardar el idioma.", "error");
+    return;
+  }
+  if (state.config.workspace) state.config.workspace.portalLanguage = loc;
+  toast(t("common.saved"), "ok");
+  onLocaleChange();
 }
 
 async function saveWorkspaceProfile() {
@@ -3742,6 +3782,13 @@ function switchScreen(name) {
   const prev = state.currentScreen;
   state.currentScreen = name;
 
+  if (window.I18n) {
+    I18n.ensureScreen(name).then(() => {
+      I18n.applyDom();
+      if (name === "workspace") setWorkspaceTab(state.workspaceTab || "profile");
+    });
+  }
+
   document.querySelectorAll(".nav-item[data-screen]").forEach((b) =>
     b.classList.toggle("active", b.dataset.screen === name)
   );
@@ -3891,6 +3938,8 @@ function bindEvents() {
     btn.addEventListener("click", () => setWorkspaceTab(btn.dataset.wsTab))
   );
   $("wsSaveProfile").addEventListener("click", saveWorkspaceProfile);
+  const wsSaveLang = $("wsSaveLanguage");
+  if (wsSaveLang) wsSaveLang.addEventListener("click", savePortalLanguage);
   $("wsSaveWorkspace").addEventListener("click", saveWorkspaceSettings);
   $("wsRefreshReports").addEventListener("click", loadWorkspaceReports);
   $("wsPhotoInput").addEventListener("change", (e) => {

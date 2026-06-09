@@ -1,0 +1,33 @@
+{
+  "title": "Рабочее пространство",
+  "intro": "Настройте профиль WhatsApp, пространство и просматривайте базовые отчёты.",
+  "tabs": {
+    "profile": "Профиль WhatsApp",
+    "workspace": "Пространство",
+    "reports": "Отчёты",
+    "language": "Язык"
+  },
+  "pageTitles": {
+    "profile": "Профиль WhatsApp",
+    "workspace": "Рабочее пространство",
+    "reports": "Отчёты",
+    "language": "Язык портала"
+  },
+  "waPhotoTitle": "Фото для клиентов",
+  "waPhotoDesc": "Изображение профиля WhatsApp Business (в чате).",
+  "waPhotoHintConnect": "Подключите ACCESS_TOKEN, чтобы видеть текущее фото из Meta.",
+  "waPhotoHintChange": "Чтобы изменить фото WhatsApp, используйте Meta Business Manager или приложение WhatsApp Business. Здесь оно обновляется в реальном времени.",
+  "waPhotoSynced": "Текущее фото синхронизировано из Meta.",
+  "portalPhotoTitle": "Фото портала",
+  "portalPhotoDesc": "Аватар рабочего пространства (не меняет профиль WhatsApp автоматически).",
+  "publicProfileTitle": "Публичный профиль WhatsApp",
+  "languageTitle": "Язык портала",
+  "languageHint": "Выберите язык интерфейса. Не влияет на язык шаблонов WhatsApp в Meta.",
+  "languageLabel": "Предпочитаемый язык",
+  "languageNote": "Сохраняется в пространстве и в этом браузере.",
+  "langEs": "Español",
+  "langEn": "English",
+  "langRu": "Русский",
+  "reportsIntro": "Базовая операционная сводка. Графики и экспорт позже.",
+  "viewBilling": "Открыть биллинг"
+}

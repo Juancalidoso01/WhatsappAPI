@@ -1,0 +1,22 @@
+{
+  "newChat": {
+    "title": "New conversation",
+    "hint": "To start cold outreach, WhatsApp requires an approved template.",
+    "phone": "Number (with country code)",
+    "phonePlaceholder": "50712345678",
+    "name": "Name (optional)",
+    "namePlaceholder": "Customer name",
+    "template": "Template",
+    "send": "Send"
+  },
+  "msgTypes": {
+    "text": "Text",
+    "image": "Image",
+    "audio": "Audio",
+    "video": "Video",
+    "document": "Document",
+    "template": "Template",
+    "sticker": "Sticker",
+    "interactive": "Interactive"
+  }
+}

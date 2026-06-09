@@ -1,0 +1,10 @@
+{
+  "title": "Facturación",
+  "subtitle": "Costos Meta + registro de envíos desde Punto Pago.",
+  "tabs": {
+    "resumen": "Resumen Meta",
+    "envios": "Nuestros envíos",
+    "flows": "Flows",
+    "tarifas": "Tarifas"
+  }
+}

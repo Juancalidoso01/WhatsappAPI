@@ -1,0 +1,63 @@
+{
+  "leadAlert": "The customer wrote. Complete lead qualification.",
+  "leadTitle": "Lead qualification",
+  "leadHint": "When the customer writes, classify the contact for the sales team.",
+  "activityTitle": "WhatsApp activity",
+  "channelsTitle": "Email and Android app",
+  "channelsHint": "WhatsApp does not provide this data. Fill in only if you have it from another channel.",
+  "fields": {
+    "name": "Name",
+    "company": "Company",
+    "type": "Type",
+    "userType": "User",
+    "location": "Location",
+    "owner": "Owner",
+    "email": "Email",
+    "phone": "Phone",
+    "userId": "User ID",
+    "signedUp": "Sign-up date",
+    "lastOpenedEmail": "Last opened email"
+  },
+  "placeholders": {
+    "name": "Contact name",
+    "company": "Company or organization",
+    "location": "City, country…",
+    "owner": "Agent or lead owner",
+    "email": "email@example.com",
+    "userId": "Internal or CRM ID",
+    "lastOpenedEmail": "Date or reference"
+  },
+  "activity": {
+    "whatsapp": "WhatsApp number",
+    "firstSeen": "First seen",
+    "lastSeen": "Last seen",
+    "lastContacted": "Last contact (sent)",
+    "lastHeardFrom": "Last customer reply"
+  },
+  "androidNa": "Not available via WhatsApp",
+  "android": {
+    "lastSeen": "Last seen on Android",
+    "sessions": "Android sessions",
+    "appVersion": "Android app version",
+    "device": "Android device",
+    "osVersion": "Android OS version",
+    "sdkVersion": "Android SDK version"
+  },
+  "types": {
+    "": "Unclassified",
+    "prospecto": "Prospect",
+    "cliente": "Customer",
+    "lead_caliente": "Hot lead",
+    "lead_frio": "Cold lead",
+    "soporte": "Support",
+    "otro": "Other"
+  },
+  "userTypes": {
+    "": "Undefined",
+    "titular": "Account holder",
+    "beneficiario": "Beneficiary",
+    "representante": "Representative",
+    "empleado": "Employee",
+    "otro": "Other"
+  }
+}

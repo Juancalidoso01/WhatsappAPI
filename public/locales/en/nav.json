@@ -1,0 +1,17 @@
+{
+  "chats": { "label": "Conversations", "short": "Chats", "title": "Conversations" },
+  "templates": { "label": "Templates", "short": "Templates", "title": "Templates" },
+  "bulk": { "label": "Bulk sends", "short": "Bulk", "title": "Bulk sends" },
+  "integration": { "label": "API integration", "short": "API", "title": "API integration" },
+  "flows": { "label": "WhatsApp Flows", "short": "Flows", "title": "WhatsApp Flows" },
+  "billing": { "label": "Billing", "short": "Costs", "title": "Billing" },
+  "workspace": { "label": "Workspace", "short": "Profile", "title": "Workspace" },
+  "collapse": "Collapse menu",
+  "mainMenu": "Main menu",
+  "flyout": {
+    "profile": "WhatsApp profile",
+    "workspace": "Workspace",
+    "reports": "Reports",
+    "language": "Portal language"
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "title": "Биллинг",
+  "subtitle": "Расходы Meta + журнал отправок Punto Pago.",
+  "tabs": {
+    "resumen": "Сводка Meta",
+    "envios": "Наши отправки",
+    "flows": "Flows",
+    "tarifas": "Тарифы"
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "chats": { "label": "Conversaciones", "short": "Chats", "title": "Conversaciones" },
+  "templates": { "label": "Plantillas", "short": "Plantillas", "title": "Plantillas" },
+  "bulk": { "label": "Cargas masivas", "short": "Masivas", "title": "Cargas masivas" },
+  "integration": { "label": "Integración API", "short": "API", "title": "Integración API" },
+  "flows": { "label": "WhatsApp Flows", "short": "Flows", "title": "WhatsApp Flows" },
+  "billing": { "label": "Facturación", "short": "Costos", "title": "Facturación" },
+  "workspace": { "label": "Espacio de trabajo", "short": "Perfil", "title": "Espacio de trabajo" },
+  "collapse": "Contraer menú",
+  "mainMenu": "Menú principal",
+  "flyout": {
+    "profile": "Perfil WhatsApp",
+    "workspace": "Espacio de trabajo",
+    "reports": "Informes",
+    "language": "Idioma del portal"
+  }
+}

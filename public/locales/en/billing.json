@@ -1,0 +1,10 @@
+{
+  "title": "Billing",
+  "subtitle": "Meta costs + send log from Punto Pago.",
+  "tabs": {
+    "resumen": "Meta summary",
+    "envios": "Our sends",
+    "flows": "Flows",
+    "tarifas": "Rates"
+  }
+}

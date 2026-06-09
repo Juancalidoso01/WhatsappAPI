@@ -1,0 +1,33 @@
+{
+  "title": "Espacio de trabajo",
+  "intro": "Configura tu perfil de WhatsApp, el espacio y consulta informes básicos.",
+  "tabs": {
+    "profile": "Perfil WhatsApp",
+    "workspace": "Espacio",
+    "reports": "Informes",
+    "language": "Idioma"
+  },
+  "pageTitles": {
+    "profile": "Perfil WhatsApp",
+    "workspace": "Espacio de trabajo",
+    "reports": "Informes",
+    "language": "Idioma del portal"
+  },
+  "waPhotoTitle": "Foto que ven tus clientes",
+  "waPhotoDesc": "Imagen del perfil de WhatsApp Business (lo que aparece en el chat).",
+  "waPhotoHintConnect": "Conecta ACCESS_TOKEN para ver la foto actual desde Meta.",
+  "waPhotoHintChange": "Para cambiar la foto en WhatsApp usa Meta Business Manager o la app de WhatsApp Business. Aquí la ves en tiempo real.",
+  "waPhotoSynced": "Foto actual sincronizada desde Meta.",
+  "portalPhotoTitle": "Foto del portal",
+  "portalPhotoDesc": "Avatar de tu espacio de trabajo en este panel (no cambia el perfil de WhatsApp automáticamente).",
+  "publicProfileTitle": "Perfil público de WhatsApp",
+  "languageTitle": "Idioma del portal",
+  "languageHint": "Elige el idioma de la interfaz. No afecta el idioma de las plantillas de WhatsApp enviadas a Meta.",
+  "languageLabel": "Idioma preferido",
+  "languageNote": "Se guarda en tu espacio de trabajo y en este navegador.",
+  "langEs": "Español",
+  "langEn": "English",
+  "langRu": "Русский",
+  "reportsIntro": "Resumen operativo básico. Luego ampliaremos gráficos y exportación.",
+  "viewBilling": "Ver facturación"
+}

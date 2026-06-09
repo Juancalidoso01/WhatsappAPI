@@ -300,7 +300,7 @@ app.get('/api/workspace', async (req, res) => {
       },
       whatsapp,
       line,
-      portalLanguageEnabled: false,
+      portalLanguageEnabled: true,
     });
   } catch (err) {
     res.status(500).json({ ok: false, error: String(err.message || err) });

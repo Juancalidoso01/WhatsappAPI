@@ -13,53 +13,53 @@
 <body>
   <div class="app">
     <!-- Navegación principal -->
-    <nav class="app-nav" id="appNav" aria-label="Menú principal">
+    <nav class="app-nav" id="appNav" aria-label="Menú principal" data-i18n-aria="nav.mainMenu">
       <div class="app-nav-brand">
         <img src="/logo.png" alt="Punto Pago" class="app-nav-logo" id="railLogo" />
         <div class="app-nav-brand-text">
           <strong id="sidebarBrandName">Punto Pago</strong>
-          <span class="app-nav-sub">WhatsApp Business</span>
+          <span class="app-nav-sub" data-i18n="common.brandSub">WhatsApp Business</span>
         </div>
-        <button type="button" id="sidebarCollapseBtn" class="app-nav-collapse" title="Contraer menú" aria-label="Contraer menú">
+        <button type="button" id="sidebarCollapseBtn" class="app-nav-collapse" data-i18n-title="nav.collapse" data-i18n-aria="nav.collapse">
           <svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg>
         </button>
       </div>
 
       <div class="app-nav-items">
-        <button class="nav-item active" data-screen="chats" title="Conversaciones">
+        <button class="nav-item active" data-screen="chats" data-i18n-title="nav.chats.label">
           <span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill-rule="evenodd"><path d="M12 3C6.48 3 2 6.7 2 11.25c0 2.56 1.42 4.84 3.66 6.35L4.8 21.3a.6.6 0 0 0 .86.68l4.2-2.25c.76.13 1.54.2 2.34.2 5.52 0 10-3.7 10-8.68C22 6.7 17.52 3 12 3zm-4 9.75a1.25 1.25 0 1 1 0-2.5 1.25 1.25 0 0 1 0 2.5zm4 0a1.25 1.25 0 1 1 0-2.5 1.25 1.25 0 0 1 0 2.5zm4 0a1.25 1.25 0 1 1 0-2.5 1.25 1.25 0 0 1 0 2.5z"/></svg></span>
-          <span class="nav-label">Conversaciones</span>
-          <span class="nav-short">Chats</span>
+          <span class="nav-label" data-i18n="nav.chats.label">Conversaciones</span>
+          <span class="nav-short" data-i18n="nav.chats.short">Chats</span>
         </button>
-        <button class="nav-item" data-screen="templates" title="Plantillas">
+        <button class="nav-item" data-screen="templates" data-i18n-title="nav.templates.label">
           <span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill-rule="evenodd"><path d="M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2zm1 4v2.4h12V7H6zm0 4.4V17h5.2v-5.6H6zm7.2 0V17H18v-5.6h-4.8z"/></svg></span>
-          <span class="nav-label">Plantillas</span>
-          <span class="nav-short">Plantillas</span>
+          <span class="nav-label" data-i18n="nav.templates.label">Plantillas</span>
+          <span class="nav-short" data-i18n="nav.templates.short">Plantillas</span>
         </button>
-        <button class="nav-item" data-screen="bulk" title="Cargas masivas">
+        <button class="nav-item" data-screen="bulk" data-i18n-title="nav.bulk.label">
           <span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill-rule="evenodd"><path d="M4 6h16v2H4V6zm0 5h10v2H4v-2zm0 5h16v2H4v-2zm12-5h4v2h-4v-2z"/></svg></span>
-          <span class="nav-label">Cargas masivas</span>
-          <span class="nav-short">Masivas</span>
+          <span class="nav-label" data-i18n="nav.bulk.label">Cargas masivas</span>
+          <span class="nav-short" data-i18n="nav.bulk.short">Masivas</span>
         </button>
-        <button class="nav-item" data-screen="integration" title="Integración API">
+        <button class="nav-item" data-screen="integration" data-i18n-title="nav.integration.label">
           <span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill-rule="evenodd"><path d="M8 4h8a2 2 0 0 1 2 2v2H6V6a2 2 0 0 1 2-2zm-2 6h12v10a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V10zm4 2v6h2v-6h-2zm4 0v6h2v-6h-2z"/></svg></span>
-          <span class="nav-label">Integración API</span>
-          <span class="nav-short">API</span>
+          <span class="nav-label" data-i18n="nav.integration.label">Integración API</span>
+          <span class="nav-short" data-i18n="nav.integration.short">API</span>
         </button>
-        <button class="nav-item" data-screen="flows" title="WhatsApp Flows">
+        <button class="nav-item" data-screen="flows" data-i18n-title="nav.flows.label">
           <span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill-rule="evenodd"><path d="M4 4h6v6H4V4zm10 0h6v6h-6V4zM4 14h6v6H4v-6zm10 3h6v3h-6v-3zm0-3h2v2h-2v-2zm4 0h2v2h-2v-2z"/></svg></span>
-          <span class="nav-label">WhatsApp Flows</span>
-          <span class="nav-short">Flows</span>
+          <span class="nav-label" data-i18n="nav.flows.label">WhatsApp Flows</span>
+          <span class="nav-short" data-i18n="nav.flows.short">Flows</span>
         </button>
-        <button class="nav-item" data-screen="billing" title="Facturación">
+        <button class="nav-item" data-screen="billing" data-i18n-title="nav.billing.label">
           <span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill-rule="evenodd"><path d="M4 4h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2zm0 4v2.2h16V8H4zm2 5.4v2h6v-2H6zm9 0v2h3v-2h-3z"/></svg></span>
-          <span class="nav-label">Facturación</span>
-          <span class="nav-short">Costos</span>
+          <span class="nav-label" data-i18n="nav.billing.label">Facturación</span>
+          <span class="nav-short" data-i18n="nav.billing.short">Costos</span>
         </button>
-        <button type="button" class="nav-item nav-item-ws-mobile" id="mobileWsBtn" title="Espacio de trabajo">
+        <button type="button" class="nav-item nav-item-ws-mobile" id="mobileWsBtn" data-i18n-title="nav.workspace.label">
           <span class="nav-icon nav-icon-avatar"><img id="wsMobileAvatar" src="/logo.png" alt="" /></span>
-          <span class="nav-label">Espacio de trabajo</span>
-          <span class="nav-short">Perfil</span>
+          <span class="nav-label" data-i18n="nav.workspace.label">Espacio de trabajo</span>
+          <span class="nav-short" data-i18n="nav.workspace.short">Perfil</span>
         </button>
       </div>
 
@@ -81,12 +81,10 @@
             <span class="muted" id="wsFlyoutStatus">Espacio de trabajo</span>
           </div>
         </header>
-        <button type="button" class="ws-flyout-item" data-ws-tab="profile" role="menuitem">Perfil WhatsApp</button>
-        <button type="button" class="ws-flyout-item" data-ws-tab="workspace" role="menuitem">Espacio de trabajo</button>
-        <button type="button" class="ws-flyout-item" data-ws-tab="reports" role="menuitem">Informes</button>
-        <button type="button" class="ws-flyout-item ws-flyout-soon" data-ws-tab="language" role="menuitem" disabled>
-          Idioma del portal <span class="ws-badge">Próximamente</span>
-        </button>
+          <button type="button" class="ws-flyout-item" data-ws-tab="profile" role="menuitem" data-i18n="nav.flyout.profile">Perfil WhatsApp</button>
+          <button type="button" class="ws-flyout-item" data-ws-tab="workspace" role="menuitem" data-i18n="nav.flyout.workspace">Espacio de trabajo</button>
+          <button type="button" class="ws-flyout-item" data-ws-tab="reports" role="menuitem" data-i18n="nav.flyout.reports">Informes</button>
+          <button type="button" class="ws-flyout-item" data-ws-tab="language" role="menuitem" data-i18n="nav.flyout.language">Idioma del portal</button>
       </div>
     </nav>
 
@@ -97,31 +95,31 @@
       <!-- Conversation list -->
       <aside class="list-pane">
         <header class="pane-header">
-          <h1>Conversaciones</h1>
-          <button id="newChatBtn" class="btn-primary sm" title="Nueva conversación">
+          <h1 data-i18n="chats.title">Conversaciones</h1>
+          <button id="newChatBtn" class="btn-primary sm" data-i18n-title="chats.new">
             <svg viewBox="0 0 24 24" class="ic"><path d="M12 5v14M5 12h14"/></svg>
-            Nueva
+            <span data-i18n="chats.new">Nueva</span>
           </button>
         </header>
         <div class="search">
           <svg viewBox="0 0 24 24" class="ic-search"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg>
-          <input id="searchInput" type="text" placeholder="Buscar…" />
+          <input id="searchInput" type="text" data-i18n-placeholder="chats.searchPlaceholder" placeholder="Buscar…" />
         </div>
         <ul id="conversationList" class="conversation-list"></ul>
-        <button id="simBtn" class="sim-link" title="Simular mensaje entrante (pruebas)">Simular entrante</button>
+        <button id="simBtn" class="sim-link" data-i18n-title="chats.simulate" data-i18n="chats.simulate">Simular entrante</button>
       </aside>
 
       <!-- Chat -->
       <main class="chat-pane">
         <div id="emptyState" class="empty-state">
           <img src="/logo.png" alt="" class="empty-logo" />
-          <h2>Selecciona una conversación</h2>
-          <p>Los mensajes de WhatsApp aparecen aquí. Pulsa <strong>Nueva</strong> para iniciar una con una plantilla.</p>
+          <h2 data-i18n="chats.emptyTitle">Selecciona una conversación</h2>
+          <p data-i18n="chats.emptyBody">Los mensajes de WhatsApp aparecen aquí. Pulsa Nueva para iniciar una con una plantilla.</p>
         </div>
 
         <section id="chatView" class="chat-view hidden">
           <header class="chat-header">
-            <button type="button" id="chatBackBtn" class="icon-btn ghost chat-back" title="Volver a conversaciones" aria-label="Volver">
+            <button type="button" id="chatBackBtn" class="icon-btn ghost chat-back" data-i18n-title="chats.back" data-i18n-aria="chats.back">
               <svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg>
             </button>
             <div class="avatar" id="chatAvatar">?</div>
@@ -129,7 +127,7 @@
               <h2 id="chatName">—</h2>
               <span id="chatPhone" class="muted"></span>
             </div>
-            <button id="detailToggle" class="icon-btn ghost" title="Detalles">
+            <button id="detailToggle" class="icon-btn ghost" data-i18n-title="chats.details" data-i18n-aria="chats.details">
               <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>
             </button>
           </header>
@@ -139,11 +137,11 @@
           <div id="windowBanner" class="window-banner hidden"></div>
 
           <form id="composer" class="composer">
-            <button type="button" id="attachBtn" class="icon-btn ghost" title="Adjuntar imagen o archivo">
+            <button type="button" id="attachBtn" class="icon-btn ghost" data-i18n-title="chats.attach" data-i18n-aria="chats.attach">
               <svg viewBox="0 0 24 24"><path d="M21 12.5l-8.5 8.5a5 5 0 0 1-7-7l9-9a3.5 3.5 0 0 1 5 5l-9 9a2 2 0 0 1-3-3l8-8"/></svg>
             </button>
-            <input id="messageInput" type="text" placeholder="Escribe un mensaje…" autocomplete="off" />
-            <button type="submit" class="send-btn" title="Enviar">
+            <input id="messageInput" type="text" data-i18n-placeholder="chats.writePlaceholder" placeholder="Escribe un mensaje…" autocomplete="off" />
+            <button type="submit" class="send-btn" data-i18n-title="chats.send" data-i18n-aria="chats.send">
               <svg viewBox="0 0 24 24"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>
             </button>
           </form>
@@ -157,100 +155,100 @@
           <h3 id="detailName">—</h3>
           <span class="muted" id="detailPhone"></span>
         </div>
-        <div id="detailLeadAlert" class="detail-lead-alert hidden" role="status">
+        <div id="detailLeadAlert" class="detail-lead-alert hidden" role="status" data-i18n="detail.leadAlert">
           El cliente escribió. Completa la calificación del lead.
         </div>
 
         <div class="detail-section" id="detailLeadSection">
-          <span class="detail-label">Calificación del lead</span>
-          <p class="detail-hint muted sm">Si el cliente escribe, clasifica el contacto para el equipo comercial.</p>
+          <span class="detail-label" data-i18n="detail.leadTitle">Calificación del lead</span>
+          <p class="detail-hint muted sm" data-i18n="detail.leadHint">Si el cliente escribe, clasifica el contacto para el equipo comercial.</p>
           <div class="detail-lead-form">
             <label class="detail-field">
-              <span>Nombre</span>
-              <input type="text" id="leadName" placeholder="Nombre del contacto" autocomplete="off" />
+              <span data-i18n="detail.fields.name">Nombre</span>
+              <input type="text" id="leadName" data-i18n-placeholder="detail.placeholders.name" placeholder="Nombre del contacto" autocomplete="off" />
             </label>
             <label class="detail-field">
-              <span>Empresa</span>
-              <input type="text" id="leadCompany" placeholder="Empresa u organización" autocomplete="off" />
+              <span data-i18n="detail.fields.company">Empresa</span>
+              <input type="text" id="leadCompany" data-i18n-placeholder="detail.placeholders.company" placeholder="Empresa u organización" autocomplete="off" />
             </label>
             <label class="detail-field">
-              <span>Tipo</span>
+              <span data-i18n="detail.fields.type">Tipo</span>
               <select id="leadType"></select>
             </label>
             <label class="detail-field">
-              <span>Usuario</span>
+              <span data-i18n="detail.fields.userType">Usuario</span>
               <select id="leadUserType"></select>
             </label>
             <label class="detail-field">
-              <span>Ubicación</span>
-              <input type="text" id="leadLocation" placeholder="Ciudad, país…" autocomplete="off" />
+              <span data-i18n="detail.fields.location">Ubicación</span>
+              <input type="text" id="leadLocation" data-i18n-placeholder="detail.placeholders.location" placeholder="Ciudad, país…" autocomplete="off" />
             </label>
             <label class="detail-field">
-              <span>Responsable</span>
-              <input type="text" id="leadOwner" placeholder="Agente o dueño del lead" autocomplete="off" />
+              <span data-i18n="detail.fields.owner">Responsable</span>
+              <input type="text" id="leadOwner" data-i18n-placeholder="detail.placeholders.owner" placeholder="Agente o dueño del lead" autocomplete="off" />
             </label>
             <label class="detail-field">
-              <span>Correo electrónico</span>
-              <input type="email" id="leadEmail" placeholder="correo@ejemplo.com" autocomplete="off" />
+              <span data-i18n="detail.fields.email">Correo electrónico</span>
+              <input type="email" id="leadEmail" data-i18n-placeholder="detail.placeholders.email" placeholder="correo@ejemplo.com" autocomplete="off" />
             </label>
             <label class="detail-field">
-              <span>Teléfono</span>
+              <span data-i18n="detail.fields.phone">Teléfono</span>
               <input type="text" id="leadPhone" readonly tabindex="-1" />
             </label>
             <label class="detail-field">
-              <span>ID de usuario</span>
-              <input type="text" id="leadUserId" placeholder="ID interno o CRM" autocomplete="off" />
+              <span data-i18n="detail.fields.userId">ID de usuario</span>
+              <input type="text" id="leadUserId" data-i18n-placeholder="detail.placeholders.userId" placeholder="ID interno o CRM" autocomplete="off" />
             </label>
             <label class="detail-field">
-              <span>Fecha de registro</span>
+              <span data-i18n="detail.fields.signedUp">Fecha de registro</span>
               <input type="date" id="leadSignedUp" />
             </label>
           </div>
-          <p id="detailLeadSaveHint" class="detail-hint muted sm hidden">Guardado</p>
+          <p id="detailLeadSaveHint" class="detail-hint muted sm hidden" data-i18n="common.saved">Guardado</p>
         </div>
 
         <div class="detail-section">
-          <span class="detail-label">Actividad en WhatsApp</span>
+          <span class="detail-label" data-i18n="detail.activityTitle">Actividad en WhatsApp</span>
           <dl class="detail-kv" id="detailActivityKv"></dl>
         </div>
 
         <details class="detail-section detail-more-channels">
-          <summary class="detail-label">Correo y app Android</summary>
-          <p class="detail-hint muted sm">Estos datos no los provee WhatsApp. Complétalos solo si los tienes de otro canal.</p>
+          <summary class="detail-label" data-i18n="detail.channelsTitle">Correo y app Android</summary>
+          <p class="detail-hint muted sm" data-i18n="detail.channelsHint">Estos datos no los provee WhatsApp. Complétalos solo si los tienes de otro canal.</p>
           <div class="detail-lead-form">
             <label class="detail-field">
-              <span>Último correo abierto</span>
-              <input type="text" id="leadLastOpenedEmail" placeholder="Fecha o referencia" autocomplete="off" />
+              <span data-i18n="detail.fields.lastOpenedEmail">Último correo abierto</span>
+              <input type="text" id="leadLastOpenedEmail" data-i18n-placeholder="detail.placeholders.lastOpenedEmail" placeholder="Fecha o referencia" autocomplete="off" />
             </label>
           </div>
           <dl class="detail-kv detail-kv-muted" id="detailAndroidKv"></dl>
         </details>
 
         <div class="detail-section">
-          <span class="detail-label">País (inferido)</span>
+          <span class="detail-label" data-i18n="chats.country">País (inferido)</span>
           <div id="detailCountry" class="detail-value">—</div>
         </div>
         <div class="detail-section">
-          <span class="detail-label">Ventana de mensajería</span>
+          <span class="detail-label" data-i18n="chats.window">Ventana de mensajería</span>
           <div id="detailWindow" class="window-pill">—</div>
           <p class="detail-hint muted" id="detailWindowExpiry"></p>
         </div>
         <div class="detail-section">
-          <span class="detail-label">Origen de conversación</span>
+          <span class="detail-label" data-i18n="chats.origin">Origen de conversación</span>
           <div id="detailOrigin" class="detail-value">—</div>
         </div>
         <div class="detail-section">
-          <span class="detail-label">Resumen de mensajes</span>
+          <span class="detail-label" data-i18n="chats.statsTitle">Resumen de mensajes</span>
           <div id="detailStats" class="detail-stats"></div>
         </div>
         <div class="detail-section">
-          <span class="detail-label">Notas internas</span>
-          <textarea id="detailNotes" class="detail-notes" rows="4" placeholder="Anotaciones del equipo…"></textarea>
+          <span class="detail-label" data-i18n="chats.notesTitle">Notas internas</span>
+          <textarea id="detailNotes" class="detail-notes" rows="4" data-i18n-placeholder="chats.notesPlaceholder" placeholder="Anotaciones del equipo…"></textarea>
         </div>
         <div class="detail-section">
-          <span class="detail-label">Acciones</span>
-          <button class="btn-ghost block" id="detailTemplateBtn">Enviar plantilla</button>
-          <button class="btn-ghost block" id="detailMediaBtn">Enviar imagen/archivo</button>
+          <span class="detail-label" data-i18n="chats.actions">Acciones</span>
+          <button class="btn-ghost block" id="detailTemplateBtn" data-i18n="chats.sendTemplate">Enviar plantilla</button>
+          <button class="btn-ghost block" id="detailMediaBtn" data-i18n="chats.sendMedia">Enviar imagen/archivo</button>
         </div>
       </aside>
       <div id="detailPaneBackdrop" class="detail-pane-backdrop" aria-hidden="true"></div>
@@ -261,23 +259,23 @@
       <main class="templates-pane">
         <header class="pane-header">
           <div>
-            <h1>Plantillas</h1>
-            <p class="muted templates-intro">Mensajes aprobados por Meta para iniciar conversaciones. Una plantilla es el texto del chat; un Flow es el formulario que se abre al tocar el botón (se gestiona aparte).</p>
+            <h1 data-i18n="templates.title">Plantillas</h1>
+            <p class="muted templates-intro" data-i18n="templates.intro">Mensajes aprobados por Meta para iniciar conversaciones.</p>
           </div>
           <button id="newTemplateBtn" class="btn-primary sm">
             <svg viewBox="0 0 24 24" class="ic"><path d="M12 5v14M5 12h14"/></svg>
-            Crear nueva
+            <span data-i18n="templates.createNew">Crear nueva</span>
           </button>
         </header>
 
         <section class="tpl-drafts-section" id="tplDraftsSection">
           <div class="tpl-drafts-head">
             <div>
-              <h2 class="section-title">Borradores Punto Pago</h2>
+              <h2 class="section-title" data-i18n="templates.draftsTitle">Borradores Punto Pago</h2>
               <p class="muted sm">Listos para revisar y enviar a Meta. Al abrir un borrador verás la leyenda de variables (qué es cada dato y formato). Los testigos <strong>Texto</strong> / <strong>+ Flow</strong> se actualizan al sincronizar.</p>
             </div>
             <div class="tpl-drafts-actions">
-              <button type="button" id="tplSyncMetaBtn" class="btn-ghost sm">Sincronizar con Meta</button>
+              <button type="button" id="tplSyncMetaBtn" class="btn-ghost sm" data-i18n="templates.syncMeta">Sincronizar con Meta</button>
               <span id="tplSyncMetaHint" class="muted sm"></span>
             </div>
           </div>
@@ -290,7 +288,7 @@
           <div id="tplVarCatalogBody" class="tpl-var-catalog-body muted sm">Cargando…</div>
         </details>
 
-        <h2 class="section-title tpl-approved-title">Plantillas en tu cuenta</h2>
+        <h2 class="section-title tpl-approved-title" data-i18n="templates.approvedTitle">Plantillas en tu cuenta</h2>
         <div id="templateList" class="templates-table-wrap"></div>
       </main>
     </section>
@@ -300,8 +298,8 @@
       <main class="bulk-pane">
         <header class="pane-header">
           <div>
-            <h1>Cargas masivas</h1>
-            <p class="muted bulk-intro">Envía plantillas aprobadas vía CSV o integración API. Cada plantilla define <strong>eventos variables</strong> que puedes inyectar después con un endpoint separado. Meta limita usuarios únicos por día según la integridad de tu línea.</p>
+            <h1 data-i18n="bulk.title">Cargas masivas</h1>
+            <p class="muted bulk-intro" data-i18n="bulk.intro">Envía plantillas aprobadas vía CSV o integración API.</p>
           </div>
         </header>
 
@@ -374,16 +372,16 @@
       <main class="workspace-pane">
         <header class="pane-header">
           <div>
-            <h1 id="wsPageTitle">Espacio de trabajo</h1>
-            <p class="muted ws-intro">Configura tu perfil de WhatsApp, el espacio y consulta informes básicos.</p>
+            <h1 id="wsPageTitle" data-i18n="workspace.title">Espacio de trabajo</h1>
+            <p class="muted ws-intro" data-i18n="workspace.intro">Configura tu perfil de WhatsApp, el espacio y consulta informes básicos.</p>
           </div>
         </header>
 
         <nav class="ws-tabs" id="wsTabs">
-          <button type="button" class="ws-tab active" data-ws-tab="profile">Perfil WhatsApp</button>
-          <button type="button" class="ws-tab" data-ws-tab="workspace">Espacio</button>
-          <button type="button" class="ws-tab" data-ws-tab="reports">Informes</button>
-          <button type="button" class="ws-tab ws-tab-soon" data-ws-tab="language" disabled>Idioma <span class="ws-badge">Próximamente</span></button>
+          <button type="button" class="ws-tab active" data-ws-tab="profile" data-i18n="workspace.tabs.profile">Perfil WhatsApp</button>
+          <button type="button" class="ws-tab" data-ws-tab="workspace" data-i18n="workspace.tabs.workspace">Espacio</button>
+          <button type="button" class="ws-tab" data-ws-tab="reports" data-i18n="workspace.tabs.reports">Informes</button>
+          <button type="button" class="ws-tab" data-ws-tab="language" data-i18n="workspace.tabs.language">Idioma</button>
         </nav>
 
         <!-- Tab: Perfil WhatsApp -->
@@ -476,15 +474,20 @@
 
         <!-- Tab: Idioma (placeholder) -->
         <section class="ws-panel hidden" id="wsPanelLanguage">
-          <div class="ws-card ws-soon-card">
-            <h2>Idioma del portal</h2>
-            <p class="muted">Próximamente podrás elegir el idioma de la interfaz (español, inglés, etc.) sin afectar el idioma de las plantillas de WhatsApp.</p>
-            <label>Idioma preferido (vista previa)
-              <select id="wsPortalLang" disabled>
-                <option value="es" selected>Español</option>
-                <option value="en">English</option>
+          <div class="ws-card">
+            <h2 data-i18n="workspace.languageTitle">Idioma del portal</h2>
+            <p class="muted" data-i18n="workspace.languageHint">Elige el idioma de la interfaz. No afecta el idioma de las plantillas de WhatsApp enviadas a Meta.</p>
+            <label data-i18n="workspace.languageLabel">Idioma preferido
+              <select id="wsPortalLang" data-i18n-options="workspace">
+                <option value="es" data-i18n-opt="langEs">Español</option>
+                <option value="en" data-i18n-opt="langEn">English</option>
+                <option value="ru" data-i18n-opt="langRu">Русский</option>
               </select>
             </label>
+            <p class="muted sm" data-i18n="workspace.languageNote">Se guarda en tu espacio de trabajo y en este navegador.</p>
+            <div class="ws-actions">
+              <button type="button" id="wsSaveLanguage" class="btn-primary sm" data-i18n="common.save">Guardar</button>
+            </div>
           </div>
         </section>
       </main>
@@ -495,8 +498,8 @@
       <main class="flows-pane">
         <header class="pane-header flows-header">
           <div>
-            <h1>Flows</h1>
-            <p class="muted flows-intro">Formularios interactivos en el chat. Créalos con el editor visual; nosotros los traducimos al formato Meta.</p>
+            <h1 data-i18n="flows.title">Flows</h1>
+            <p class="muted flows-intro" data-i18n="flows.intro">Formularios interactivos dentro de WhatsApp.</p>
           </div>
         </header>
 
@@ -750,8 +753,8 @@
       <main class="billing-pane">
         <header class="billing-header">
           <div>
-            <h1>Facturación</h1>
-            <span class="muted">Costos Meta + registro de envíos desde Punto Pago.</span>
+            <h1 data-i18n="billing.title">Facturación</h1>
+            <span class="muted" data-i18n="billing.subtitle">Costos Meta + registro de envíos desde Punto Pago.</span>
           </div>
           <div class="billing-controls">
             <select id="billRange">
@@ -759,19 +762,19 @@
               <option value="30" selected>30 días</option>
               <option value="90">90 días</option>
             </select>
-            <button id="billSync" class="btn-ghost sm" type="button" title="Vuelve a consultar Meta">
+            <button id="billSync" class="btn-ghost sm" type="button" data-i18n-title="common.update">
               <svg viewBox="0 0 24 24" class="ic"><path d="M21 12a9 9 0 1 1-3-6.7M21 4v4h-4"/></svg>
-              Actualizar
+              <span data-i18n="common.update">Actualizar</span>
             </button>
             <span id="billSyncHint" class="muted sm"></span>
           </div>
         </header>
 
         <nav class="billing-tabs" id="billingTabs">
-          <button type="button" class="billing-tab active" data-bill-tab="resumen">Resumen Meta</button>
-          <button type="button" class="billing-tab" data-bill-tab="envios">Nuestros envíos</button>
-          <button type="button" class="billing-tab" data-bill-tab="flows">Flows</button>
-          <button type="button" class="billing-tab" data-bill-tab="tarifas">Tarifas</button>
+          <button type="button" class="billing-tab active" data-bill-tab="resumen" data-i18n="billing.tabs.resumen">Resumen Meta</button>
+          <button type="button" class="billing-tab" data-bill-tab="envios" data-i18n="billing.tabs.envios">Nuestros envíos</button>
+          <button type="button" class="billing-tab" data-bill-tab="flows" data-i18n="billing.tabs.flows">Flows</button>
+          <button type="button" class="billing-tab" data-bill-tab="tarifas" data-i18n="billing.tabs.tarifas">Tarifas</button>
         </nav>
 
         <div class="billing-tab-panel" data-bill-panel="resumen">
@@ -1039,6 +1042,7 @@
 
   <div id="toast" class="toast hidden"></div>
 
+  <script src="/i18n.js"></script>
   <script src="/integration-api.js"></script>
   <script src="/app.js"></script>
 </body>

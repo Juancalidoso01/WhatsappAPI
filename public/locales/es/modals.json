@@ -1,0 +1,22 @@
+{
+  "newChat": {
+    "title": "Nueva conversación",
+    "hint": "Para iniciar en frío, WhatsApp exige una plantilla aprobada.",
+    "phone": "Número (con código de país)",
+    "phonePlaceholder": "50712345678",
+    "name": "Nombre (opcional)",
+    "namePlaceholder": "Nombre del cliente",
+    "template": "Plantilla",
+    "send": "Enviar"
+  },
+  "msgTypes": {
+    "text": "Texto",
+    "image": "Imagen",
+    "audio": "Audio",
+    "video": "Video",
+    "document": "Documento",
+    "template": "Plantilla",
+    "sticker": "Sticker",
+    "interactive": "Interactivo"
+  }
+}

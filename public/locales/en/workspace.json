@@ -1,0 +1,33 @@
+{
+  "title": "Workspace",
+  "intro": "Configure your WhatsApp profile, workspace, and view basic reports.",
+  "tabs": {
+    "profile": "WhatsApp profile",
+    "workspace": "Workspace",
+    "reports": "Reports",
+    "language": "Language"
+  },
+  "pageTitles": {
+    "profile": "WhatsApp profile",
+    "workspace": "Workspace",
+    "reports": "Reports",
+    "language": "Portal language"
+  },
+  "waPhotoTitle": "Photo your customers see",
+  "waPhotoDesc": "WhatsApp Business profile image (shown in chat).",
+  "waPhotoHintConnect": "Connect ACCESS_TOKEN to see the current photo from Meta.",
+  "waPhotoHintChange": "To change the WhatsApp photo use Meta Business Manager or the WhatsApp Business app. You see it here in real time.",
+  "waPhotoSynced": "Current photo synced from Meta.",
+  "portalPhotoTitle": "Portal photo",
+  "portalPhotoDesc": "Workspace avatar in this panel (does not change WhatsApp profile automatically).",
+  "publicProfileTitle": "Public WhatsApp profile",
+  "languageTitle": "Portal language",
+  "languageHint": "Choose the interface language. Does not affect WhatsApp template languages sent to Meta.",
+  "languageLabel": "Preferred language",
+  "languageNote": "Saved to your workspace and this browser.",
+  "langEs": "Español",
+  "langEn": "English",
+  "langRu": "Русский",
+  "reportsIntro": "Basic operational summary. Charts and export coming later.",
+  "viewBilling": "View billing"
+}

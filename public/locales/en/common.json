@@ -1,0 +1,23 @@
+{
+  "cancel": "Cancel",
+  "save": "Save",
+  "saved": "Saved",
+  "loading": "Loading…",
+  "syncing": "Syncing…",
+  "new": "New",
+  "create": "Create",
+  "update": "Update",
+  "refresh": "Refresh",
+  "remove": "Remove",
+  "upload": "Upload image",
+  "send": "Send",
+  "close": "Close",
+  "you": "You",
+  "now": "now",
+  "brandSub": "WhatsApp Business",
+  "workspace": "Workspace",
+  "online": "Online · persistent data",
+  "memory": "In-memory mode",
+  "persistentOn": "Persistence active",
+  "persistentOff": "In-memory mode"
+}

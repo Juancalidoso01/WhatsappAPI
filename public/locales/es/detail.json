@@ -1,0 +1,63 @@
+{
+  "leadAlert": "El cliente escribió. Completa la calificación del lead.",
+  "leadTitle": "Calificación del lead",
+  "leadHint": "Si el cliente escribe, clasifica el contacto para el equipo comercial.",
+  "activityTitle": "Actividad en WhatsApp",
+  "channelsTitle": "Correo y app Android",
+  "channelsHint": "Estos datos no los provee WhatsApp. Complétalos solo si los tienes de otro canal.",
+  "fields": {
+    "name": "Nombre",
+    "company": "Empresa",
+    "type": "Tipo",
+    "userType": "Usuario",
+    "location": "Ubicación",
+    "owner": "Responsable",
+    "email": "Correo electrónico",
+    "phone": "Teléfono",
+    "userId": "ID de usuario",
+    "signedUp": "Fecha de registro",
+    "lastOpenedEmail": "Último correo abierto"
+  },
+  "placeholders": {
+    "name": "Nombre del contacto",
+    "company": "Empresa u organización",
+    "location": "Ciudad, país…",
+    "owner": "Agente o dueño del lead",
+    "email": "correo@ejemplo.com",
+    "userId": "ID interno o CRM",
+    "lastOpenedEmail": "Fecha o referencia"
+  },
+  "activity": {
+    "whatsapp": "Número de WhatsApp",
+    "firstSeen": "Primera vez visto",
+    "lastSeen": "Última vez visto",
+    "lastContacted": "Último contacto (enviado)",
+    "lastHeardFrom": "Última respuesta del cliente"
+  },
+  "androidNa": "No disponible vía WhatsApp",
+  "android": {
+    "lastSeen": "Última vez en Android",
+    "sessions": "Sesiones Android",
+    "appVersion": "Versión app Android",
+    "device": "Dispositivo Android",
+    "osVersion": "Versión SO Android",
+    "sdkVersion": "Versión SDK Android"
+  },
+  "types": {
+    "": "Sin clasificar",
+    "prospecto": "Prospecto",
+    "cliente": "Cliente",
+    "lead_caliente": "Lead caliente",
+    "lead_frio": "Lead frío",
+    "soporte": "Soporte",
+    "otro": "Otro"
+  },
+  "userTypes": {
+    "": "Sin definir",
+    "titular": "Titular",
+    "beneficiario": "Beneficiario",
+    "representante": "Representante",
+    "empleado": "Empleado",
+    "otro": "Otro"
+  }
+}
