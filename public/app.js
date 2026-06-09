@@ -602,7 +602,14 @@ function bodyOf(t) {
 }
 
 /* ---------- create template (placeholders + emojis) ---------- */
-const tpState = { limits: { header: 60, body: 1024, footer: 60 }, emojis: [], vars: [] };
+const tpState = {
+  limits: { header: 60, body: 1024, footer: 60 },
+  emojis: [],
+  vars: [],
+  placeholderRules: [],
+  validation: { ok: false, errors: [], warnings: [] },
+  validateTimer: null,
+};
 
 function tpGraphemeLen(text) {
   const s = String(text || "");
@@ -1232,6 +1239,89 @@ function updateTpFieldCounts() {
   });
 }
 
+function renderTpMetaRules() {
+  const list = $("tpMetaRulesList");
+  if (!list) return;
+  const rules = tpState.placeholderRules.length
+    ? tpState.placeholderRules
+    : [
+      "Solo {{1}}, {{2}}… (números, sin nombres).",
+      "Consecutivos, sin saltos.",
+      "No empezar ni terminar con {{n}}.",
+      "Ejemplos sin #, $ ni %.",
+      "Suficiente texto fijo entre variables.",
+    ];
+  list.innerHTML = rules.map((r) => `<li>${escapeHtml(r)}</li>`).join("");
+}
+
+function collectTpDraftPayload() {
+  return {
+    headerText: ($("tpHeader") || {}).value.trim(),
+    bodyText: ($("tpBody") || {}).value.trim(),
+    footerText: ($("tpFooter") || {}).value.trim(),
+    variables: collectTpVariables(),
+  };
+}
+
+function renderTpValidation(result) {
+  const box = $("tpValidation");
+  const btn = $("tpCreate");
+  if (!box) return;
+  const errors = (result && result.errors) || [];
+  const warnings = (result && result.warnings) || [];
+  const ok = result && result.ok;
+
+  tpState.validation = { ok: Boolean(ok), errors, warnings };
+
+  if (btn) btn.disabled = !ok || !($("tpBody") || {}).value.trim();
+
+  if (!($("tpBody") || {}).value.trim()) {
+    box.className = "tp-validation hidden";
+    box.innerHTML = "";
+    return;
+  }
+
+  box.classList.remove("hidden");
+  if (ok && !warnings.length) {
+    box.className = "tp-validation ok";
+    box.innerHTML = "✓ Cumple las reglas de Meta para variables. Puedes enviar a revisión.";
+    return;
+  }
+  if (ok && warnings.length) {
+    box.className = "tp-validation warn";
+    box.innerHTML = `<strong>Listo con avisos:</strong><ul>${warnings.map((w) => `<li>${escapeHtml(w)}</li>`).join("")}</ul>`;
+    return;
+  }
+  box.className = "tp-validation error";
+  box.innerHTML = `<strong>Corrige antes de enviar a Meta:</strong><ul>${errors.map((e) => `<li>${escapeHtml(e)}</li>`).join("")}</ul>`;
+
+  document.querySelectorAll(".tp-var-row").forEach((row, i) => {
+    const keyInp = row.querySelector(".tp-var-key");
+    const exInp = row.querySelector(".tp-var-ex");
+    const n = i + 1;
+    const badKey = errors.some((e) => e.includes(`{{${n}}}`) && e.includes("clave"));
+    const badEx = errors.some((e) => e.includes(`{{${n}}}`) && (e.includes("ejemplo") || e.includes("#")));
+    if (keyInp) keyInp.classList.toggle("invalid", badKey);
+    if (exInp) exInp.classList.toggle("invalid", badEx);
+  });
+}
+
+function scheduleTpValidation() {
+  clearTimeout(tpState.validateTimer);
+  tpState.validateTimer = setTimeout(runTpValidation, 350);
+}
+
+async function runTpValidation() {
+  const payload = collectTpDraftPayload();
+  if (!payload.bodyText) {
+    renderTpValidation({ ok: false, errors: [], warnings: [] });
+    if ($("tpCreate")) $("tpCreate").disabled = true;
+    return;
+  }
+  const res = await post("/api/templates/validate", payload);
+  renderTpValidation(res);
+}
+
 function updateTpPreview() {
   const preview = $("tpPreview");
   if (!preview) return;
@@ -1252,14 +1342,12 @@ function updateTpPreview() {
       if (v.key) lines.push(`  {{${i + 1}}} → API: ${v.key}${v.example ? ` (ej: ${v.example})` : ""}`);
     });
   }
-  if (headerPh.length) lines.push("Encabezado con {{1}} — usa el primer ejemplo de variable si aplica.");
-  const seqOk = ph.every((n, i) => n === i + 1);
-  if (ph.length && !seqOk) lines.push("⚠ Los placeholders del cuerpo deben ser {{1}}, {{2}}… en orden.");
-  const showPreview = ph.length > 0 || headerPh.length > 0 || !seqOk;
-  preview.classList.toggle("hidden", !showPreview);
-  preview.textContent = showPreview ? lines.join("\n") : "";
+  if (headerPh.length) lines.push("Encabezado con {{1}}.");
+  preview.classList.toggle("hidden", !body.trim());
+  preview.textContent = body.trim() ? lines.join("\n") : "";
   updateTpFieldCounts();
   syncTpVariablesSection();
+  scheduleTpValidation();
 }
 
 function renderTpEmojiBar() {
@@ -1279,8 +1367,10 @@ async function initTemplateModal(presetKey) {
   if (meta.ok) {
     tpState.limits = meta.limits || tpState.limits;
     tpState.emojis = meta.emojis || [];
+    tpState.placeholderRules = meta.placeholderRules || [];
     if (meta.variableCatalog) state.variableCatalog = meta.variableCatalog;
   }
+  renderTpMetaRules();
   if (!state.variableCatalog.length) await loadTplVariableCatalog();
   await loadTemplatePresets();
   $("tpHint").textContent = "";
@@ -1297,6 +1387,7 @@ async function initTemplateModal(presetKey) {
   }
   renderTpEmojiBar();
   updateTpPreview();
+  await runTpValidation();
 }
 
 async function createTemplate() {
@@ -1304,10 +1395,7 @@ async function createTemplate() {
     name: $("tpName").value.trim(),
     category: $("tpCategory").value,
     language: $("tpLang").value,
-    headerText: $("tpHeader").value.trim(),
-    bodyText: $("tpBody").value.trim(),
-    footerText: $("tpFooter").value.trim(),
-    variables: collectTpVariables(),
+    ...collectTpDraftPayload(),
   };
   const hint = $("tpHint");
   if (!payload.name || !payload.bodyText) {
@@ -1316,19 +1404,12 @@ async function createTemplate() {
     return;
   }
 
-  const ph = tpExtractPlaceholders(payload.bodyText);
-  if (ph.length) {
-    const missing = payload.variables.filter((v, i) => ph.includes(i + 1) && (!v.key || !v.example));
-    if (missing.length) {
-      hint.className = "hint error";
-      hint.textContent = "Cada placeholder necesita clave API y ejemplo para Meta.";
-      return;
-    }
-    if (!ph.every((n, i) => n === i + 1)) {
-      hint.className = "hint error";
-      hint.textContent = "Usa placeholders consecutivos: {{1}}, {{2}}, {{3}}…";
-      return;
-    }
+  await runTpValidation();
+  if (!tpState.validation.ok) {
+    hint.className = "hint error";
+    hint.textContent = (tpState.validation.errors && tpState.validation.errors[0])
+      || "Corrige las reglas de variables antes de enviar a Meta.";
+    return;
   }
 
   hint.className = "hint";
@@ -1778,6 +1859,7 @@ function bindBillMetaRowTips(rows) {
 async function loadBilling() {
   const days = $("billRange").value;
   const tbody = $("billRows");
+  if ($("billSyncHint")) $("billSyncHint").textContent = "Sincronizando…";
   tbody.innerHTML = `<tr><td colspan="4" class="muted center">Sincronizando…</td></tr>`;
   let res;
   try { res = await api(`/api/billing?days=${days}`); } catch (_) { res = { ok: false, error: "Error de red" }; }

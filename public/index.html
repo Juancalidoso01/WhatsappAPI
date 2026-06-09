@@ -886,6 +886,11 @@
         </label>
       </div>
 
+      <details class="tp-meta-rules" id="tpMetaRules">
+        <summary>Reglas de Meta para variables <span class="muted">· evita rechazos</span></summary>
+        <ul id="tpMetaRulesList" class="tp-meta-rules-list muted sm"></ul>
+      </details>
+
       <section class="tp-vars-section hidden" id="tpVarsSection">
         <div class="tp-vars-head">
           <strong>Variables / placeholders</strong>
@@ -915,10 +920,11 @@
       </label>
 
       <div id="tpPreview" class="tp-preview muted hidden">Vista previa de la plantilla…</div>
+      <div id="tpValidation" class="tp-validation hidden" aria-live="polite"></div>
       <div id="tpHint" class="hint"></div>
       <div class="modal-actions">
         <button class="btn-ghost" data-close>Cancelar</button>
-        <button id="tpCreate" class="btn-primary">Crear plantilla</button>
+        <button id="tpCreate" class="btn-primary" disabled>Crear plantilla</button>
       </div>
     </div>
   </div>

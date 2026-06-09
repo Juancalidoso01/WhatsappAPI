@@ -731,6 +731,21 @@ input, textarea, select { font-family: inherit; }
 .tp-emoji-btn { border: 1px solid var(--border); background: var(--surface); border-radius: 8px; padding: 4px 8px; font-size: 16px; cursor: pointer; line-height: 1; }
 .tp-emoji-btn:hover { background: var(--surface-2); }
 .tp-preview { font-size: 12px; line-height: 1.5; padding: 10px 12px; border-radius: 10px; background: #f0f7ff; margin-bottom: 10px; white-space: pre-wrap; }
+.tp-meta-rules { margin: 0 0 12px; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--border); background: var(--surface-2); }
+.tp-meta-rules summary { cursor: pointer; font-size: 12px; font-weight: 600; list-style: none; }
+.tp-meta-rules summary::-webkit-details-marker { display: none; }
+.tp-meta-rules-list { margin: 8px 0 0; padding-left: 18px; line-height: 1.55; }
+.tp-meta-rules-list li { margin: 4px 0; }
+.tp-validation {
+  margin-bottom: 10px; padding: 10px 12px; border-radius: 10px; font-size: 12px; line-height: 1.5;
+}
+.tp-validation.ok { background: #ecfdf3; border: 1px solid #a7f3d0; color: #166534; }
+.tp-validation.error { background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; }
+.tp-validation.warn { background: #fffbeb; border: 1px solid #fde68a; color: #92400e; }
+.tp-validation ul { margin: 6px 0 0; padding-left: 18px; }
+.tp-validation li { margin: 3px 0; }
+#tpCreate:disabled { opacity: .55; cursor: not-allowed; }
+.tp-var-ex.invalid, .tp-var-key.invalid { border-color: var(--red) !important; background: #fff5f5; }
 
 /* WhatsApp-style template preview */
 .tpl-drafts-section { margin: 8px 0 24px; }

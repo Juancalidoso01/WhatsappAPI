@@ -1159,10 +1159,31 @@ app.get('/api/templates/create-meta', (req, res) => {
     emojis: templateBuilder.COMMON_EMOJIS,
     limits: templateBuilder.LIMITS,
     placeholderHelp: "Usa {{1}}, {{2}}… en el texto. Cada variable necesita clave API y ejemplo para Meta.",
+    placeholderRules: templateBuilder.META_PLACEHOLDER_RULES,
     variableCatalog: variableSchema.getVariableCatalog(),
     catalogNote:
       "La biblioteca es solo referencia para operadores y futuros borradores. "
       + "No modifica plantillas ya aprobadas en Meta hasta que solicites una nueva.",
+  });
+});
+
+// Validar borrador de plantilla antes de enviar a Meta (reglas de placeholders)
+app.post('/api/templates/validate', apiJson, (req, res) => {
+  const { headerText, bodyText, footerText, variables } = req.body || {};
+  if (!bodyText || !String(bodyText).trim()) {
+    return res.json({ ok: false, errors: ['El cuerpo del mensaje es obligatorio.'], warnings: [] });
+  }
+  const result = templateBuilder.validateTemplateDraft({
+    headerText: headerText || '',
+    bodyText: bodyText || '',
+    footerText: footerText || '',
+    variables: variables || [],
+  });
+  res.json({
+    ok: result.ok,
+    errors: result.errors || [],
+    warnings: result.warnings || [],
+    placeholderCount: result.placeholderCount || 0,
   });
 });
 
