@@ -29,7 +29,9 @@
   function flatten(obj, prefix, out) {
     Object.entries(obj || {}).forEach(([k, v]) => {
       const key = prefix ? `${prefix}.${k}` : k;
-      if (v && typeof v === "object" && !Array.isArray(v)) flatten(v, key, out);
+      if (Array.isArray(v)) {
+        v.forEach((item, i) => { out[`${key}.${i}`] = String(item); });
+      } else if (v && typeof v === "object") flatten(v, key, out);
       else out[key] = String(v);
     });
     return out;

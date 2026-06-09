@@ -132,7 +132,12 @@ async function onLocaleChange() {
   initLeadFormOptions();
   if (state.activePhone && state.conversationDetail) renderDetailPanel();
   renderConversations();
-  if (state.currentScreen === "templates" && state.templates.length) renderTemplateList();
+  if (state.currentScreen === "templates") {
+    renderTemplateList();
+    renderTplPresetCards();
+    renderTpMetaRules();
+    if (tpState.validation && ($("tpBody") || {}).value.trim()) renderTpValidation(tpState.validation);
+  }
   if (state.workspace) fillWorkspaceForms(state.workspace);
   setWorkspaceTab(state.workspaceTab || "profile");
 }
@@ -778,26 +783,27 @@ function renderTemplateRow(t, i) {
 function renderTemplateList() {
   const list = $("templateList");
   if (!state.config.templatesEnabled) {
-    list.innerHTML = `<p class="muted center-msg">Configura ACCESS_TOKEN y WABA_ID para gestionar plantillas.</p>`;
+    list.innerHTML = `<p class="muted center-msg">${escapeHtml(t("templates.configureAccess"))}</p>`;
     return;
   }
   if (!state.templates.length) {
-    list.innerHTML = `<p class="muted center-msg">No hay plantillas. Pulsa “Crear”.</p>`;
+    list.innerHTML = `<p class="muted center-msg">${escapeHtml(t("templates.noTemplates"))}</p>`;
     return;
   }
   const count = state.templates.length;
+  const countLabel = count === 1 ? t("templates.countOne") : t("templates.countMany", { count });
   list.innerHTML = `
-    <p class="templates-count muted">${count} plantilla${count === 1 ? "" : "s"} en tu cuenta</p>
+    <p class="templates-count muted">${escapeHtml(countLabel)}</p>
     <div class="billing-table-wrap">
       <table class="templates-table billing-table">
         <thead>
           <tr>
-            <th>Plantilla</th>
-            <th>Idioma</th>
-            <th>Categoría</th>
-            <th>Estado</th>
-            <th>Fecha</th>
-            <th>Mensaje</th>
+            <th>${escapeHtml(t("templates.colName"))}</th>
+            <th>${escapeHtml(t("templates.colLang"))}</th>
+            <th>${escapeHtml(t("templates.colCategory"))}</th>
+            <th>${escapeHtml(t("templates.colStatus"))}</th>
+            <th>${escapeHtml(t("templates.colDate"))}</th>
+            <th>${escapeHtml(t("templates.colMessage"))}</th>
             <th></th>
           </tr>
         </thead>
@@ -1190,7 +1196,7 @@ function renderTplPresetCards() {
   const box = $("tplPresetCards");
   if (!box) return;
   if (!state.templatePresets.length) {
-    box.innerHTML = `<p class="muted">No hay borradores disponibles.</p>`;
+    box.innerHTML = `<p class="muted">${escapeHtml(t("templates.noDrafts"))}</p>`;
     return;
   }
   box.innerHTML = state.templatePresets.map((p) => {
@@ -1200,15 +1206,15 @@ function renderTplPresetCards() {
       ? metaStatusBadge(ms.flow && ms.flow.status)
       : "";
     const ready = ms && ms.readyForProduction
-      ? `<span class="tpl-preset-tag tpl-ready-prod">Lista para producción</span>`
+      ? `<span class="tpl-preset-tag tpl-ready-prod">${escapeHtml(t("templates.readyForProd"))}</span>`
       : "";
     return `
     <button type="button" class="tpl-preset-card${p.isFlowPreset ? " flow-preset" : ""}" data-preset="${escapeHtml(p.key)}">
       <h3>${escapeHtml(p.label)}</h3>
       <p>${escapeHtml(p.description || "")}</p>
       <div class="tpl-card-meta">
-        <span class="tpl-preset-tag">Texto ${textBadge}</span>
-        ${p.templateFlowName ? `<span class="tpl-preset-tag">+ Flow ${flowBadge}</span>` : ""}
+        <span class="tpl-preset-tag">${escapeHtml(t("templates.badgeText"))} ${textBadge}</span>
+        ${p.templateFlowName ? `<span class="tpl-preset-tag">${escapeHtml(t("templates.badgeFlow"))} ${flowBadge}</span>` : ""}
         ${ready}
         <span class="tpl-preset-tag">${escapeHtml(String(p.category || "UTILITY").toLowerCase())}</span>
       </div>
@@ -1229,7 +1235,7 @@ async function openTplDraftModal(key) {
     $("tplPreviewMerchant").value = ($("payAuthMerchant") || {}).value || "Supermercado XO";
     $("tplPreviewCard4").value = ($("payAuthCard4") || {}).value || "4821";
   }
-  if ($("tplDraftTitle")) $("tplDraftTitle").textContent = preset ? preset.label : "Borrador";
+  if ($("tplDraftTitle")) $("tplDraftTitle").textContent = preset ? preset.label : t("templates.draftTitle");
   if ($("tplDraftDesc")) $("tplDraftDesc").textContent = preset ? preset.description : "";
   renderTplDraftMetaBar(key);
   const presetRes = await api(`/api/templates/presets/${encodeURIComponent(key)}`);
@@ -1455,18 +1461,22 @@ function updateTpFieldCounts() {
   });
 }
 
+function tpMetaRulesFallback() {
+  const rules = [];
+  for (let i = 0; i < 8; i++) {
+    const line = t(`templates.metaRules.${i}`);
+    if (line === `templates.metaRules.${i}`) break;
+    rules.push(line);
+  }
+  return rules;
+}
+
 function renderTpMetaRules() {
   const list = $("tpMetaRulesList");
   if (!list) return;
   const rules = tpState.placeholderRules.length
     ? tpState.placeholderRules
-    : [
-      "Solo {{1}}, {{2}}… (números, sin nombres).",
-      "Consecutivos, sin saltos.",
-      "No empezar ni terminar con {{n}}.",
-      "Ejemplos sin #, $ ni %.",
-      "Suficiente texto fijo entre variables.",
-    ];
+    : tpMetaRulesFallback();
   list.innerHTML = rules.map((r) => `<li>${escapeHtml(r)}</li>`).join("");
 }
 
@@ -1500,16 +1510,16 @@ function renderTpValidation(result) {
   box.classList.remove("hidden");
   if (ok && !warnings.length) {
     box.className = "tp-validation ok";
-    box.innerHTML = "✓ Cumple las reglas de Meta para variables. Puedes enviar a revisión.";
+    box.innerHTML = escapeHtml(t("templates.validationOk"));
     return;
   }
   if (ok && warnings.length) {
     box.className = "tp-validation warn";
-    box.innerHTML = `<strong>Listo con avisos:</strong><ul>${warnings.map((w) => `<li>${escapeHtml(w)}</li>`).join("")}</ul>`;
+    box.innerHTML = `<strong>${escapeHtml(t("templates.validationWarnTitle"))}</strong><ul>${warnings.map((w) => `<li>${escapeHtml(w)}</li>`).join("")}</ul>`;
     return;
   }
   box.className = "tp-validation error";
-  box.innerHTML = `<strong>Corrige antes de enviar a Meta:</strong><ul>${errors.map((e) => `<li>${escapeHtml(e)}</li>`).join("")}</ul>`;
+  box.innerHTML = `<strong>${escapeHtml(t("templates.validationErrorTitle"))}</strong><ul>${errors.map((e) => `<li>${escapeHtml(e)}</li>`).join("")}</ul>`;
 
   document.querySelectorAll(".tp-var-row").forEach((row, i) => {
     const keyInp = row.querySelector(".tp-var-key");
@@ -1548,9 +1558,9 @@ function updateTpPreview() {
   const ph = tpExtractPlaceholders(body);
   const headerPh = tpExtractPlaceholders(header);
   const lines = [];
-  if (header) lines.push("【Encabezado】 " + header);
-  lines.push("【Cuerpo】 " + (body || "—"));
-  if (footer) lines.push("【Pie】 " + footer);
+  if (header) lines.push(t("templates.previewHeader") + " " + header);
+  lines.push(t("templates.previewBody") + " " + (body || "—"));
+  if (footer) lines.push(t("templates.previewFooter") + " " + footer);
   if (ph.length) {
     lines.push("");
     lines.push("Placeholders en cuerpo: " + ph.map((n) => `{{${n}}}`).join(", "));
@@ -1778,7 +1788,7 @@ async function openNewChat(prefillName) {
   const hint = $("ncHint");
   $("ncFields").innerHTML = "";
   renderVariableGuide($("ncVarGuide"), []);
-  sel.innerHTML = `<option>Cargando…</option>`;
+  sel.innerHTML = `<option>${escapeHtml(t("common.loading"))}</option>`;
   if (!state.templates.length) await loadTemplates();
   const approved = state.templates.filter((t) => (t.status || "").toLowerCase() === "approved");
   if (!approved.length) {

@@ -388,53 +388,53 @@
         <section class="ws-panel" id="wsPanelProfile">
           <div class="ws-grid">
             <div class="ws-card">
-              <h2>Foto que ven tus clientes</h2>
-              <p class="muted">Imagen del perfil de WhatsApp Business (lo que aparece en el chat).</p>
+              <h2 data-i18n="workspace.waPhotoTitle">Foto que ven tus clientes</h2>
+              <p class="muted" data-i18n="workspace.waPhotoDesc">Imagen del perfil de WhatsApp Business (lo que aparece en el chat).</p>
               <div class="ws-photo-row">
                 <img id="wsWaPhoto" src="/logo.png" alt="Perfil WhatsApp" class="ws-photo-preview" />
                 <div>
-                  <p id="wsWaPhotoHint" class="muted">Conecta ACCESS_TOKEN para ver la foto actual desde Meta.</p>
-                  <p class="muted sm">Para cambiar la foto en WhatsApp usa Meta Business Manager o la app de WhatsApp Business. Aquí la ves en tiempo real.</p>
+                  <p id="wsWaPhotoHint" class="muted" data-i18n="workspace.waPhotoHintConnect">Conecta ACCESS_TOKEN para ver la foto actual desde Meta.</p>
+                  <p class="muted sm" data-i18n="workspace.waPhotoHintChange">Para cambiar la foto en WhatsApp usa Meta Business Manager o la app de WhatsApp Business. Aquí la ves en tiempo real.</p>
                 </div>
               </div>
             </div>
             <div class="ws-card">
-              <h2>Foto del portal</h2>
-              <p class="muted">Avatar de tu espacio de trabajo en este panel (no cambia el perfil de WhatsApp automáticamente).</p>
+              <h2 data-i18n="workspace.portalPhotoTitle">Foto del portal</h2>
+              <p class="muted" data-i18n="workspace.portalPhotoDesc">Avatar de tu espacio de trabajo en este panel (no cambia el perfil de WhatsApp automáticamente).</p>
               <div class="ws-photo-row">
                 <img id="wsPortalPhoto" src="/logo.png" alt="Avatar portal" class="ws-photo-preview" />
                 <div class="ws-photo-actions">
                   <label class="btn-ghost sm ws-upload-label">
-                    Subir imagen
+                    <span data-i18n="common.upload">Subir imagen</span>
                     <input id="wsPhotoInput" type="file" accept="image/jpeg,image/png,image/webp" hidden />
                   </label>
-                  <button type="button" id="wsPhotoRemove" class="btn-ghost sm">Quitar</button>
+                  <button type="button" id="wsPhotoRemove" class="btn-ghost sm" data-i18n="common.remove">Quitar</button>
                 </div>
               </div>
             </div>
           </div>
           <div class="ws-card">
-            <h2>Perfil público de WhatsApp</h2>
+            <h2 data-i18n="workspace.publicProfileTitle">Perfil público de WhatsApp</h2>
             <div class="ws-form-grid">
-              <label>Acerca de (about)
-                <input id="wsAbout" type="text" maxlength="139" placeholder="Ej. Atención al cliente Lun–Vie 8am–6pm" />
+              <label><span data-i18n="workspace.aboutLabel">Acerca de (about)</span>
+                <input id="wsAbout" type="text" maxlength="139" data-i18n-placeholder="workspace.aboutPlaceholder" placeholder="Ej. Atención al cliente Lun–Vie 8am–6pm" />
               </label>
-              <label>Descripción
-                <textarea id="wsDescription" rows="3" maxlength="512" placeholder="Breve descripción del negocio"></textarea>
+              <label><span data-i18n="workspace.descriptionLabel">Descripción</span>
+                <textarea id="wsDescription" rows="3" maxlength="512" data-i18n-placeholder="workspace.descriptionPlaceholder" placeholder="Breve descripción del negocio"></textarea>
               </label>
-              <label>Correo
-                <input id="wsEmail" type="email" placeholder="contacto@empresa.com" />
+              <label><span data-i18n="workspace.emailLabel">Correo</span>
+                <input id="wsEmail" type="email" data-i18n-placeholder="workspace.emailPlaceholder" placeholder="contacto@empresa.com" />
               </label>
-              <label>Sitio web
-                <input id="wsWebsite" type="url" placeholder="https://www.empresa.com" />
+              <label><span data-i18n="workspace.websiteLabel">Sitio web</span>
+                <input id="wsWebsite" type="url" data-i18n-placeholder="workspace.websitePlaceholder" placeholder="https://www.empresa.com" />
               </label>
             </div>
             <label class="ws-check">
               <input id="wsSyncWhatsapp" type="checkbox" checked />
-              Sincronizar texto con perfil de WhatsApp (Meta)
+              <span data-i18n="workspace.syncWhatsapp">Sincronizar texto con perfil de WhatsApp (Meta)</span>
             </label>
             <div class="ws-actions">
-              <button type="button" id="wsSaveProfile" class="btn-primary sm">Guardar perfil</button>
+              <button type="button" id="wsSaveProfile" class="btn-primary sm" data-i18n="workspace.saveProfile">Guardar perfil</button>
             </div>
           </div>
         </section>
@@ -442,29 +442,29 @@
         <!-- Tab: Espacio de trabajo -->
         <section class="ws-panel hidden" id="wsPanelWorkspace">
           <div class="ws-card">
-            <h2>Identidad del espacio</h2>
+            <h2 data-i18n="workspace.workspaceIdentityTitle">Identidad del espacio</h2>
             <div class="ws-form-grid">
-              <label>Nombre del espacio de trabajo
-                <input id="wsWorkspaceName" type="text" placeholder="Punto Pago · Cobranza" />
+              <label><span data-i18n="workspace.workspaceNameLabel">Nombre del espacio de trabajo</span>
+                <input id="wsWorkspaceName" type="text" data-i18n-placeholder="workspace.workspaceNamePlaceholder" placeholder="Punto Pago · Cobranza" />
               </label>
-              <label>Nombre para mostrar
-                <input id="wsDisplayName" type="text" placeholder="Punto Pago" />
+              <label><span data-i18n="workspace.displayNameLabel">Nombre para mostrar</span>
+                <input id="wsDisplayName" type="text" data-i18n-placeholder="workspace.displayNamePlaceholder" placeholder="Punto Pago" />
               </label>
             </div>
-            <p class="muted sm">El nombre para mostrar aparece en el título del portal y en el menú del punto verde.</p>
+            <p class="muted sm" data-i18n="workspace.displayNameHint">El nombre para mostrar aparece en el título del portal y en el menú del punto verde.</p>
             <div class="ws-actions">
-              <button type="button" id="wsSaveWorkspace" class="btn-primary sm">Guardar espacio</button>
+              <button type="button" id="wsSaveWorkspace" class="btn-primary sm" data-i18n="workspace.saveWorkspace">Guardar espacio</button>
             </div>
           </div>
           <div class="ws-card muted">
-            <h2>Estado del sistema</h2>
+            <h2 data-i18n="workspace.systemStatusTitle">Estado del sistema</h2>
             <ul id="wsSystemStatus" class="ws-status-list"></ul>
           </div>
         </section>
 
         <!-- Tab: Informes -->
         <section class="ws-panel hidden" id="wsPanelReports">
-          <p class="muted">Resumen operativo básico. Luego ampliaremos gráficos y exportación.</p>
+          <p class="muted" data-i18n="workspace.reportsIntro">Resumen operativo básico. Luego ampliaremos gráficos y exportación.</p>
           <div id="wsReportsGrid" class="ws-reports-grid muted">Cargando informes…</div>
           <div class="ws-actions">
             <button type="button" id="wsRefreshReports" class="btn-ghost sm">Actualizar</button>
@@ -852,80 +852,80 @@
     <!-- ============ MODALS ============ -->
   <div id="modalNewChat" class="modal hidden">
     <div class="modal-card">
-      <h3>Nueva conversación</h3>
-      <p class="muted">Para iniciar en frío, WhatsApp exige una plantilla aprobada.</p>
-      <label>Número (con código de país)
-        <input id="ncPhone" type="text" placeholder="50712345678" />
+      <h3 data-i18n="modals.newChat.title">Nueva conversación</h3>
+      <p class="muted" data-i18n="modals.newChat.hint">Para iniciar en frío, WhatsApp exige una plantilla aprobada.</p>
+      <label><span data-i18n="modals.newChat.phone">Número (con código de país)</span>
+        <input id="ncPhone" type="text" data-i18n-placeholder="modals.newChat.phonePlaceholder" placeholder="50712345678" />
       </label>
-      <label>Nombre (opcional)
-        <input id="ncName" type="text" placeholder="Nombre del cliente" />
+      <label><span data-i18n="modals.newChat.name">Nombre (opcional)</span>
+        <input id="ncName" type="text" data-i18n-placeholder="modals.newChat.namePlaceholder" placeholder="Nombre del cliente" />
       </label>
-      <label>Plantilla
+      <label><span data-i18n="modals.newChat.template">Plantilla</span>
         <select id="ncTemplate"></select>
       </label>
       <div id="ncFields" class="tpl-fields"></div>
       <div id="ncVarGuide" class="tpl-var-guide hidden" aria-label="Leyenda de variables"></div>
       <div id="ncHint" class="hint"></div>
       <div class="modal-actions">
-        <button class="btn-ghost" data-close>Cancelar</button>
-        <button id="ncSend" class="btn-primary">Enviar</button>
+        <button class="btn-ghost" data-close data-i18n="common.cancel">Cancelar</button>
+        <button id="ncSend" class="btn-primary" data-i18n="modals.newChat.send">Enviar</button>
       </div>
     </div>
   </div>
 
   <div id="modalMedia" class="modal hidden">
     <div class="modal-card">
-      <h3>Enviar archivo</h3>
-      <p class="muted">Adjunta una imagen, documento, audio o video desde tu equipo.</p>
-      <label>Archivo
+      <h3 data-i18n="modals.media.title">Enviar archivo</h3>
+      <p class="muted" data-i18n="modals.media.hint">Adjunta una imagen, documento, audio o video desde tu equipo.</p>
+      <label><span data-i18n="modals.media.file">Archivo</span>
         <input id="mdFile" type="file" accept="image/*,audio/*,video/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip" />
       </label>
       <div id="mdPreview" class="media-preview hidden"></div>
-      <label>Tipo
-        <select id="mdType">
-          <option value="image">Imagen</option>
-          <option value="document">Documento</option>
-          <option value="audio">Audio</option>
-          <option value="video">Video</option>
+      <label><span data-i18n="modals.media.type">Tipo</span>
+        <select id="mdType" data-i18n-options="modals.msgTypes">
+          <option value="image" data-i18n-opt="image">Imagen</option>
+          <option value="document" data-i18n-opt="document">Documento</option>
+          <option value="audio" data-i18n-opt="audio">Audio</option>
+          <option value="video" data-i18n-opt="video">Video</option>
         </select>
       </label>
       <details class="media-url-fallback">
-        <summary>O usar enlace público (https)</summary>
-        <label>Enlace (URL)
-          <input id="mdLink" type="text" placeholder="https://…/archivo.jpg" />
+        <summary data-i18n="modals.media.urlSummary">O usar enlace público (https)</summary>
+        <label><span data-i18n="modals.media.urlLabel">Enlace (URL)</span>
+          <input id="mdLink" type="text" data-i18n-placeholder="modals.media.urlPlaceholder" placeholder="https://…/archivo.jpg" />
         </label>
       </details>
-      <label>Texto / pie (opcional)
-        <input id="mdCaption" type="text" placeholder="Descripción opcional" />
+      <label><span data-i18n="modals.media.caption">Texto / pie (opcional)</span>
+        <input id="mdCaption" type="text" data-i18n-placeholder="modals.media.captionPlaceholder" placeholder="Descripción opcional" />
       </label>
       <div class="modal-actions">
-        <button class="btn-ghost" data-close>Cancelar</button>
-        <button id="mdSend" class="btn-primary">Enviar</button>
+        <button class="btn-ghost" data-close data-i18n="common.cancel">Cancelar</button>
+        <button id="mdSend" class="btn-primary" data-i18n="common.send">Enviar</button>
       </div>
     </div>
   </div>
 
   <div id="modalSim" class="modal hidden">
     <div class="modal-card">
-      <h3>Simular mensaje entrante</h3>
-      <p class="muted">Inyecta un mensaje como si llegara desde WhatsApp (para probar).</p>
-      <label>Número <input id="simPhone" type="text" placeholder="50712345678" /></label>
-      <label>Nombre (opcional) <input id="simName" type="text" placeholder="Cliente de prueba" /></label>
-      <label>Mensaje <input id="simText" type="text" placeholder="Hola, quiero información" /></label>
+      <h3 data-i18n="modals.sim.title">Simular mensaje entrante</h3>
+      <p class="muted" data-i18n="modals.sim.hint">Inyecta un mensaje como si llegara desde WhatsApp (para probar).</p>
+      <label><span data-i18n="modals.sim.phone">Número</span> <input id="simPhone" type="text" data-i18n-placeholder="modals.newChat.phonePlaceholder" placeholder="50712345678" /></label>
+      <label><span data-i18n="modals.sim.name">Nombre (opcional)</span> <input id="simName" type="text" data-i18n-placeholder="modals.sim.namePlaceholder" placeholder="Cliente de prueba" /></label>
+      <label><span data-i18n="modals.sim.message">Mensaje</span> <input id="simText" type="text" data-i18n-placeholder="modals.sim.messagePlaceholder" placeholder="Hola, quiero información" /></label>
       <div class="modal-actions">
-        <button class="btn-ghost" data-close>Cancelar</button>
-        <button id="simSend" class="btn-primary">Inyectar</button>
+        <button class="btn-ghost" data-close data-i18n="common.cancel">Cancelar</button>
+        <button id="simSend" class="btn-primary" data-i18n="modals.sim.inject">Inyectar</button>
       </div>
     </div>
   </div>
 
   <div id="modalBillDetail" class="modal hidden">
     <div class="modal-card">
-      <h3>Detalle de envío</h3>
+      <h3 data-i18n="modals.billDetail.title">Detalle de envío</h3>
       <div id="billDetailBody" class="bill-detail-body"></div>
       <div class="modal-actions">
-        <button class="btn-ghost" data-close>Cerrar</button>
-        <button type="button" id="billDetailOpenChat" class="btn-primary">Ver en conversación</button>
+        <button class="btn-ghost" data-close data-i18n="common.close">Cerrar</button>
+        <button type="button" id="billDetailOpenChat" class="btn-primary" data-i18n="modals.billDetail.openChat">Ver en conversación</button>
       </div>
     </div>
   </div>
@@ -975,20 +975,20 @@
 
   <div id="modalTemplate" class="modal hidden">
     <div class="modal-card modal-card-wide">
-      <h3>Crear plantilla</h3>
-          <p class="muted">Tras crearla, Meta la revisa (minutos a horas). Si usas variables (<code>{{1}}</code>, <code>{{2}}</code>…), define claves para la API y ejemplos — Meta los exige al crear la plantilla.</p>
-      <label>Nombre (sin espacios)
-        <input id="tpName" type="text" placeholder="recordatorio_pago" />
+      <h3 data-i18n="modals.templateCreate.title">Crear plantilla</h3>
+          <p class="muted" data-i18n="modals.templateCreate.intro">Tras crearla, Meta la revisa (minutos a horas). Si usas variables (<code>{{1}}</code>, <code>{{2}}</code>…), define claves para la API y ejemplos — Meta los exige al crear la plantilla.</p>
+      <label><span data-i18n="modals.templateCreate.name">Nombre (sin espacios)</span>
+        <input id="tpName" type="text" data-i18n-placeholder="modals.templateCreate.namePlaceholder" placeholder="recordatorio_pago" />
       </label>
       <div class="row">
-        <label>Categoría solicitada
+        <label><span data-i18n="modals.templateCreate.category">Categoría solicitada</span>
           <select id="tpCategory">
             <option value="MARKETING">Marketing</option>
             <option value="UTILITY" selected>Utilidad</option>
             <option value="AUTHENTICATION">Autenticación</option>
           </select>
         </label>
-        <label>Idioma
+        <label><span data-i18n="modals.templateCreate.language">Idioma</span>
           <select id="tpLang">
             <option value="es">Español (es)</option>
             <option value="es_MX">Español MX (es_MX)</option>
@@ -998,44 +998,44 @@
       </div>
 
       <details class="tp-meta-rules" id="tpMetaRules">
-        <summary>Reglas de Meta para variables <span class="muted">· evita rechazos</span></summary>
+        <summary><span data-i18n="modals.templateCreate.metaRulesSummary">Reglas de Meta para variables</span> <span class="muted" data-i18n="modals.templateCreate.metaRulesHint">· evita rechazos</span></summary>
         <ul id="tpMetaRulesList" class="tp-meta-rules-list muted sm"></ul>
       </details>
 
       <section class="tp-vars-section hidden" id="tpVarsSection">
         <div class="tp-vars-head">
-          <strong>Variables / placeholders</strong>
-          <button type="button" id="tpAddVar" class="btn-ghost sm">+ Agregar variable</button>
+          <strong data-i18n="modals.templateCreate.varsTitle">Variables / placeholders</strong>
+          <button type="button" id="tpAddVar" class="btn-ghost sm" data-i18n="modals.templateCreate.addVar">+ Agregar variable</button>
         </div>
-        <p class="muted sm">Solo si usas <code>{{1}}</code>, <code>{{2}}</code>… en el cuerpo. Clave = nombre en la API; ejemplo = valor que Meta revisa al aprobar. Usa la biblioteca de variables en Plantillas como referencia.</p>
+        <p class="muted sm" data-i18n="modals.templateCreate.varsHint">Solo si usas <code>{{1}}</code>, <code>{{2}}</code>… en el cuerpo. Clave = nombre en la API; ejemplo = valor que Meta revisa al aprobar. Usa la biblioteca de variables en Plantillas como referencia.</p>
         <div id="tpVarCatalogPick" class="tpl-var-catalog-pick hidden"></div>
         <div id="tpVarGuide" class="tpl-var-guide hidden" aria-label="Leyenda de variables"></div>
         <div id="tpVarList" class="tp-var-list"></div>
       </section>
 
-      <label>Encabezado (opcional, máx. 60 · un solo <code>{{1}}</code> si lleva variable)
-        <input id="tpHeader" type="text" placeholder="Recordatorio de pago" maxlength="120" />
+      <label><span data-i18n="modals.templateCreate.header">Encabezado (opcional, máx. 60 · un solo <code>{{1}}</code> si lleva variable)</span>
+        <input id="tpHeader" type="text" data-i18n-placeholder="modals.templateCreate.headerPlaceholder" placeholder="Recordatorio de pago" maxlength="120" />
         <span id="tpHeaderCount" class="field-count muted"></span>
       </label>
-      <label>Cuerpo del mensaje (máx. 1024)
-        <textarea id="tpBody" rows="4" placeholder="Hola {{1}}, tu saldo pendiente es {{2}}. Vence el {{3}}."></textarea>
+      <label><span data-i18n="modals.templateCreate.body">Cuerpo del mensaje (máx. 1024)</span>
+        <textarea id="tpBody" rows="4" data-i18n-placeholder="modals.templateCreate.bodyPlaceholder" placeholder="Hola {{1}}, tu saldo pendiente es {{2}}. Vence el {{3}}."></textarea>
         <span id="tpBodyCount" class="field-count muted"></span>
       </label>
       <div class="tp-emoji-bar">
-        <span class="muted sm">Emojis (compatibles con WhatsApp):</span>
+        <span class="muted sm" data-i18n="modals.templateCreate.emojiLabel">Emojis (compatibles con WhatsApp):</span>
         <div id="tpEmojiBar" class="tp-emoji-list"></div>
       </div>
-      <label>Pie (opcional, máx. 60)
-        <input id="tpFooter" type="text" placeholder="Punto Pago · Responde AYUDA" maxlength="80" />
+      <label><span data-i18n="modals.templateCreate.footer">Pie (opcional, máx. 60)</span>
+        <input id="tpFooter" type="text" data-i18n-placeholder="modals.templateCreate.footerPlaceholder" placeholder="Punto Pago · Responde AYUDA" maxlength="80" />
         <span id="tpFooterCount" class="field-count muted"></span>
       </label>
 
-      <div id="tpPreview" class="tp-preview muted hidden">Vista previa de la plantilla…</div>
+      <div id="tpPreview" class="tp-preview muted hidden" data-i18n="modals.templateCreate.preview">Vista previa de la plantilla…</div>
       <div id="tpValidation" class="tp-validation hidden" aria-live="polite"></div>
       <div id="tpHint" class="hint"></div>
       <div class="modal-actions">
-        <button class="btn-ghost" data-close>Cancelar</button>
-        <button id="tpCreate" class="btn-primary" disabled>Crear plantilla</button>
+        <button class="btn-ghost" data-close data-i18n="common.cancel">Cancelar</button>
+        <button id="tpCreate" class="btn-primary" disabled data-i18n="modals.templateCreate.create">Crear plantilla</button>
       </div>
     </div>
   </div>

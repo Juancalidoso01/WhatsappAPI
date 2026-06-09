@@ -9,6 +9,53 @@
     "template": "Template",
     "send": "Send"
   },
+  "media": {
+    "title": "Send file",
+    "hint": "Attach an image, document, audio, or video from your device.",
+    "file": "File",
+    "type": "Type",
+    "urlSummary": "Or use a public link (https)",
+    "urlLabel": "Link (URL)",
+    "urlPlaceholder": "https://…/file.jpg",
+    "caption": "Caption (optional)",
+    "captionPlaceholder": "Optional description"
+  },
+  "sim": {
+    "title": "Simulate incoming message",
+    "hint": "Inject a message as if it arrived from WhatsApp (for testing).",
+    "phone": "Number",
+    "name": "Name (optional)",
+    "namePlaceholder": "Test customer",
+    "message": "Message",
+    "messagePlaceholder": "Hi, I'd like more information",
+    "inject": "Inject"
+  },
+  "billDetail": {
+    "title": "Send detail",
+    "openChat": "View in conversation"
+  },
+  "templateCreate": {
+    "title": "Create template",
+    "intro": "After creation, Meta reviews it (minutes to hours). If you use variables ({{1}}, {{2}}…), define API keys and examples — Meta requires them when creating the template.",
+    "name": "Name (no spaces)",
+    "namePlaceholder": "payment_reminder",
+    "category": "Requested category",
+    "language": "Language",
+    "metaRulesSummary": "Meta variable rules",
+    "metaRulesHint": "· avoid rejections",
+    "varsTitle": "Variables / placeholders",
+    "addVar": "+ Add variable",
+    "varsHint": "Only if you use {{1}}, {{2}}… in the body. Key = API name; example = value Meta reviews for approval. Use the variable library in Templates as reference.",
+    "header": "Header (optional, max 60 · only one {{1}} if it has a variable)",
+    "headerPlaceholder": "Payment reminder",
+    "body": "Message body (max 1024)",
+    "bodyPlaceholder": "Hi {{1}}, your balance is {{2}}. Due {{3}}.",
+    "emojiLabel": "Emojis (WhatsApp compatible):",
+    "footer": "Footer (optional, max 60)",
+    "footerPlaceholder": "Punto Pago · Reply HELP",
+    "preview": "Template preview…",
+    "create": "Create template"
+  },
   "msgTypes": {
     "text": "Text",
     "image": "Image",

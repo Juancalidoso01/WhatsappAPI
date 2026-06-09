@@ -9,6 +9,53 @@
     "template": "Plantilla",
     "send": "Enviar"
   },
+  "media": {
+    "title": "Enviar archivo",
+    "hint": "Adjunta una imagen, documento, audio o video desde tu equipo.",
+    "file": "Archivo",
+    "type": "Tipo",
+    "urlSummary": "O usar enlace público (https)",
+    "urlLabel": "Enlace (URL)",
+    "urlPlaceholder": "https://…/archivo.jpg",
+    "caption": "Texto / pie (opcional)",
+    "captionPlaceholder": "Descripción opcional"
+  },
+  "sim": {
+    "title": "Simular mensaje entrante",
+    "hint": "Inyecta un mensaje como si llegara desde WhatsApp (para probar).",
+    "phone": "Número",
+    "name": "Nombre (opcional)",
+    "namePlaceholder": "Cliente de prueba",
+    "message": "Mensaje",
+    "messagePlaceholder": "Hola, quiero información",
+    "inject": "Inyectar"
+  },
+  "billDetail": {
+    "title": "Detalle de envío",
+    "openChat": "Ver en conversación"
+  },
+  "templateCreate": {
+    "title": "Crear plantilla",
+    "intro": "Tras crearla, Meta la revisa (minutos a horas). Si usas variables ({{1}}, {{2}}…), define claves para la API y ejemplos — Meta los exige al crear la plantilla.",
+    "name": "Nombre (sin espacios)",
+    "namePlaceholder": "recordatorio_pago",
+    "category": "Categoría solicitada",
+    "language": "Idioma",
+    "metaRulesSummary": "Reglas de Meta para variables",
+    "metaRulesHint": "· evita rechazos",
+    "varsTitle": "Variables / placeholders",
+    "addVar": "+ Agregar variable",
+    "varsHint": "Solo si usas {{1}}, {{2}}… en el cuerpo. Clave = nombre en la API; ejemplo = valor que Meta revisa al aprobar. Usa la biblioteca de variables en Plantillas como referencia.",
+    "header": "Encabezado (opcional, máx. 60 · un solo {{1}} si lleva variable)",
+    "headerPlaceholder": "Recordatorio de pago",
+    "body": "Cuerpo del mensaje (máx. 1024)",
+    "bodyPlaceholder": "Hola {{1}}, tu saldo pendiente es {{2}}. Vence el {{3}}.",
+    "emojiLabel": "Emojis (compatibles con WhatsApp):",
+    "footer": "Pie (opcional, máx. 60)",
+    "footerPlaceholder": "Punto Pago · Responde AYUDA",
+    "preview": "Vista previa de la plantilla…",
+    "create": "Crear plantilla"
+  },
   "msgTypes": {
     "text": "Texto",
     "image": "Imagen",
