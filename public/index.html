@@ -651,10 +651,11 @@
               <option value="30" selected>30 días</option>
               <option value="90">90 días</option>
             </select>
-            <button id="billSync" class="btn-primary sm">
+            <button id="billSync" class="btn-ghost sm" type="button" title="Vuelve a consultar Meta">
               <svg viewBox="0 0 24 24" class="ic"><path d="M21 12a9 9 0 1 1-3-6.7M21 4v4h-4"/></svg>
-              Sincronizar
+              Actualizar
             </button>
+            <span id="billSyncHint" class="muted sm"></span>
           </div>
         </header>
 
@@ -679,7 +680,7 @@
           <div class="billing-table-wrap billing-table-scroll" id="billMetaTableWrap">
             <table class="billing-table billing-table-compact">
               <thead><tr><th>País</th><th>Categoría</th><th class="num">Msgs</th><th class="num">Costo</th></tr></thead>
-              <tbody id="billRows"><tr><td colspan="4" class="muted center">Pulsa “Sincronizar”.</td></tr></tbody>
+              <tbody id="billRows"><tr><td colspan="4" class="muted center">Se sincroniza al abrir Facturación.</td></tr></tbody>
             </table>
           </div>
           <div id="billMetaTip" class="bill-meta-tip hidden" role="tooltip" aria-hidden="true"></div>

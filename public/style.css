@@ -565,7 +565,8 @@ input, textarea, select { font-family: inherit; }
 .billing-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-wrap: wrap; flex-shrink: 0; }
 .billing-header h1 { font-size: 18px; margin: 0 0 2px; letter-spacing: -.3px; }
 .billing-header .muted { font-size: 11px; }
-.billing-controls { display: flex; gap: 8px; align-items: center; }
+.billing-controls { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.billing-controls #billSyncHint { flex: 1 1 140px; text-align: right; min-width: 120px; }
 .billing-controls select {
   border: 1px solid var(--border); background: var(--surface); border-radius: 10px; padding: 7px 10px; font-size: 12px; outline: none;
 }

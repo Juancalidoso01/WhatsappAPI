@@ -41,6 +41,8 @@ const state = {
   activeBillEntry: null,
   highlightMessageId: null,
   billingTab: "resumen",
+  billingLastSync: null,
+  billingRangeDirty: false,
   variableCatalog: [],
 };
 
@@ -1862,7 +1864,27 @@ async function loadBilling() {
     bindBillMetaRowTips(state.billingMetaRows);
   }
   note.innerHTML = `Pasa el mouse sobre una fila para ver de dónde salen los números. Meta entrega totales agregados; el portal cruza con envíos registrados. Costo <strong>0</strong> en Servicio = gratis (ventana 24 h).`;
+  state.billingLastSync = Date.now();
+  state.billingRangeDirty = false;
+  updateBillSyncHint();
   setBillingTab(state.billingTab);
+}
+
+function updateBillSyncHint() {
+  const hint = $("billSyncHint");
+  if (!hint) return;
+  if (state.billingRangeDirty) {
+    hint.textContent = "Cambiaste el periodo · pulsa Actualizar";
+    return;
+  }
+  if (!state.billingLastSync) {
+    hint.textContent = "Se sincroniza al abrir esta pantalla";
+    return;
+  }
+  const when = new Date(state.billingLastSync).toLocaleString("es", {
+    day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit",
+  });
+  hint.textContent = `Actualizado ${when}`;
 }
 
 function categoryBillingLabel(cat) {
@@ -3485,7 +3507,10 @@ function bindEvents() {
   $("simBtn").addEventListener("click", () => showModal("modalSim"));
   $("simSend").addEventListener("click", simulate);
   $("billSync").addEventListener("click", loadBilling);
-  $("billRange").addEventListener("change", loadBilling);
+  $("billRange").addEventListener("change", () => {
+    state.billingRangeDirty = true;
+    updateBillSyncHint();
+  });
   document.querySelectorAll(".billing-tab").forEach((btn) =>
     btn.addEventListener("click", () => setBillingTab(btn.dataset.billTab))
   );
