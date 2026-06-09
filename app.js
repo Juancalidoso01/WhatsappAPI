@@ -40,6 +40,7 @@ const { decryptRequest, encryptResponse, FlowEndpointException } = require('./se
 const { handleFlowRequest, cardImageUrl, resolveCardImageUrl, buildPaymentAuthScreenData } = require('./services/flow-endpoint-handler');
 const PaymentAuthStore = require('./services/payment-auth-store');
 const templatePresets = require('./services/template-presets');
+const variableSchema = require('./services/variable-schema');
 const flowPerformance = require('./services/flow-performance');
 const CardImageStore = require('./services/card-image-store');
 const flowUseCases = require('./services/flow-use-cases');
@@ -1158,6 +1159,21 @@ app.get('/api/templates/create-meta', (req, res) => {
     emojis: templateBuilder.COMMON_EMOJIS,
     limits: templateBuilder.LIMITS,
     placeholderHelp: "Usa {{1}}, {{2}}… en el texto. Cada variable necesita clave API y ejemplo para Meta.",
+    variableCatalog: variableSchema.getVariableCatalog(),
+    catalogNote:
+      "La biblioteca es solo referencia para operadores y futuros borradores. "
+      + "No modifica plantillas ya aprobadas en Meta hasta que solicites una nueva.",
+  });
+});
+
+// Biblioteca de variables predefinidas (guía humana, sin enviar a Meta)
+app.get('/api/templates/variable-catalog', (req, res) => {
+  res.json({
+    ok: true,
+    catalog: variableSchema.getVariableCatalog(),
+    note:
+      "Referencia para saber qué llenar y qué formato usar. "
+      + "Las entradas «En uso» corresponden a plantillas activas; el resto es para futuras aprobaciones.",
   });
 });
 
@@ -1236,6 +1252,7 @@ app.get('/api/templates/presets/:key', (req, res) => {
       bodyText: preset.bodyText,
       footerText: preset.footerText,
       variables: preset.variables,
+      variableGuide: variableSchema.enrichPresetVariables(preset.variables),
       flowCta: preset.flowCta,
       flowMessage: preset.flowMessage,
     },
@@ -1955,12 +1972,14 @@ app.get('/api/templates/:name/variables', async (req, res) => {
   const metaMap = await Store.getAllTemplateMeta();
   const local = metaMap[`${tpl.name}|${tpl.language}`] || {};
   const eventVariables = resolveEventVariables(tpl, req.query, local);
+  const variableGuide = variableSchema.enrichEventVariables(eventVariables, tpl.name);
   res.json({
     ok: true,
     template: tpl.name,
     language: tpl.language,
     category: tpl.category,
     eventVariables,
+    variableGuide,
     requiredCount: eventVariables.filter((e) => e.required !== false).length,
   });
 });
@@ -1977,6 +1996,7 @@ app.get('/api/integrations/templates/:name/variables', requireIntegrationKey, as
     language: tpl.language,
     category: tpl.category,
     eventVariables: resolveEventVariables(tpl, {}, local),
+    variableGuide: variableSchema.enrichEventVariables(resolveEventVariables(tpl, {}, local), tpl.name),
   });
 });
 

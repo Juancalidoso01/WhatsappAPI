@@ -166,7 +166,7 @@
           <div class="tpl-drafts-head">
             <div>
               <h2 class="section-title">Borradores Punto Pago</h2>
-              <p class="muted sm">Listos para revisar y enviar a Meta. Los testigos <strong>Texto</strong> / <strong>+ Flow</strong> reflejan el estado en Meta (Aprobada, En revisión…).</p>
+              <p class="muted sm">Listos para revisar y enviar a Meta. Al abrir un borrador verás la leyenda de variables (qué es cada dato y formato). Los testigos <strong>Texto</strong> / <strong>+ Flow</strong> se actualizan al sincronizar.</p>
             </div>
             <div class="tpl-drafts-actions">
               <button type="button" id="tplSyncMetaBtn" class="btn-ghost sm">Sincronizar con Meta</button>
@@ -175,6 +175,12 @@
           </div>
           <div id="tplPresetCards" class="tpl-preset-cards">Cargando borradores…</div>
         </section>
+
+        <details class="tpl-var-catalog" id="tplVarCatalog">
+          <summary class="tpl-var-catalog-summary">Biblioteca de variables <span class="muted">· referencia para operadores</span></summary>
+          <p class="muted sm tpl-var-catalog-intro">Solo guía humana: qué dato va en cada campo y formato correcto. <strong>No cambia</strong> las plantillas ya aprobadas en Meta. Las marcadas «Futuro» son para cuando pidamos nuevas aprobaciones.</p>
+          <div id="tplVarCatalogBody" class="tpl-var-catalog-body muted sm">Cargando…</div>
+        </details>
 
         <h2 class="section-title tpl-approved-title">Plantillas en tu cuenta</h2>
         <div id="templateList" class="templates-table-wrap"></div>
@@ -439,13 +445,14 @@
                 <input id="payAuthAmount" type="text" placeholder="45.90" value="45.90" />
               </label>
               <label>Últimos 4 dígitos
-                <input id="payAuthCard4" type="text" placeholder="4821" value="4821" maxlength="4" />
+                <input id="payAuthCard4" type="text" placeholder="4821" value="4821" maxlength="4" inputmode="numeric" pattern="\d{4}" />
               </label>
               <label class="flows-upload-label">Imagen de tarjeta
                 <input id="payAuthCardImage" type="file" accept="image/jpeg,image/png,image/webp" />
                 <span class="muted sm">PNG o JPG · se muestra dentro del formulario</span>
               </label>
             </div>
+            <div id="payAuthVarGuide" class="tpl-var-guide" aria-label="Leyenda de variables del mensaje"></div>
             <div class="flows-actions">
               <button type="button" id="payAuthSendBtn" class="btn-primary sm">Enviar prueba a WhatsApp</button>
               <button type="button" id="payAuthOpenTplBtn" class="btn-ghost sm">Ver plantilla del mensaje</button>
@@ -744,6 +751,7 @@
         <select id="ncTemplate"></select>
       </label>
       <div id="ncFields" class="tpl-fields"></div>
+      <div id="ncVarGuide" class="tpl-var-guide hidden" aria-label="Leyenda de variables"></div>
       <div id="ncHint" class="hint"></div>
       <div class="modal-actions">
         <button class="btn-ghost" data-close>Cancelar</button>
@@ -816,19 +824,9 @@
       <div id="tplDraftMetaBar" class="tpl-draft-meta-bar"></div>
       <div class="tpl-draft-layout">
         <div class="tpl-draft-fields">
-          <p class="muted sm">Ajusta los datos de ejemplo para ver cómo llegará el mensaje.</p>
-          <label>Nombre del cliente
-            <input id="tplPreviewName" type="text" value="Juan Pablo" />
-          </label>
-          <label>Monto
-            <input id="tplPreviewAmount" type="text" value="45.90" />
-          </label>
-          <label>Comercio
-            <input id="tplPreviewMerchant" type="text" value="Supermercado XO" />
-          </label>
-          <label>Últimos 4 dígitos
-            <input id="tplPreviewCard4" type="text" value="4821" maxlength="4" />
-          </label>
+          <p class="muted sm">Ajusta los datos de ejemplo. La leyenda indica qué variable es cada campo y el formato correcto.</p>
+          <div id="tplDraftFields" class="tpl-draft-inputs"></div>
+          <div id="tplDraftVarGuide" class="tpl-var-guide" aria-label="Leyenda de variables"></div>
         </div>
         <div id="tplDraftWaPreview" class="wa-preview-phone" aria-label="Vista previa WhatsApp"></div>
       </div>
@@ -891,7 +889,9 @@
           <strong>Variables / placeholders</strong>
           <button type="button" id="tpAddVar" class="btn-ghost sm">+ Agregar variable</button>
         </div>
-        <p class="muted sm">Solo si usas <code>{{1}}</code>, <code>{{2}}</code>… en el cuerpo. Clave = nombre en la API; ejemplo = valor que Meta revisa al aprobar.</p>
+        <p class="muted sm">Solo si usas <code>{{1}}</code>, <code>{{2}}</code>… en el cuerpo. Clave = nombre en la API; ejemplo = valor que Meta revisa al aprobar. Usa la biblioteca de variables en Plantillas como referencia.</p>
+        <div id="tpVarCatalogPick" class="tpl-var-catalog-pick hidden"></div>
+        <div id="tpVarGuide" class="tpl-var-guide hidden" aria-label="Leyenda de variables"></div>
         <div id="tpVarList" class="tp-var-list"></div>
       </section>
 

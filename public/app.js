@@ -40,6 +40,7 @@ const state = {
   activeBillEntry: null,
   highlightMessageId: null,
   billingTab: "resumen",
+  variableCatalog: [],
 };
 
 /* ---------- tiny helpers ---------- */
@@ -627,6 +628,152 @@ function brandDisplayName() {
   return ws.displayName || state.config.brandName || "Punto Pago";
 }
 
+const PRESET_FIELD_IDS = {
+  nombre_cliente: { draft: "tplPreviewName", flow: "payAuthCustomerName" },
+  monto: { draft: "tplPreviewAmount", flow: "payAuthAmount" },
+  comercio: { draft: "tplPreviewMerchant", flow: "payAuthMerchant" },
+  ultimos_4: { draft: "tplPreviewCard4", flow: "payAuthCard4" },
+};
+
+const VAR_TYPE_HINTS = {
+  text: { typeLabel: "Texto", accept: "Letras y espacios. Sin emojis ni saltos de línea.", example: "Juan Pablo" },
+  money: { typeLabel: "Monto", accept: "Moneda ISO + monto (2 decimales). Ej: USD 45.90", example: "USD 45.90" },
+  merchant: { typeLabel: "Comercio", accept: "Nombre del establecimiento.", example: "Supermercado XO" },
+  card_last4: { typeLabel: "4 dígitos", accept: "Exactamente 4 números.", example: "4821" },
+  phone: { typeLabel: "Teléfono", accept: "Dígitos con código de país.", example: "50763163152" },
+  date: { typeLabel: "Fecha", accept: "Fecha legible.", example: "15 mar 2026" },
+  code: { typeLabel: "Código", accept: "Alfanumérico corto.", example: "FAC-2026-00482" },
+  id_ref: { typeLabel: "ID interno", accept: "Identificador del cliente. Sin espacios.", example: "CLI-10482" },
+  integer: { typeLabel: "Entero", accept: "Solo dígitos (días, cuotas).", example: "15" },
+  url: { typeLabel: "URL", accept: "Enlace https:// público.", example: "https://…" },
+  generic: { typeLabel: "Texto", accept: "Texto corto sin saltos de línea.", example: "Valor" },
+};
+
+function inferVarTypeFromKey(key) {
+  const k = String(key || "").toLowerCase();
+  if (/^id_/.test(k) || k === "id_cliente") return "id_ref";
+  if (/monto|amount|importe|saldo|cuota|deuda/.test(k)) return "money";
+  if (/comercio|merchant|tienda/.test(k)) return "merchant";
+  if (/ultimos|last4|card|tarjeta/.test(k)) return "card_last4";
+  if (/^nombre_|_nombre$/.test(k)) return "text";
+  if (/telefono|phone|celular|movil/.test(k)) return "phone";
+  if (/fecha|date|vence|vencimiento/.test(k)) return "date";
+  if (/numero_|num_|factura|referencia/.test(k)) return "code";
+  if (/dias_/.test(k)) return "integer";
+  if (/cliente|customer/.test(k)) return "text";
+  return "generic";
+}
+
+function lookupClientSchema(key) {
+  const flat = (state.variableCatalog || []).flatMap((g) => g.variables || []);
+  return flat.find((v) => v.key === key) || null;
+}
+
+function clientVarSchema(v, index) {
+  const key = (v && v.key) || "";
+  const fromCatalog = key ? lookupClientSchema(key) : null;
+  if (fromCatalog) return { ...fromCatalog, index };
+  const type = (v && v.type) || inferVarTypeFromKey(key);
+  const meta = VAR_TYPE_HINTS[type] || VAR_TYPE_HINTS.generic;
+  return {
+    key: key || `variable_${index + 1}`,
+    label: (v && v.label) || key || `Variable {{${index + 1}}}`,
+    placeholder: (v && v.placeholder) || `{{${index + 1}}}`,
+    type,
+    typeLabel: (v && v.typeLabel) || meta.typeLabel,
+    accept: (v && v.accept) || meta.accept,
+    example: (v && v.example) || meta.example,
+    mapsTo: v && v.mapsTo,
+    maxLength: v && v.maxLength,
+    pattern: v && v.pattern,
+    status: v && v.status,
+    component: v && v.component,
+    index,
+  };
+}
+
+function variableGuideTableHtml(vars, { title = "Leyenda de variables" } = {}) {
+  if (!vars || !vars.length) return "";
+  const rows = vars.map((v, i) => {
+    const s = v.typeLabel ? v : clientVarSchema(v, i);
+    return `<tr>
+      <td><span class="tpl-var-ph">${escapeHtml(s.placeholder || `{{${i + 1}}}`)}</span><br><strong>${escapeHtml(s.label)}</strong>${s.key ? `<br><code class="muted sm">${escapeHtml(s.key)}</code>` : ""}</td>
+      <td><span class="tpl-var-type">${escapeHtml(s.typeLabel || "Texto")}</span>${s.mapsTo ? `<div class="muted sm">${escapeHtml(s.mapsTo)}</div>` : ""}</td>
+      <td class="muted sm">${escapeHtml(s.accept || "—")}</td>
+      <td><code>${escapeHtml(s.example || "—")}</code></td>
+    </tr>`;
+  }).join("");
+  return `<p class="tpl-var-guide-title">${escapeHtml(title)}</p>
+    <table class="tpl-var-guide-table">
+      <thead><tr><th>Variable</th><th>Tipo</th><th>Formato aceptado</th><th>Ejemplo</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+}
+
+function renderVariableGuide(el, vars, opts) {
+  if (!el) return;
+  if (!vars || !vars.length) {
+    el.innerHTML = "";
+    el.classList.add("hidden");
+    return;
+  }
+  el.innerHTML = variableGuideTableHtml(vars, opts);
+  el.classList.remove("hidden");
+}
+
+function inputAttrsFromSchema(schema) {
+  const parts = [];
+  if (schema.maxLength) parts.push(`maxlength="${schema.maxLength}"`);
+  if (schema.pattern) parts.push(`pattern="${schema.pattern}"`);
+  if (schema.type === "card_last4") parts.push('inputmode="numeric" maxlength="4" pattern="\\d{4}"');
+  if (schema.type === "phone") parts.push('inputmode="tel"');
+  if (schema.type === "money") parts.push(`placeholder="${escapeHtml(schema.example || "USD 45.90")}"`);
+  return parts.join(" ");
+}
+
+function renderTplDraftInputs(guide) {
+  const box = $("tplDraftFields");
+  if (!box) return;
+  const items = guide && guide.length ? guide : [];
+  if (!items.length) {
+    box.innerHTML = `<p class="muted sm">Sin variables configuradas.</p>`;
+    renderVariableGuide($("tplDraftVarGuide"), []);
+    return;
+  }
+  box.innerHTML = items.map((v) => {
+    const s = v.typeLabel ? v : clientVarSchema(v, v.index || 0);
+    const ids = PRESET_FIELD_IDS[s.key];
+    const id = (ids && ids.draft) || `tplVar_${s.key}`;
+    const val = s.example || "";
+    return `<label>${escapeHtml(s.label)} <span class="tpl-var-ph">${escapeHtml(s.placeholder || "")}</span>
+      <input id="${id}" type="text" value="${escapeHtml(val)}" ${inputAttrsFromSchema(s)} />
+      <span class="tpl-field-hint">${escapeHtml(s.accept || "")}</span>
+    </label>`;
+  }).join("");
+  items.forEach((v) => {
+    const s = v.typeLabel ? v : clientVarSchema(v, v.index || 0);
+    const ids = PRESET_FIELD_IDS[s.key];
+    const id = (ids && ids.draft) || `tplVar_${s.key}`;
+    const el = $(id);
+    if (el) el.addEventListener("input", () => {
+      updateTplDraftPreview();
+      updatePayAuthPreview();
+      updatePayAuthFlowPreview();
+    });
+  });
+  renderVariableGuide($("tplDraftVarGuide"), items, { title: "Qué significa cada variable" });
+}
+
+function renderPayAuthVarGuide(guide) {
+  renderVariableGuide($("payAuthVarGuide"), guide, { title: "Variables del mensaje de verificación 3DS" });
+}
+
+function updateTpVarGuide() {
+  const vars = collectTpVariables().filter((v) => v.key || v.example);
+  const guide = vars.map((v, i) => clientVarSchema(v, i));
+  renderVariableGuide($("tpVarGuide"), guide, { title: "Guía de variables que estás definiendo" });
+}
+
 function tplPreviewOverrides() {
   return {
     nombre_cliente: ($("tplPreviewName") || {}).value || ($("payAuthCustomerName") || {}).value || "Juan Pablo",
@@ -685,6 +832,62 @@ function metaStatusBadge(status, fallbackLabel) {
   const cls = st === "approved" ? "approved" : st === "rejected" ? "rejected" : st === "pending" ? "pending" : "draft";
   const text = labels[st] || fallbackLabel || status || "—";
   return `<span class="status-badge ${cls}">${escapeHtml(text)}</span>`;
+}
+
+async function loadTplVariableCatalog() {
+  const res = await api("/api/templates/variable-catalog");
+  state.variableCatalog = (res && res.ok && res.catalog) || [];
+  const box = $("tplVarCatalogBody");
+  if (!box) return;
+  if (!state.variableCatalog.length) {
+    box.textContent = res && res.error ? res.error : "Sin catálogo.";
+    return;
+  }
+  box.innerHTML = state.variableCatalog.map((g) => `
+    <div class="tpl-var-catalog-group">
+      <h4>${escapeHtml(g.label)}
+        <span class="tpl-var-status ${escapeHtml(g.status)}">${g.status === "active" ? "En uso" : "Futuro"}</span>
+      </h4>
+      <p class="muted sm">${escapeHtml(g.note || "")}</p>
+      ${variableGuideTableHtml(g.variables, { title: "" })}
+    </div>`).join("");
+  renderTpVarCatalogPick();
+}
+
+function renderTpVarCatalogPick() {
+  const box = $("tpVarCatalogPick");
+  if (!box) return;
+  const picks = (state.variableCatalog || [])
+    .flatMap((g) => (g.variables || []).filter((v) => v.status === "reference"));
+  if (!picks.length) {
+    box.classList.add("hidden");
+    box.innerHTML = "";
+    return;
+  }
+  box.classList.remove("hidden");
+  box.innerHTML = `<span class="muted sm" style="flex:1 1 100%;margin-bottom:2px">Claves sugeridas (referencia; no envía nada a Meta):</span>`
+    + picks.map((v) =>
+      `<button type="button" class="tpl-var-pick-btn" data-key="${escapeHtml(v.key)}" title="${escapeHtml(v.label + " — " + (v.accept || ""))}">${escapeHtml(v.key)}</button>`
+    ).join("");
+  box.querySelectorAll(".tpl-var-pick-btn").forEach((btn) =>
+    btn.addEventListener("click", () => applyTpVarPick(btn.dataset.key))
+  );
+}
+
+function applyTpVarPick(key) {
+  if (!key) return;
+  const s = lookupClientSchema(key);
+  let rows = collectTpVariables();
+  if (!rows.length) rows = [{ key: "", example: "" }];
+  let idx = rows.findIndex((r) => !r.key);
+  if (idx < 0) {
+    rows.push({ key: "", example: "" });
+    idx = rows.length - 1;
+  }
+  rows[idx] = { key, example: s.example || "" };
+  renderTpVarList(rows);
+  updateTpVarGuide();
+  toast(`Clave «${key}» lista en variable {{${idx + 1}}}.`, "ok");
 }
 
 async function loadTemplatePresets() {
@@ -803,6 +1006,10 @@ async function openTplDraftModal(key) {
   if ($("tplDraftTitle")) $("tplDraftTitle").textContent = preset ? preset.label : "Borrador";
   if ($("tplDraftDesc")) $("tplDraftDesc").textContent = preset ? preset.description : "";
   renderTplDraftMetaBar(key);
+  const presetRes = await api(`/api/templates/presets/${encodeURIComponent(key)}`);
+  const guide = (presetRes && presetRes.preset && presetRes.preset.variableGuide)
+    || (preset && preset.variables) || [];
+  renderTplDraftInputs(guide);
   await updateTplDraftPreview();
   showModal("modalTplDraft");
 }
@@ -846,7 +1053,7 @@ async function updatePayAuthPreview() {
 }
 
 async function initTemplateStudio() {
-  await loadTemplatePresets();
+  await Promise.all([loadTemplatePresets(), loadTplVariableCatalog()]);
 }
 
 function applyPresetToForm(preset) {
@@ -979,7 +1186,11 @@ function renderTpVarList(vars) {
       updateTpPreview();
     });
   });
-  list.querySelectorAll("input").forEach((inp) => inp.addEventListener("input", updateTpPreview));
+  list.querySelectorAll("input").forEach((inp) => inp.addEventListener("input", () => {
+    updateTpPreview();
+    updateTpVarGuide();
+  }));
+  updateTpVarGuide();
 }
 
 function insertTpPlaceholder(fieldId, token) {
@@ -1170,7 +1381,12 @@ function templateNeedsConfig(t) {
 
 function renderTemplateFields(t) {
   const box = $("ncFields");
-  if (!t) { box.innerHTML = ""; return; }
+  const guideEl = $("ncVarGuide");
+  if (!t) {
+    box.innerHTML = "";
+    renderVariableGuide(guideEl, []);
+    return;
+  }
   const parts = [];
   const hs = headerSpec(t);
   if (hs && hs.kind === "text") parts.push(`<label>Encabezado (variable)<input data-field="header" type="text" placeholder="Texto del encabezado" /></label>`);
@@ -1188,6 +1404,41 @@ function renderTemplateFields(t) {
   box.innerHTML = parts.length
     ? `<div class="field-group"><div class="fg-title">Parámetros de la plantilla</div>${parts.join("")}</div>`
     : `<div class="tpl-none">Esta plantilla no requiere parámetros.</div>`;
+
+  loadTemplateVariableGuide(t);
+}
+
+async function loadTemplateVariableGuide(t) {
+  const guideEl = $("ncVarGuide");
+  if (!t || !guideEl) {
+    renderVariableGuide(guideEl, []);
+    return;
+  }
+  try {
+    const res = await api(`/api/templates/${encodeURIComponent(t.name)}/variables?language=${encodeURIComponent(t.language || "es")}`);
+    const guide = (res && res.ok && (res.variableGuide || res.eventVariables)) || [];
+    renderVariableGuide(guideEl, guide, { title: "Leyenda de variables de esta plantilla" });
+    guide.forEach((v, i) => {
+      const s = v.typeLabel ? v : clientVarSchema(v, i);
+      const field = v.component === "header"
+        ? guideEl.closest(".modal-card")?.querySelector('[data-field="header"]')
+        : guideEl.closest(".modal-card")?.querySelector(`[data-field="body${(v.index != null ? v.index : i) + 1}"]`);
+      if (!field) {
+        const bodyIdx = guide.filter((g) => g.component !== "header").indexOf(v) + 1;
+        const alt = guideEl.closest(".modal-card")?.querySelector(`[data-field="body${bodyIdx}"]`);
+        if (alt) {
+          alt.placeholder = s.example || alt.placeholder;
+          if (s.maxLength) alt.maxLength = s.maxLength;
+        }
+        return;
+      }
+      field.placeholder = s.example || field.placeholder;
+      if (s.maxLength) field.maxLength = s.maxLength;
+      if (s.pattern) field.pattern = s.pattern;
+    });
+  } catch (_) {
+    renderVariableGuide(guideEl, []);
+  }
 }
 
 function collectComponents(t) {
@@ -1224,6 +1475,7 @@ async function openNewChat(prefillName) {
   const sel = $("ncTemplate");
   const hint = $("ncHint");
   $("ncFields").innerHTML = "";
+  renderVariableGuide($("ncVarGuide"), []);
   sel.innerHTML = `<option>Cargando…</option>`;
   if (!state.templates.length) await loadTemplates();
   const approved = state.templates.filter((t) => (t.status || "").toLowerCase() === "approved");
@@ -2648,6 +2900,9 @@ async function initFlowBuilder() {
 async function loadPaymentAuthPanel() {
   const cfg = await api("/api/flows/payment-auth/config");
   if (cfg.ok && cfg.cardImageUrl) state.cardImageUrl = cfg.cardImageUrl;
+  const presetRes = await api("/api/templates/presets/punto_pago_autorizacion_pago");
+  const guide = (presetRes && presetRes.preset && presetRes.preset.variableGuide) || [];
+  renderPayAuthVarGuide(guide);
   await updatePayAuthPreview();
   updatePayAuthFlowPreview();
   const recent = await api("/api/flows/payment-auth/recent");
