@@ -56,6 +56,10 @@
     "preview": "Template preview…",
     "create": "Create template"
   },
+  "draftModal": {
+    "hint": "Adjust sample data. The legend shows each variable and correct format.",
+    "requestMeta": "Submit to Meta"
+  },
   "msgTypes": {
     "text": "Text",
     "image": "Image",

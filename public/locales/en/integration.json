@@ -1,4 +1,28 @@
 {
-  "title": "API integration",
-  "intro": "Documentation and examples to connect external systems."
+  "title": "API Integration",
+  "intro": "Guide to connect your system with bulk campaigns and variable events in two phases.",
+  "toolbar": {
+    "liveSchema": "Try live schema",
+    "noTemplate": "— approved template —",
+    "downloadMd": "Download MD"
+  },
+  "live": {
+    "pickTemplate": "Select a template below to see its live schema.",
+    "selectForSchema": "Select a template to see its live schema.",
+    "loading": "Loading schema…",
+    "noVars": "no required variables.",
+    "loadFailed": "Could not load schema.",
+    "required": "required",
+    "varsCount": "variable(s)"
+  },
+  "sections": {
+    "concepto": "Concept: two-phase integration",
+    "auth": "Authentication",
+    "paso0": "Step 0 — Variable schema per template",
+    "paso1": "Step 1 — Create campaign (recipients without variables)",
+    "paso2": "Step 2 — Connect variables (events)",
+    "paso3": "Step 3 — Start send and monitor",
+    "curl": "Full cURL example",
+    "ref": "Endpoint reference"
+  }
 }

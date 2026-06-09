@@ -56,6 +56,10 @@
     "preview": "Vista previa de la plantilla…",
     "create": "Crear plantilla"
   },
+  "draftModal": {
+    "hint": "Ajusta los datos de ejemplo. La leyenda indica qué variable es cada campo y el formato correcto.",
+    "requestMeta": "Solicitar en Meta"
+  },
   "msgTypes": {
     "text": "Texto",
     "image": "Imagen",

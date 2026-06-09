@@ -138,6 +138,23 @@ async function onLocaleChange() {
     renderTpMetaRules();
     if (tpState.validation && ($("tpBody") || {}).value.trim()) renderTpValidation(tpState.validation);
   }
+  if (state.currentScreen === "billing" && state.billingLedger) {
+    renderBillingLedger(state.billingLedger);
+    renderBillingFlowRows(state.billingLedger);
+  }
+  if (state.currentScreen === "bulk") {
+    renderLineHealth();
+    renderCampaignList();
+    if (state.activeCampaignId) refreshCampaignDetail();
+  }
+  if (state.currentScreen === "flows") {
+    loadFlowCapability();
+    renderFlowsList();
+    if (state.activeFlowId) loadFlowDetail(state.activeFlowId);
+  }
+  if (state.currentScreen === "integration" && window.IntegrationApiModule) {
+    IntegrationApiModule.renderGuide($("screenIntegration"));
+  }
   if (state.workspace) fillWorkspaceForms(state.workspace);
   setWorkspaceTab(state.workspaceTab || "profile");
 }
@@ -696,7 +713,7 @@ async function sendText(text) {
   $("messageInput").value = "";
   const res = await post("/api/send", { phone, text: text.trim() });
   if (res.warning) toast(res.warning, "error");
-  else if (res.error) toast("No se pudo enviar: " + res.error, "error");
+  else if (res.error) toast(t("toast.sendFailed", { error: res.error }), "error");
   await loadMessages(phone);
   await loadConversationDetail(phone);
   await loadConversations();
@@ -1119,7 +1136,7 @@ function applyTpVarPick(key) {
   rows[idx] = { key, example: s.example || "" };
   renderTpVarList(rows);
   updateTpVarGuide();
-  toast(`Clave «${key}» lista en variable {{${idx + 1}}}.`, "ok");
+  toast(t("toast.varKeyReady", { key, index: `{{${idx + 1}}}` }), "ok");
 }
 
 async function loadTemplatePresets() {
@@ -1140,7 +1157,7 @@ async function syncTemplatesWithMeta() {
   if (btn) btn.disabled = false;
   if (!res.ok) {
     if (hint) hint.textContent = res.error || "No se pudo sincronizar.";
-    toast(res.error || "Error al sincronizar con Meta.", "error");
+    toast(res.error || t("toast.syncMetaError"), "error");
     return;
   }
   state.templates = res.data || [];
@@ -1150,7 +1167,7 @@ async function syncTemplatesWithMeta() {
   renderTplPresetCards();
   renderTemplateList();
   if (state.activeTemplatePreset) renderTplDraftMetaBar(state.activeTemplatePreset);
-  toast(`Sincronizado: ${res.total || 0} plantilla(s) en Meta.`, "ok");
+  toast(t("toast.syncMetaOk", { total: res.total || 0 }), "ok");
 }
 
 function renderTplDraftMetaBar(key) {
@@ -1645,9 +1662,9 @@ async function createTemplate() {
     closeModals();
     const keys = (res.eventVariableKeys || []).join(", ");
     toast(
-      "Plantilla enviada a Meta."
-      + (keys ? " Variables API: " + keys + "." : "")
-      + " Espera la aprobación.",
+      t("toast.templateSubmittedMeta", {
+        vars: keys ? t("toast.templateSubmittedVars", { keys }) : "",
+      }),
       "ok"
     );
     await loadTemplates();
@@ -1792,7 +1809,7 @@ async function openNewChat(prefillName) {
   if (!state.templates.length) await loadTemplates();
   const approved = state.templates.filter((t) => (t.status || "").toLowerCase() === "approved");
   if (!approved.length) {
-    sel.innerHTML = `<option value="">— sin plantillas aprobadas —</option>`;
+    sel.innerHTML = `<option value="">${escapeHtml(t("bulk.noApprovedTemplates"))}</option>`;
     hint.className = "hint error";
     hint.textContent = "No tienes plantillas aprobadas. Crea una en Plantillas y espera la aprobación de Meta.";
     return;
@@ -1810,10 +1827,10 @@ async function openNewChat(prefillName) {
 }
 
 function updateNewChatCategoryHint() {
-  const t = tplByName($("ncTemplate").value);
+  const tpl = tplByName($("ncTemplate").value);
   const hint = $("ncHint");
-  if (!t || !hint) return;
-  const info = t.categoryInfo;
+  if (!tpl || !hint) return;
+  const info = tpl.categoryInfo;
   if (info && info.impactsBilling && info.hint) {
     hint.className = "hint warn";
     hint.textContent = `Facturación actual: ${info.billingLabel}. ${info.hint}`;
@@ -1829,18 +1846,18 @@ async function sendNewChat() {
   const phone = $("ncPhone").value.replace(/[^0-9]/g, "");
   const name = $("ncName").value.trim();
   const tplName = $("ncTemplate").value;
-  if (!phone || !tplName) { toast("Indica número y plantilla.", "error"); return; }
-  const t = tplByName(tplName);
-  const components = t ? collectComponents(t) : [];
-  const res = await post("/api/send-template", { phone, name, template: tplName, language: t ? t.language : "es", components });
+  if (!phone || !tplName) { toast(t("toast.phoneAndTemplateRequired"), "error"); return; }
+  const tpl = tplByName(tplName);
+  const components = tpl ? collectComponents(tpl) : [];
+  const res = await post("/api/send-template", { phone, name, template: tplName, language: tpl ? tpl.language : "es", components });
   if (res.ok) {
     closeModals();
-    toast("Plantilla enviada.", "ok");
+    toast(t("toast.templateSent"), "ok");
     switchScreen("chats");
     await loadConversations();
     openConversation(phone, name || phone);
   } else {
-    toast("No se pudo enviar: " + (res.error || res.warning || "error"), "error");
+    toast(t("toast.sendFailed", { error: res.error || res.warning || "error" }), "error");
   }
 }
 
@@ -1850,7 +1867,7 @@ async function sendMedia() {
   if (!phone) return;
   const file = $("mdFile").files[0];
   const link = $("mdLink").value.trim();
-  if (!file && !link) { toast("Selecciona un archivo o pega un enlace.", "error"); return; }
+  if (!file && !link) { toast(t("toast.fileOrLinkRequired"), "error"); return; }
 
   let res;
   if (file) {
@@ -1869,8 +1886,8 @@ async function sendMedia() {
   }
 
   closeModals();
-  if (res.ok) toast("Enviado.", "ok");
-  else toast("No se pudo enviar: " + (res.error || res.warning || "error"), "error");
+  if (res.ok) toast(t("toast.sent"), "ok");
+  else toast(t("toast.sendFailed", { error: res.error || res.warning || "error" }), "error");
   $("mdFile").value = "";
   $("mdLink").value = "";
   $("mdCaption").value = "";
@@ -1882,7 +1899,7 @@ async function sendMedia() {
 async function simulate() {
   const phone = $("simPhone").value.replace(/[^0-9]/g, "");
   const text = $("simText").value.trim();
-  if (!phone || !text) { toast("Número y mensaje requeridos.", "error"); return; }
+  if (!phone || !text) { toast(t("toast.phoneAndMessageRequired"), "error"); return; }
   await post("/api/simulate-incoming", { phone, name: $("simName").value.trim(), text });
   closeModals();
   $("simText").value = "";
@@ -1914,7 +1931,7 @@ function fmtBillDate(ts) {
 function fmtCostCell(entry) {
   if (!entry) return "—";
   if (entry.isFree || !entry.estimatedCost) {
-    return `<span class="bill-cost-free">Gratis</span>`;
+    return `<span class="bill-cost-free">${escapeHtml(t("billing.free"))}</span>`;
   }
   return `<span class="bill-cost-paid">${fmtUsd(entry.estimatedCost)}</span>`;
 }
@@ -1941,17 +1958,17 @@ function openBillDetail(entry) {
   if (!body) return;
   body.innerHTML = `
     <dl>
-      <dt>Fecha</dt><dd>${escapeHtml(fmtBillDate(entry.sentAt))}</dd>
-      <dt>Destino</dt><dd>${escapeHtml(entry.phoneFormatted || entry.phone)}${entry.recipientName ? ` · ${escapeHtml(entry.recipientName)}` : ""}</dd>
-      <dt>País</dt><dd>${countryFlag(entry.country)} ${escapeHtml(entry.countryName || entry.country || "—")}</dd>
-      <dt>Tipo</dt><dd>${escapeHtml(entry.kindLabel || entry.kind)}</dd>
-      <dt>Categoría</dt><dd><span class="cat-tag ${escapeHtml(entry.category)}">${escapeHtml(entry.categoryLabel || categoryBillingLabel(entry.category))}</span></dd>
-      <dt>Costo est.</dt><dd>${entry.isFree ? '<span class="bill-cost-free">Gratis (servicio)</span>' : fmtUsd(entry.estimatedCost || 0)}</dd>
-      ${entry.templateName ? `<dt>Plantilla</dt><dd>${escapeHtml(entry.templateName)}</dd>` : ""}
-      ${entry.flowName ? `<dt>Flow</dt><dd>${escapeHtml(entry.flowName)}</dd>` : ""}
-      ${entry.flowMode ? `<dt>Modo</dt><dd>${escapeHtml(entry.flowMode)}</dd>` : ""}
-      ${entry.preview ? `<dt>Mensaje</dt><dd>${escapeHtml(entry.preview)}</dd>` : ""}
-      ${entry.billingNote ? `<dt>Nota</dt><dd class="muted sm">${escapeHtml(entry.billingNote)}</dd>` : ""}
+      <dt>${escapeHtml(t("billing.detail.date"))}</dt><dd>${escapeHtml(fmtBillDate(entry.sentAt))}</dd>
+      <dt>${escapeHtml(t("billing.detail.dest"))}</dt><dd>${escapeHtml(entry.phoneFormatted || entry.phone)}${entry.recipientName ? ` · ${escapeHtml(entry.recipientName)}` : ""}</dd>
+      <dt>${escapeHtml(t("billing.detail.country"))}</dt><dd>${countryFlag(entry.country)} ${escapeHtml(entry.countryName || entry.country || "—")}</dd>
+      <dt>${escapeHtml(t("billing.detail.type"))}</dt><dd>${escapeHtml(entry.kindLabel || entry.kind)}</dd>
+      <dt>${escapeHtml(t("billing.detail.category"))}</dt><dd><span class="cat-tag ${escapeHtml(entry.category)}">${escapeHtml(entry.categoryLabel || categoryBillingLabel(entry.category))}</span></dd>
+      <dt>${escapeHtml(t("billing.detail.costEst"))}</dt><dd>${entry.isFree ? `<span class="bill-cost-free">${escapeHtml(t("billing.freeServiceLabel"))}</span>` : fmtUsd(entry.estimatedCost || 0)}</dd>
+      ${entry.templateName ? `<dt>${escapeHtml(t("billing.detail.template"))}</dt><dd>${escapeHtml(entry.templateName)}</dd>` : ""}
+      ${entry.flowName ? `<dt>${escapeHtml(t("billing.detail.flow"))}</dt><dd>${escapeHtml(entry.flowName)}</dd>` : ""}
+      ${entry.flowMode ? `<dt>${escapeHtml(t("billing.detail.mode"))}</dt><dd>${escapeHtml(entry.flowMode)}</dd>` : ""}
+      ${entry.preview ? `<dt>${escapeHtml(t("billing.detail.message"))}</dt><dd>${escapeHtml(entry.preview)}</dd>` : ""}
+      ${entry.billingNote ? `<dt>${escapeHtml(t("billing.detail.note"))}</dt><dd class="muted sm">${escapeHtml(entry.billingNote)}</dd>` : ""}
     </dl>`;
   showModal("modalBillDetail");
 }
@@ -1967,7 +1984,7 @@ function renderBillingLedger(rows) {
   const tbody = $("billLedgerRows");
   if (!tbody) return;
   if (!rows.length) {
-    tbody.innerHTML = `<tr><td colspan="5" class="muted center">Sin envíos registrados en este periodo.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="5" class="muted center">${escapeHtml(t("billing.noLedgerRows"))}</td></tr>`;
     return;
   }
   tbody.innerHTML = rows.map((r, i) => `<tr class="bill-row-click" data-ledger-i="${i}">
@@ -1987,7 +2004,7 @@ function renderBillingFlowRows(rows) {
   const tbody = $("billFlowRows");
   if (!tbody) return;
   if (!flowRows.length) {
-    tbody.innerHTML = `<tr><td colspan="5" class="muted center">Sin envíos Flow en este periodo.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="5" class="muted center">${escapeHtml(t("billing.noFlowRows"))}</td></tr>`;
     return;
   }
   tbody.innerHTML = flowRows.map((r, i) => `<tr class="bill-row-click" data-flow-i="${i}">
@@ -2009,28 +2026,28 @@ function buildBillMetaTipHtml(row) {
   let portalBlock = "";
   if (p.matchCount > 0) {
     const list = items.slice(0, 8).map((it) => {
-      const cost = it.isFree ? "gratis" : fmtUsd(it.estimatedCost || 0);
+      const cost = it.isFree ? t("billing.tip.freeWord") : fmtUsd(it.estimatedCost || 0);
       const label = it.preview || it.templateName || it.flowName || it.kindLabel || "Mensaje";
       return `<li><strong>${escapeHtml(fmtBillDate(it.sentAt))}</strong> · ${escapeHtml(it.phoneFormatted || it.phone)}<br><span class="muted">${escapeHtml(label)}</span> · ${escapeHtml(cost)}</li>`;
     }).join("");
     const more = p.matchCount > items.length
-      ? `<li class="muted">+ ${p.matchCount - items.length} más en «Nuestros envíos»</li>`
-      : (p.matchCount > 8 ? `<li class="muted">+ ${p.matchCount - 8} más…</li>` : "");
-    portalBlock = `<p><strong>En Punto Pago (${p.matchCount} envío${p.matchCount === 1 ? "" : "s"}):</strong></p><ul>${list}${more}</ul>`
-      + (p.estimatedCost ? `<p>Estimado portal: <strong>${fmtUsd(p.estimatedCost)}</strong> (${p.freeCount || 0} gratis)</p>` : "");
+      ? `<li class="muted">${escapeHtml(t("billing.tip.moreInLedger", { n: p.matchCount - items.length }))}</li>`
+      : (p.matchCount > 8 ? `<li class="muted">${escapeHtml(t("billing.tip.more", { n: p.matchCount - 8 }))}</li>` : "");
+    portalBlock = `<p><strong>${escapeHtml(t("billing.tip.portalSends", { count: p.matchCount }))}</strong></p><ul>${list}${more}</ul>`
+      + (p.estimatedCost ? `<p>${escapeHtml(t("billing.tip.portalEst", { cost: fmtUsd(p.estimatedCost), free: p.freeCount || 0 }))}</p>` : "");
   } else {
-    portalBlock = `<p class="muted">Sin envíos registrados en el portal para esta fila. Pueden ser mensajes entrantes, webhooks o envíos anteriores al registro local.</p>`;
+    portalBlock = `<p class="muted">${escapeHtml(t("billing.tip.noPortal"))}</p>`;
   }
   const zeroNote = row.costZeroReason
     ? `<p>${escapeHtml(row.costZeroReason)}</p>`
     : "";
   return `
-    <div class="bill-tip-source">Fuente: ${escapeHtml(row.sourceLabel || "Meta")} · datos agregados (no lista mensaje por mensaje)</div>
+    <div class="bill-tip-source">${escapeHtml(t("billing.tip.source", { source: row.sourceLabel || "Meta" }))}</div>
     <p><strong>${escapeHtml(countryName(row.country))}</strong> · ${escapeHtml(categoryBillingLabel(row.category))}</p>
-    <p>Meta reporta <strong>${fmtNum(row.volume)}</strong> mensaje(s) entregado(s) · costo <strong>${fmtCost(row.cost)}</strong></p>
+    <p>${escapeHtml(t("billing.tip.metaReports", { volume: fmtNum(row.volume), cost: fmtCost(row.cost) }))}</p>
     ${zeroNote}
     ${portalBlock}
-    <p class="bill-tip-hint">Clic en la fila abre el primer envío del portal (si hay). Pestaña «Nuestros envíos» lista todos.</p>`;
+    <p class="bill-tip-hint">${escapeHtml(t("billing.tip.clickHint"))}</p>`;
 }
 
 function positionBillMetaTip(evt) {
@@ -2085,8 +2102,8 @@ function bindBillMetaRowTips(rows) {
 async function loadBilling() {
   const days = $("billRange").value;
   const tbody = $("billRows");
-  if ($("billSyncHint")) $("billSyncHint").textContent = "Sincronizando…";
-  tbody.innerHTML = `<tr><td colspan="4" class="muted center">Sincronizando…</td></tr>`;
+  if ($("billSyncHint")) $("billSyncHint").textContent = t("billing.syncing");
+  tbody.innerHTML = `<tr><td colspan="4" class="muted center">${escapeHtml(t("billing.syncing"))}</td></tr>`;
   let res;
   try { res = await api(`/api/billing?days=${days}`); } catch (_) { res = { ok: false, error: "Error de red" }; }
 
@@ -2097,7 +2114,7 @@ async function loadBilling() {
     "bcFlowSends", "bcFlowBillable", "bcFlowFree", "bcFlowCost", "bcFlowResponses", "bcFlowEndpoint",
   ];
   if (!res.ok) {
-    tbody.innerHTML = `<tr><td colspan="4" class="muted center">No se pudo cargar.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="4" class="muted center">${escapeHtml(t("billing.loadFailed"))}</td></tr>`;
     note.textContent = res.error || "";
     resetIds.forEach((id) => { if ($(id)) $(id).textContent = "—"; });
     $("billTplAlert").classList.add("hidden");
@@ -2153,7 +2170,7 @@ async function loadBilling() {
   state.billingMetaRows = res.rows || [];
   hideBillMetaTip();
   if (!state.billingMetaRows.length) {
-    tbody.innerHTML = `<tr><td colspan="4" class="muted center">Sin datos Meta en este periodo.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="4" class="muted center">${escapeHtml(t("billing.noMetaRows"))}</td></tr>`;
   } else {
     tbody.innerHTML = state.billingMetaRows
       .map((r, i) => {
@@ -2171,7 +2188,7 @@ async function loadBilling() {
       .join("");
     bindBillMetaRowTips(state.billingMetaRows);
   }
-  note.innerHTML = `Pasa el mouse sobre una fila para ver de dónde salen los números. Meta entrega totales agregados; el portal cruza con envíos registrados. Costo <strong>0</strong> en Servicio = gratis (ventana 24 h).`;
+  note.innerHTML = t("billing.metaNote");
   state.billingLastSync = Date.now();
   state.billingRangeDirty = false;
   updateBillSyncHint();
@@ -2182,17 +2199,17 @@ function updateBillSyncHint() {
   const hint = $("billSyncHint");
   if (!hint) return;
   if (state.billingRangeDirty) {
-    hint.textContent = "Cambiaste el periodo · pulsa Actualizar";
+    hint.textContent = t("billing.periodChanged");
     return;
   }
   if (!state.billingLastSync) {
-    hint.textContent = "Se sincroniza al abrir esta pantalla";
+    hint.textContent = t("billing.syncOnScreenOpen");
     return;
   }
-  const when = new Date(state.billingLastSync).toLocaleString("es", {
+  const when = new Date(state.billingLastSync).toLocaleString((window.I18n && I18n.getLocale()) || "es", {
     day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit",
   });
-  hint.textContent = `Actualizado ${when}`;
+  hint.textContent = t("billing.updatedAt", { when });
 }
 
 function categoryBillingLabel(cat) {
@@ -2288,23 +2305,16 @@ function recomputePrices() {
 }
 
 /* ---------- bulk campaigns ---------- */
-const BULK_STATUS_LABELS = {
-  draft: "Borrador",
-  running: "Enviando",
-  paused: "Pausada",
-  completed: "Completada",
-  failed: "Fallida",
-};
-const ROW_STATUS_LABELS = {
-  awaiting_vars: "Sin variables",
-  ready: "Listo",
-  pending: "Pendiente",
-  sent: "Enviado",
-  delivered: "Entregado",
-  read: "Leído",
-  failed: "Error",
-  skipped: "Omitido",
-};
+function bulkStatusLabel(status) {
+  const key = `bulk.status.${status}`;
+  const label = t(key);
+  return label !== key ? label : status;
+}
+function bulkRowStatusLabel(status) {
+  const key = `bulk.rowStatus.${status}`;
+  const label = t(key);
+  return label !== key ? label : status;
+}
 
 async function loadLineHealth() {
   const res = await api("/api/line-health");
@@ -2317,22 +2327,22 @@ function renderLineHealth() {
   const box = $("lineHealthCards");
   const l = state.lineHealth;
   if (!l) {
-    box.innerHTML = `<div class="lh-card"><span class="lh-label">Línea WhatsApp</span><span class="lh-value">—</span><span class="lh-sub">Configura ACCESS_TOKEN y PHONE_NUMBER_ID.</span></div>`;
+    box.innerHTML = `<div class="lh-card"><span class="lh-label">${escapeHtml(t("bulk.lineWhatsapp"))}</span><span class="lh-value">—</span><span class="lh-sub">${escapeHtml(t("bulk.configureLine"))}</span></div>`;
     return;
   }
   const qClass = l.qualityColor || "muted";
   box.innerHTML = `
-    <div class="lh-card"><span class="lh-label">Número</span><span class="lh-value" style="font-size:15px">${escapeHtml(l.displayPhone || "—")}</span><span class="lh-sub">${escapeHtml(l.verifiedName || "")}</span></div>
-    <div class="lh-card ${qClass}"><span class="lh-label">Integridad (Meta)</span><span class="lh-value">${escapeHtml(l.qualityLabel)}</span><span class="lh-sub">${escapeHtml(l.qualityHint || "")}</span></div>
-    <div class="lh-card"><span class="lh-label">Límite diario</span><span class="lh-value">${escapeHtml(l.dailyUniqueLimitLabel)}</span><span class="lh-sub">Usuarios únicos / 24h · ${escapeHtml(l.messagingTier || "")}</span></div>
-    <div class="lh-card"><span class="lh-label">Estado de envío</span><span class="lh-value" style="font-size:15px">${l.canSendMessage ? "Disponible" : "Restringido"}</span><span class="lh-sub">${l.canSendMessage ? "La línea puede enviar plantillas." : "Meta restringió envíos temporales."}</span></div>`;
+    <div class="lh-card"><span class="lh-label">${escapeHtml(t("bulk.lineNumber"))}</span><span class="lh-value" style="font-size:15px">${escapeHtml(l.displayPhone || "—")}</span><span class="lh-sub">${escapeHtml(l.verifiedName || "")}</span></div>
+    <div class="lh-card ${qClass}"><span class="lh-label">${escapeHtml(t("bulk.lineIntegrity"))}</span><span class="lh-value">${escapeHtml(l.qualityLabel)}</span><span class="lh-sub">${escapeHtml(l.qualityHint || "")}</span></div>
+    <div class="lh-card"><span class="lh-label">${escapeHtml(t("bulk.lineDailyLimit"))}</span><span class="lh-value">${escapeHtml(l.dailyUniqueLimitLabel)}</span><span class="lh-sub">${escapeHtml(t("bulk.lineDailySub", { tier: l.messagingTier || "" }))}</span></div>
+    <div class="lh-card"><span class="lh-label">${escapeHtml(t("bulk.lineSendStatus"))}</span><span class="lh-value" style="font-size:15px">${l.canSendMessage ? escapeHtml(t("bulk.lineAvailable")) : escapeHtml(t("bulk.lineRestricted"))}</span><span class="lh-sub">${l.canSendMessage ? escapeHtml(t("bulk.lineCanSend")) : escapeHtml(t("bulk.lineCannotSend"))}</span></div>`;
 }
 
 function fillBulkTemplates() {
   const sel = $("bulkTemplate");
   const approved = state.templates.filter((t) => (t.status || "").toLowerCase() === "approved");
   if (!approved.length) {
-    sel.innerHTML = `<option value="">— sin plantillas aprobadas —</option>`;
+    sel.innerHTML = `<option value="">${escapeHtml(t("bulk.noApprovedTemplates"))}</option>`;
     return;
   }
   sel.innerHTML = approved
@@ -2351,13 +2361,13 @@ async function loadBulkTemplateVars() {
   if (!tpl.name) { box.classList.add("hidden"); return; }
   const res = await api(`/api/templates/${encodeURIComponent(tpl.name)}/variables?language=${encodeURIComponent(tpl.language)}`);
   if (!res.ok || !res.eventVariables || !res.eventVariables.length) {
-    box.innerHTML = `<span class="muted">Esta plantilla no requiere eventos variables.</span>`;
+    box.innerHTML = `<span class="muted">${escapeHtml(t("bulk.noEventVars"))}</span>`;
     box.classList.remove("hidden");
     return;
   }
-  box.innerHTML = `<strong>Eventos variables de la plantilla</strong><ul>${res.eventVariables
+  box.innerHTML = `<strong>${escapeHtml(t("bulk.eventVarsTitle"))}</strong><ul>${res.eventVariables
     .map((ev) => `<li><code>${escapeHtml(ev.key)}</code> — ${escapeHtml(ev.label)} (${escapeHtml(ev.placeholder)})</li>`)
-    .join("")}</ul><p class="muted" style="margin:8px 0 0">En CSV: columnas extra. Por API: ver guía en <strong>Integración API</strong>.</p>`;
+    .join("")}</ul><p class="muted" style="margin:8px 0 0">${escapeHtml(t("bulk.eventVarsApiHint"))}</p>`;
   box.classList.remove("hidden");
 }
 
@@ -2371,20 +2381,20 @@ function renderCampaignList() {
   const box = $("bulkCampaignList");
   $("bulkListHint").textContent = state.campaigns.length ? `(${state.campaigns.length})` : "";
   if (!state.campaigns.length) {
-    box.innerHTML = `<p class="muted">Aún no hay cargas. Crea una con CSV.</p>`;
+    box.innerHTML = `<p class="muted">${escapeHtml(t("bulk.noCampaigns"))}</p>`;
     return;
   }
   box.innerHTML = state.campaigns
     .map((c) => {
-      const t = c.totals || {};
+      const totals = c.totals || {};
       const active = c.id === state.activeCampaignId ? " active" : "";
       const pct = c.progress ? c.progress.percent : 0;
-      const src = c.source === "api" ? "API" : "CSV";
+      const src = c.source === "api" ? t("bulk.sourceApi") : t("bulk.sourceCsv");
       return `<div class="bulk-camp-item${active}" data-id="${escapeHtml(c.id)}">
         <strong>${escapeHtml(c.name)}</strong>
         <div class="muted" style="font-size:11px;margin-top:4px">
-          ${escapeHtml(c.template)} · ${src} · ${escapeHtml(BULK_STATUS_LABELS[c.status] || c.status)}
-          · ${pct}% · ${t.delivered || 0}/${t.total || 0} entregados
+          ${escapeHtml(c.template)} · ${src} · ${escapeHtml(bulkStatusLabel(c.status))}
+          · ${pct}% · ${escapeHtml(t("bulk.deliveredOf", { delivered: totals.delivered || 0, total: totals.total || 0 }))}
         </div>
       </div>`;
     })
@@ -2410,8 +2420,8 @@ async function previewBulkCsv() {
   const csvText = await readBulkCsvFile();
   const box = $("bulkPreview");
   const tpl = selectedBulkTemplate();
-  if (!csvText) { box.className = "bulk-preview error"; box.textContent = "Selecciona un archivo CSV."; box.classList.remove("hidden"); return; }
-  if (!tpl.name) { box.className = "bulk-preview error"; box.textContent = "Selecciona una plantilla."; box.classList.remove("hidden"); return; }
+  if (!csvText) { box.className = "bulk-preview error"; box.textContent = t("bulk.selectCsv"); box.classList.remove("hidden"); return; }
+  if (!tpl.name) { box.className = "bulk-preview error"; box.textContent = t("bulk.selectTemplate"); box.classList.remove("hidden"); return; }
 
   const fd = new FormData();
   fd.append("file", $("bulkCsv").files[0]);
@@ -2422,15 +2432,18 @@ async function previewBulkCsv() {
   box.classList.remove("hidden");
   if (!res.ok) {
     box.className = "bulk-preview error";
-    box.textContent = res.error || (res.errors && res.errors.join(" ")) || "No se pudo validar.";
+    box.textContent = res.error || (res.errors && res.errors.join(" ")) || t("bulk.validateFailed");
     return;
   }
   const evKeys = (res.eventVariables || []).map((e) => e.key).join(", ");
-  let msg = `${res.rowCount} contacto(s) válidos. Eventos: ${evKeys || (res.varColumns || []).join(", ") || "ninguno"}.`;
+  let msg = t("bulk.previewValid", {
+    count: res.rowCount,
+    events: evKeys || (res.varColumns || []).join(", ") || t("bulk.none"),
+  });
   if (res.overDailyLimit && res.line) {
-    msg += ` Atención: supera el límite diario de Meta (${res.line.dailyUniqueLimitLabel} únicos/24h).`;
+    msg += t("bulk.previewOverLimit", { limit: res.line.dailyUniqueLimitLabel });
   }
-  if (res.errors && res.errors.length) msg += ` Avisos: ${res.errors.slice(0, 3).join(" ")}`;
+  if (res.errors && res.errors.length) msg += t("bulk.previewWarnings", { warnings: res.errors.slice(0, 3).join(" ") });
   box.className = "bulk-preview ok";
   box.textContent = msg;
 }
@@ -2438,7 +2451,7 @@ async function previewBulkCsv() {
 async function createBulkCampaign() {
   const csvText = await readBulkCsvFile();
   const tpl = selectedBulkTemplate();
-  if (!csvText || !tpl.name) { toast("CSV y plantilla requeridos.", "error"); return; }
+  if (!csvText || !tpl.name) { toast(t("toast.csvAndTemplateRequired"), "error"); return; }
 
   const fd = new FormData();
   fd.append("file", $("bulkCsv").files[0]);
@@ -2446,8 +2459,8 @@ async function createBulkCampaign() {
   fd.append("template", tpl.name);
   fd.append("language", tpl.language);
   const res = await api("/api/campaigns", { method: "POST", body: fd });
-  if (!res.ok) { toast(res.error || "No se pudo crear la carga.", "error"); return; }
-  toast("Carga creada.", "ok");
+  if (!res.ok) { toast(res.error || t("toast.campaignCreateFailed"), "error"); return; }
+  toast(t("toast.campaignCreated"), "ok");
   await loadCampaigns();
   openCampaignDetail(res.campaign.id);
 }
@@ -2490,19 +2503,19 @@ async function refreshCampaignDetail() {
   }
   const rowsRes = await api(`/api/campaigns/${encodeURIComponent(id)}/rows?offset=0&limit=200`);
   const c = metaRes.campaign;
-  const t = c.totals || {};
+  const campTotals = c.totals || {};
   const prog = c.progress || {};
   const cost = c.costEstimate || {};
   $("bulkDetailTitle").textContent = c.name;
-  const srcLabel = c.source === "api" ? "Integración API" : "CSV";
-  $("bulkDetailMeta").textContent = `${c.template} · ${c.language} · ${srcLabel} · ${BULK_STATUS_LABELS[c.status] || c.status}${c.pauseReason ? " · " + c.pauseReason : ""}`;
+  const srcLabel = c.source === "api" ? t("bulk.sourceApi") : t("bulk.sourceCsv");
+  $("bulkDetailMeta").textContent = `${c.template} · ${c.language} · ${srcLabel} · ${bulkStatusLabel(c.status)}${c.pauseReason ? " · " + c.pauseReason : ""}`;
 
   const progBox = $("bulkProgress");
   progBox.classList.remove("hidden");
   progBox.innerHTML = `
     <div style="display:flex;justify-content:space-between;font-size:12px;gap:12px;flex-wrap:wrap">
-      <span><strong>Envío:</strong> ${prog.done || 0} / ${prog.total || 0} (${prog.percent || 0}%)</span>
-      <span><strong>Variables:</strong> ${prog.varsReady || 0} / ${prog.total || 0} (${prog.varsPercent || 0}%)</span>
+      <span><strong>${escapeHtml(t("bulk.progressSend"))}</strong> ${prog.done || 0} / ${prog.total || 0} (${prog.percent || 0}%)</span>
+      <span><strong>${escapeHtml(t("bulk.progressVars"))}</strong> ${prog.varsReady || 0} / ${prog.total || 0} (${prog.varsPercent || 0}%)</span>
     </div>
     <div class="bulk-progress-bar"><div class="bulk-progress-fill" style="width:${prog.percent || 0}%"></div></div>
     <div class="bulk-progress-bar" style="margin-top:6px"><div class="bulk-progress-fill vars" style="width:${prog.varsPercent || 0}%"></div></div>`;
@@ -2510,24 +2523,17 @@ async function refreshCampaignDetail() {
   const costBox = $("bulkCost");
   if (cost.estimatedTotalUsd != null) {
     costBox.classList.remove("hidden");
-    costBox.innerHTML = `<strong>Costo estimado:</strong> ~$${cost.estimatedTotalUsd} USD (${cost.billableEstimate || 0} msgs × $${cost.ratePerMessageUsd} · ${escapeHtml(cost.category || "UTILITY")}). ${escapeHtml(cost.note || "")}`;
+    costBox.innerHTML = `<strong>${escapeHtml(t("bulk.costEst"))}</strong> ~$${cost.estimatedTotalUsd} USD (${cost.billableEstimate || 0} msgs × $${cost.ratePerMessageUsd} · ${escapeHtml(cost.category || "UTILITY")}). ${escapeHtml(cost.note || "")}`;
   } else costBox.classList.add("hidden");
 
   $("bulkStats").innerHTML = [
-    ["total", "Total"],
-    ["awaiting_vars", "Sin vars"],
-    ["ready", "Listos"],
-    ["pending", "Pendientes"],
-    ["sent", "Enviados"],
-    ["delivered", "Entregados"],
-    ["read", "Leídos"],
-    ["failed", "Errores"],
-  ].map(([k, label]) => `<div class="bulk-stat"><span class="n">${t[k] || 0}</span><span class="l">${label}</span></div>`).join("");
+    "total", "awaiting_vars", "ready", "pending", "sent", "delivered", "read", "failed",
+  ].map((k) => `<div class="bulk-stat"><span class="n">${campTotals[k] || 0}</span><span class="l">${escapeHtml(t(`bulk.stats.${k}`))}</span></div>`).join("");
 
   const schemaBox = $("bulkEventSchema");
   if (c.eventVariables && c.eventVariables.length) {
     schemaBox.classList.remove("hidden");
-    schemaBox.innerHTML = `<strong>Esquema de eventos variables</strong>: ${c.eventVariables
+    schemaBox.innerHTML = `<strong>${escapeHtml(t("bulk.eventSchema"))}</strong>: ${c.eventVariables
       .map((ev) => `<code>${escapeHtml(ev.key)}</code>`)
       .join(", ")}`;
   } else schemaBox.classList.add("hidden");
@@ -2537,7 +2543,7 @@ async function refreshCampaignDetail() {
     <td>+${escapeHtml(r.phone)}</td>
     <td class="muted">${escapeHtml(r.externalId || "—")}</td>
     <td>${escapeHtml(r.name || "—")}</td>
-    <td><span class="st-${escapeHtml(r.status)}">${escapeHtml(ROW_STATUS_LABELS[r.status] || r.status)}</span></td>
+    <td><span class="st-${escapeHtml(r.status)}">${escapeHtml(bulkRowStatusLabel(r.status))}</span></td>
     <td class="muted">${escapeHtml(r.error || "")}</td>
     <td>${r.sentAt ? escapeHtml(new Date(r.sentAt).toLocaleString("es", { dateStyle: "short", timeStyle: "short" })) : "—"}</td>
   </tr>`).join("");
@@ -2549,8 +2555,8 @@ async function startBulkCampaign() {
   const id = state.activeCampaignId;
   if (!id) return;
   const res = await api(`/api/campaigns/${encodeURIComponent(id)}/start`, { method: "POST" });
-  if (!res.ok) { toast(res.error || "No se pudo iniciar.", "error"); return; }
-  toast("Carga iniciada.", "ok");
+  if (!res.ok) { toast(res.error || t("toast.campaignStartFailed"), "error"); return; }
+  toast(t("toast.campaignStarted"), "ok");
   startBulkPolling();
   await refreshCampaignDetail();
   await loadCampaigns();
@@ -2679,7 +2685,7 @@ async function savePortalLanguage() {
   await I18n.ensureScreen(state.currentScreen || "chats", loc);
   const res = await patch("/api/workspace", { portalLanguage: loc });
   if (!res.ok) {
-    toast(res.error || "No se pudo guardar el idioma.", "error");
+    toast(res.error || t("toast.languageSaveFailed"), "error");
     return;
   }
   if (state.config.workspace) state.config.workspace.portalLanguage = loc;
@@ -2696,11 +2702,11 @@ async function saveWorkspaceProfile() {
     syncWhatsapp: $("wsSyncWhatsapp").checked,
   };
   const res = await patch("/api/workspace", body);
-  if (!res.ok) { toast(res.error || "No se pudo guardar.", "error"); return; }
+  if (!res.ok) { toast(res.error || t("toast.saveFailed"), "error"); return; }
   if (res.whatsappSync && !res.whatsappSync.ok) {
-    toast("Guardado localmente. Meta: " + (res.whatsappSync.error || "no sincronizó"), "error");
+    toast(t("toast.profileSavedLocalMeta", { error: res.whatsappSync.error || "no sincronizó" }), "error");
   } else {
-    toast("Perfil guardado.", "ok");
+    toast(t("toast.profileSaved"), "ok");
   }
   await loadWorkspace();
   state.config = await api("/api/config");
@@ -2712,8 +2718,8 @@ async function saveWorkspaceSettings() {
     workspaceName: $("wsWorkspaceName").value.trim(),
     displayName: $("wsDisplayName").value.trim(),
   });
-  if (!res.ok) { toast(res.error || "No se pudo guardar.", "error"); return; }
-  toast("Espacio actualizado.", "ok");
+  if (!res.ok) { toast(res.error || t("toast.saveFailed"), "error"); return; }
+  toast(t("toast.workspaceUpdated"), "ok");
   state.config = await api("/api/config");
   applyBranding();
   await loadWorkspace();
@@ -2724,8 +2730,8 @@ async function uploadWorkspacePhoto(file) {
   const fd = new FormData();
   fd.append("photo", file);
   const res = await postForm("/api/workspace/profile-photo", fd);
-  if (!res.ok) { toast(res.error || "No se pudo subir la imagen.", "error"); return; }
-  toast("Foto del portal actualizada.", "ok");
+  if (!res.ok) { toast(res.error || t("toast.photoUploadFailed"), "error"); return; }
+  toast(t("toast.portalPhotoUpdated"), "ok");
   state.config = await api("/api/config");
   applyBranding();
   await loadWorkspace();
@@ -2733,8 +2739,8 @@ async function uploadWorkspacePhoto(file) {
 
 async function removeWorkspacePhoto() {
   const res = await api("/api/workspace/profile-photo", { method: "DELETE" });
-  if (!res.ok) { toast(res.error || "No se pudo quitar.", "error"); return; }
-  toast("Foto quitada.", "ok");
+  if (!res.ok) { toast(res.error || t("toast.removeFailed"), "error"); return; }
+  toast(t("toast.photoRemoved"), "ok");
   state.config = await api("/api/config");
   applyBranding();
   await loadWorkspace();
@@ -2742,7 +2748,7 @@ async function removeWorkspacePhoto() {
 
 async function loadWorkspaceReports() {
   const box = $("wsReportsGrid");
-  if (box) box.textContent = "Cargando informes…";
+  if (box) box.textContent = t("workspace.reportsLoading");
   const res = await api("/api/reports/summary");
   if (!res.ok || !box) return;
   const s = res.summary;
@@ -2839,9 +2845,9 @@ async function uploadPayAuthCardImage(file) {
   const fd = new FormData();
   fd.append("image", file);
   const res = await postForm("/api/flows/payment-auth/card-image", fd);
-  if (!res.ok) { toast(res.error || "No se pudo subir la imagen.", "error"); return; }
+  if (!res.ok) { toast(res.error || t("toast.photoUploadFailed"), "error"); return; }
   state.cardImageUrl = res.cardImageUrl;
-  toast("Imagen de tarjeta actualizada.", "ok");
+  toast(t("toast.cardImageUpdated"), "ok");
   updatePayAuthFlowPreview();
 }
 
@@ -3225,7 +3231,7 @@ function fsAddScreen() {
   syncFsFieldsFromDom();
   const max = fsState.schema?.limits?.maxScreens || 8;
   if (fsState.screens.length >= max) {
-    toast(`Máximo ${max} pantallas.`, "error");
+    toast(t("toast.maxScreens", { max }), "error");
     return;
   }
   const confirmIdx = fsState.screens.findIndex((s) => s.layout === "confirm");
@@ -3245,7 +3251,7 @@ function fsAddScreen() {
 
 function fsRemoveScreen(index) {
   if (fsState.screens.length <= 1) {
-    toast("Debe quedar al menos una pantalla.", "error");
+    toast(t("toast.minOneScreen"), "error");
     return;
   }
   fsState.screens.splice(index, 1);
@@ -3307,13 +3313,13 @@ function collectFsDefinition() {
 async function createFlowFromStudio() {
   const def = collectFsDefinition();
   if (!def.name) {
-    toast("Ingresa un nombre interno para el Flow.", "error");
+    toast(t("toast.flowNameRequired"), "error");
     $("fsName")?.focus();
     return;
   }
   const res = await post("/api/flows/build", def);
-  if (!res.ok) { toast(res.error || "No se pudo crear el Flow.", "error"); return; }
-  toast("Flow creado en Meta. Ahora puedes solicitar la plantilla del mensaje.", "ok");
+  if (!res.ok) { toast(res.error || t("toast.flowCreateFailed"), "error"); return; }
+  toast(t("toast.flowCreatedRequestTemplate"), "ok");
   await loadFlows();
   closeFlowCreate();
   if (res.flow && res.flow.id) {
@@ -3334,7 +3340,7 @@ function openTemplateFromFlow(def) {
     $("tpVarsSection")?.classList.add("hidden");
     updateTpPreview();
     showModal("modalTemplate");
-    toast("Revisa el mensaje y créalo en Meta para vincularlo al Flow.", "ok");
+    toast(t("toast.reviewMessageCreateMeta"), "ok");
   });
 }
 
@@ -3366,7 +3372,7 @@ async function loadPaymentAuthPanel() {
 
 async function sendPaymentAuthTest() {
   const phone = ($("payAuthPhone") || {}).value.trim();
-  if (!phone) { toast("Ingresa un teléfono.", "error"); return; }
+  if (!phone) { toast(t("toast.phoneRequired"), "error"); return; }
   const res = await post("/api/flows/payment-auth/test", {
     phone,
     customerName: ($("payAuthCustomerName") || {}).value.trim(),
@@ -3374,8 +3380,8 @@ async function sendPaymentAuthTest() {
     amount: ($("payAuthAmount") || {}).value.trim(),
     cardLast4: ($("payAuthCard4") || {}).value.trim(),
   });
-  if (!res.ok) { toast(res.error || "No se pudo enviar.", "error"); return; }
-  toast("Verificación de pago enviada. Revisa WhatsApp.", "ok");
+  if (!res.ok) { toast(res.error || t("toast.sendFailedGeneric"), "error"); return; }
+  toast(t("toast.payAuthSent"), "ok");
   await loadPaymentAuthPanel();
   await loadFlowActivity();
   if (res.flowId) {
@@ -3394,19 +3400,21 @@ async function loadFlowCapability() {
 
   if (!res.hasCredentials) {
     dot.className = "flows-status-dot err";
-    text.textContent = "Sin conexión a WhatsApp. Configura las credenciales del servidor.";
-    if (cfgStatus) cfgStatus.textContent = "Credenciales no configuradas.";
+    text.textContent = t("flows.noConnection");
+    if (cfgStatus) cfgStatus.textContent = t("flows.credsNotConfigured");
     return;
   }
 
   const ok = res.canListFlows;
   dot.className = `flows-status-dot ${ok ? "ok" : "warn"}`;
-  const count = res.flowCount != null ? `${res.flowCount} Flow${res.flowCount === 1 ? "" : "s"} en tu cuenta` : "Flows disponibles";
-  text.textContent = ok ? `Conectado · ${count}` : "Conexión parcial. Revisa Configuración.";
+  const count = res.flowCount != null
+    ? (res.flowCount === 1 ? t("flows.flowCountOne") : t("flows.flowCountMany", { count: res.flowCount }))
+    : t("flows.flowsAvailable");
+  text.textContent = ok ? t("flows.connected", { count }) : t("flows.connectedPartial");
   if (cfgStatus) {
     cfgStatus.textContent = ok
-      ? `Servidor listo. ${count}.`
-      : (res.error || "No se pudo verificar la API de Flows.");
+      ? t("flows.serverReady", { count })
+      : (res.error || t("flows.connectedPartial"));
   }
 }
 
@@ -3512,8 +3520,8 @@ async function openFlowsConfigModal() {
 
 async function setupFlowEndpoint() {
   const res = await post("/api/flows/endpoint/setup", {});
-  if (!res.ok) { toast(res.error || "No se pudo registrar la clave.", "error"); return; }
-  toast(res.message || "Clave registrada.", "ok");
+  if (!res.ok) { toast(res.error || t("toast.keyRegisterFailed"), "error"); return; }
+  toast(res.message || t("toast.keyRegistered"), "ok");
   await loadFlowEndpointSetup();
 }
 
@@ -3521,7 +3529,7 @@ async function loadFlows() {
   const res = await api("/api/flows");
   state.flows = (res && res.data) || [];
   if (res && res.cleaned > 0) {
-    toast(`${res.cleaned} borrador${res.cleaned === 1 ? "" : "es"} de prueba eliminado${res.cleaned === 1 ? "" : "s"} en Meta.`, "ok");
+    toast(t("toast.draftsCleaned", { count: res.cleaned }), "ok");
   }
   if (state.activeFlowId && !state.flows.some((f) => f.id === state.activeFlowId)) {
     state.activeFlowId = null;
@@ -3586,12 +3594,12 @@ async function selectFlow(id) {
 async function createFlowSampleKey(sample) {
   const key = sample || "hello";
   const res = await post("/api/flows", { sample: key });
-  if (!res.ok) { toast(res.error || "No se pudo crear el Flow.", "error"); return; }
+  if (!res.ok) { toast(res.error || t("toast.flowCreateFailed"), "error"); return; }
   if (res.validation_errors && res.validation_errors.length) {
-    toast(res.validation_errors[0].message || res.error || "Flow inválido.", "error");
+    toast(res.validation_errors[0].message || res.error || t("toast.flowInvalid"), "error");
     return;
   }
-  toast("Flow creado en Meta.", "ok");
+  toast(t("toast.flowCreated"), "ok");
   await loadFlows();
   closeFlowCreate();
   if (res.flow && res.flow.id) {
@@ -3607,9 +3615,9 @@ async function createFlowSample() {
 
 async function sendActiveFlow() {
   const id = state.activeFlowId;
-  if (!id) { toast("Selecciona un Flow.", "error"); return; }
+  if (!id) { toast(t("toast.selectFlow"), "error"); return; }
   const phone = $("flowSendPhone").value.trim();
-  if (!phone) { toast("Ingresa un teléfono.", "error"); return; }
+  if (!phone) { toast(t("toast.phoneRequired"), "error"); return; }
   const isDynamic = state.activeFlowDetail && state.activeFlowDetail.endpoint_uri;
   const res = await post(`/api/flows/${encodeURIComponent(id)}/send`, {
     phone,
@@ -3619,10 +3627,10 @@ async function sendActiveFlow() {
     flowAction: isDynamic ? "data_exchange" : undefined,
   });
   if (!res.ok) {
-    toast(res.hint || res.error || "No se pudo enviar.", "error");
+    toast(res.hint || res.error || t("toast.sendFailedGeneric"), "error");
     return;
   }
-  toast(`Flow enviado (modo ${res.mode || "published"}).`, "ok");
+  toast(t("toast.flowSent", { mode: res.mode || "published" }), "ok");
   if (state.activeFlowId) await loadFlowDetail(state.activeFlowId);
   await loadFlowActivity();
 }
@@ -3631,8 +3639,8 @@ async function publishActiveFlow() {
   const id = state.activeFlowId;
   if (!id) return;
   const res = await post(`/api/flows/${encodeURIComponent(id)}/publish`, {});
-  if (!res.ok) { toast(res.error || "No se pudo publicar.", "error"); return; }
-  toast("Flow publicado.", "ok");
+  if (!res.ok) { toast(res.error || t("toast.publishFailed"), "error"); return; }
+  toast(t("toast.flowPublished"), "ok");
   await loadFlows();
 }
 

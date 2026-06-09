@@ -1,4 +1,28 @@
 {
   "title": "Integración API",
-  "intro": "Documentación y ejemplos para conectar sistemas externos."
+  "intro": "Guía para conectar tu sistema con cargas masivas y eventos variables en dos fases.",
+  "toolbar": {
+    "liveSchema": "Probar esquema en vivo",
+    "noTemplate": "— plantilla aprobada —",
+    "downloadMd": "Descargar MD"
+  },
+  "live": {
+    "pickTemplate": "Selecciona una plantilla abajo para ver su esquema en vivo.",
+    "selectForSchema": "Selecciona una plantilla para ver su esquema en vivo.",
+    "loading": "Cargando esquema…",
+    "noVars": "sin variables requeridas.",
+    "loadFailed": "No se pudo cargar el esquema.",
+    "required": "obligatorio",
+    "varsCount": "variable(s)"
+  },
+  "sections": {
+    "concepto": "Concepto: integración en dos fases",
+    "auth": "Autenticación",
+    "paso0": "Paso 0 — Esquema de variables por plantilla",
+    "paso1": "Paso 1 — Crear campaña (destinatarios sin variables)",
+    "paso2": "Paso 2 — Conectar variables (eventos)",
+    "paso3": "Paso 3 — Iniciar envío y monitorear",
+    "curl": "Ejemplo cURL completo",
+    "ref": "Referencia de endpoints"
+  }
 }

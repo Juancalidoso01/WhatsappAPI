@@ -307,33 +307,33 @@
 
         <div class="bulk-grid">
           <section class="bulk-panel">
-            <h2 class="section-title">Nueva carga</h2>
-            <label>Nombre de la campaña
-              <input id="bulkName" type="text" placeholder="Promo marzo 2026" />
+            <h2 class="section-title" data-i18n="bulk.newCampaign">Nueva carga</h2>
+            <label><span data-i18n="bulk.campaignName">Nombre de la campaña</span>
+              <input id="bulkName" type="text" data-i18n-placeholder="bulk.campaignNamePlaceholder" placeholder="Promo marzo 2026" />
             </label>
-            <label>Plantilla aprobada
+            <label><span data-i18n="bulk.approvedTemplate">Plantilla aprobada</span>
               <select id="bulkTemplate"></select>
             </label>
             <div id="bulkEventVars" class="bulk-event-vars hidden"></div>
-            <label>Archivo CSV
+            <label><span data-i18n="bulk.csvFile">Archivo CSV</span>
               <input id="bulkCsv" type="file" accept=".csv,text/csv" />
             </label>
-            <p class="bulk-csv-hint muted">Columnas: <code>telefono</code>, <code>nombre</code> (opcional) y variables extra según la plantilla.</p>
-            <button type="button" id="bulkSampleBtn" class="btn-ghost sm">Descargar CSV de ejemplo</button>
+            <p class="bulk-csv-hint muted" data-i18n="bulk.csvHint">Columnas: <code>telefono</code>, <code>nombre</code> (opcional) y variables extra según la plantilla.</p>
+            <button type="button" id="bulkSampleBtn" class="btn-ghost sm" data-i18n="bulk.downloadSample">Descargar CSV de ejemplo</button>
             <div id="bulkPreview" class="bulk-preview hidden"></div>
             <div class="bulk-actions">
-              <button type="button" id="bulkPreviewBtn" class="btn-ghost sm">Validar CSV</button>
-              <button type="button" id="bulkCreateBtn" class="btn-primary sm">Crear carga</button>
+              <button type="button" id="bulkPreviewBtn" class="btn-ghost sm" data-i18n="bulk.validateCsv">Validar CSV</button>
+              <button type="button" id="bulkCreateBtn" class="btn-primary sm" data-i18n="bulk.createCampaign">Crear carga</button>
             </div>
           </section>
 
           <section class="bulk-panel wide">
-            <h2 class="section-title">Cargas <span class="muted" id="bulkListHint"></span></h2>
-            <div id="bulkCampaignList" class="bulk-campaign-list muted">Cargando…</div>
+            <h2 class="section-title"><span data-i18n="bulk.campaignsTitle">Cargas</span> <span class="muted" id="bulkListHint"></span></h2>
+            <div id="bulkCampaignList" class="bulk-campaign-list muted" data-i18n="bulk.loading">Cargando…</div>
           </section>
         </div>
 
-        <p class="bulk-api-link muted">¿Integras desde tu CRM o ERP? Abre la guía completa en <button type="button" class="link-btn" id="bulkGoIntegration">Integración API</button> (eventos variables en dos fases).</p>
+        <p class="bulk-api-link muted"><span data-i18n="bulk.apiLink">¿Integras desde tu CRM o ERP? Abre la guía completa en</span> <button type="button" class="link-btn" id="bulkGoIntegration" data-i18n="bulk.apiLinkBtn">Integración API</button> <span data-i18n="bulk.apiLinkSuffix">(eventos variables en dos fases).</span></p>
 
         <section id="bulkDetail" class="bulk-detail hidden">
           <header class="bulk-detail-head">
@@ -342,10 +342,10 @@
               <p class="muted" id="bulkDetailMeta"></p>
             </div>
             <div class="bulk-detail-actions">
-              <button type="button" id="bulkStartBtn" class="btn-primary sm">Iniciar</button>
-              <button type="button" id="bulkPauseBtn" class="btn-ghost sm">Pausar</button>
-              <a id="bulkExportBtn" class="btn-ghost sm" href="#" download>Exportar</a>
-              <button type="button" id="bulkCloseBtn" class="btn-ghost sm">Cerrar</button>
+              <button type="button" id="bulkStartBtn" class="btn-primary sm" data-i18n="bulk.start">Iniciar</button>
+              <button type="button" id="bulkPauseBtn" class="btn-ghost sm" data-i18n="bulk.pause">Pausar</button>
+              <a id="bulkExportBtn" class="btn-ghost sm" href="#" download data-i18n="bulk.export">Exportar</a>
+              <button type="button" id="bulkCloseBtn" class="btn-ghost sm" data-i18n="common.close">Cerrar</button>
             </div>
           </header>
           <div id="bulkProgress" class="bulk-progress hidden"></div>
@@ -355,7 +355,7 @@
           <div class="billing-table-wrap">
             <table class="billing-table bulk-rows-table">
               <thead>
-                <tr><th>Teléfono</th><th>ID ext.</th><th>Nombre</th><th>Estado</th><th>Error</th><th>Enviado</th></tr>
+                <tr><th data-i18n="bulk.colPhone">Teléfono</th><th data-i18n="bulk.colExtId">ID ext.</th><th data-i18n="bulk.colName">Nombre</th><th data-i18n="bulk.colStatus">Estado</th><th data-i18n="bulk.colError">Error</th><th data-i18n="bulk.colSent">Enviado</th></tr>
               </thead>
               <tbody id="bulkRowsBody"></tbody>
             </table>
@@ -505,13 +505,13 @@
 
         <div id="flowsStatusBar" class="flows-status-bar">
           <span id="flowsStatusDot" class="flows-status-dot"></span>
-          <span id="flowsStatusText" class="flows-status-text">Comprobando conexión…</span>
-          <button type="button" id="flowsConfigBtn" class="link-btn sm">Configuración</button>
+          <span id="flowsStatusText" class="flows-status-text" data-i18n="flows.checking">Comprobando conexión…</span>
+          <button type="button" id="flowsConfigBtn" class="link-btn sm" data-i18n="flows.config">Configuración</button>
         </div>
 
         <nav class="flows-tabs" id="flowsTabs">
-          <button type="button" class="flows-tab active" data-flows-tab="mis">Mis Flows</button>
-          <button type="button" class="flows-tab" data-flows-tab="actividad">Actividad</button>
+          <button type="button" class="flows-tab active" data-flows-tab="mis" data-i18n="flows.tabMine">Mis Flows</button>
+          <button type="button" class="flows-tab" data-flows-tab="actividad" data-i18n="flows.tabActivity">Actividad</button>
         </nav>
 
         <!-- Panel: Probar (solo desde detalle o plantilla de pago) -->
@@ -779,19 +779,19 @@
 
         <div class="billing-tab-panel" data-bill-panel="resumen">
           <div class="billing-cards billing-cards-compact">
-            <div class="bill-card"><span class="bc-label">Costo Meta</span><span class="bc-value" id="bcCost">—</span></div>
-            <div class="bill-card"><span class="bc-label">Entregados</span><span class="bc-value" id="bcVolume">—</span></div>
-            <div class="bill-card"><span class="bc-label">Marketing</span><span class="bc-value" id="bcMkt">—</span></div>
-            <div class="bill-card"><span class="bc-label">Utilidad</span><span class="bc-value" id="bcUtil">—</span></div>
-            <div class="bill-card"><span class="bc-label">Auth</span><span class="bc-value" id="bcAuth">—</span></div>
-            <div class="bill-card accent"><span class="bc-label">Estimado portal</span><span class="bc-value" id="bcPortalEst">—</span></div>
+            <div class="bill-card"><span class="bc-label" data-i18n="billing.cards.metaCost">Costo Meta</span><span class="bc-value" id="bcCost">—</span></div>
+            <div class="bill-card"><span class="bc-label" data-i18n="billing.cards.delivered">Entregados</span><span class="bc-value" id="bcVolume">—</span></div>
+            <div class="bill-card"><span class="bc-label" data-i18n="billing.cards.marketing">Marketing</span><span class="bc-value" id="bcMkt">—</span></div>
+            <div class="bill-card"><span class="bc-label" data-i18n="billing.cards.utility">Utilidad</span><span class="bc-value" id="bcUtil">—</span></div>
+            <div class="bill-card"><span class="bc-label" data-i18n="billing.cards.auth">Auth</span><span class="bc-value" id="bcAuth">—</span></div>
+            <div class="bill-card accent"><span class="bc-label" data-i18n="billing.cards.portalEst">Estimado portal</span><span class="bc-value" id="bcPortalEst">—</span></div>
           </div>
           <div id="billTplAlert" class="billing-alert hidden"></div>
-          <h2 class="section-title sm">Meta · por país y categoría</h2>
+          <h2 class="section-title sm" data-i18n="billing.metaSection">Meta · por país y categoría</h2>
           <div class="billing-table-wrap billing-table-scroll" id="billMetaTableWrap">
             <table class="billing-table billing-table-compact">
-              <thead><tr><th>País</th><th>Categoría</th><th class="num">Msgs</th><th class="num">Costo</th></tr></thead>
-              <tbody id="billRows"><tr><td colspan="4" class="muted center">Se sincroniza al abrir Facturación.</td></tr></tbody>
+              <thead><tr><th data-i18n="billing.colCountry">País</th><th data-i18n="billing.colCategory">Categoría</th><th class="num" data-i18n="billing.colMsgs">Msgs</th><th class="num" data-i18n="billing.colCost">Costo</th></tr></thead>
+              <tbody id="billRows"><tr><td colspan="4" class="muted center" data-i18n="billing.syncOnOpen">Se sincroniza al abrir Facturación.</td></tr></tbody>
             </table>
           </div>
           <div id="billMetaTip" class="bill-meta-tip hidden" role="tooltip" aria-hidden="true"></div>
@@ -937,38 +937,38 @@
       <div id="tplDraftMetaBar" class="tpl-draft-meta-bar"></div>
       <div class="tpl-draft-layout">
         <div class="tpl-draft-fields">
-          <p class="muted sm">Ajusta los datos de ejemplo. La leyenda indica qué variable es cada campo y el formato correcto.</p>
+          <p class="muted sm" data-i18n="modals.draftModal.hint">Ajusta los datos de ejemplo. La leyenda indica qué variable es cada campo y el formato correcto.</p>
           <div id="tplDraftFields" class="tpl-draft-inputs"></div>
           <div id="tplDraftVarGuide" class="tpl-var-guide" aria-label="Leyenda de variables"></div>
         </div>
         <div id="tplDraftWaPreview" class="wa-preview-phone" aria-label="Vista previa WhatsApp"></div>
       </div>
       <div class="modal-actions">
-        <button class="btn-ghost" data-close>Cerrar</button>
-        <button type="button" id="tplDraftCreateBtn" class="btn-primary">Solicitar en Meta</button>
+        <button class="btn-ghost" data-close data-i18n="common.close">Cerrar</button>
+        <button type="button" id="tplDraftCreateBtn" class="btn-primary" data-i18n="modals.draftModal.requestMeta">Solicitar en Meta</button>
       </div>
     </div>
   </div>
 
   <div id="modalFlowsConfig" class="modal hidden">
     <div class="modal-card">
-      <h3>Configuración de Flows</h3>
-      <p class="muted sm">Opciones técnicas. La conexión con Meta para formularios dinámicos se configura sola al abrir Flows.</p>
+      <h3 data-i18n="flows.configModal.title">Configuración de Flows</h3>
+      <p class="muted sm" data-i18n="flows.configModal.intro">Opciones técnicas. La conexión con Meta para formularios dinámicos se configura sola al abrir Flows.</p>
       <div class="flows-config-block">
-        <strong>Estado del servidor</strong>
+        <strong data-i18n="flows.configModal.serverStatus">Estado del servidor</strong>
         <p id="flowsConfigStatus" class="muted sm">—</p>
       </div>
       <div class="flows-config-block">
-        <strong>Servidor de formularios</strong>
+        <strong data-i18n="flows.configModal.formServer">Servidor de formularios</strong>
         <p id="flowEndpointHint" class="muted sm">—</p>
       </div>
       <details class="flows-config-advanced">
-        <summary>Detalles técnicos</summary>
+        <summary data-i18n="flows.configModal.techDetails">Detalles técnicos</summary>
         <code id="flowEndpointUri" class="flows-endpoint-url">—</code>
-        <button type="button" id="flowEndpointSetupBtn" class="btn-ghost sm hidden" style="margin-top:10px">Reintentar conexión con Meta</button>
+        <button type="button" id="flowEndpointSetupBtn" class="btn-ghost sm hidden" style="margin-top:10px" data-i18n="flows.configModal.retryMeta">Reintentar conexión con Meta</button>
       </details>
       <div class="modal-actions">
-        <button class="btn-ghost" data-close>Cerrar</button>
+        <button class="btn-ghost" data-close data-i18n="common.close">Cerrar</button>
       </div>
     </div>
   </div>

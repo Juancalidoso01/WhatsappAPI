@@ -8,7 +8,7 @@
   "configureAccess": "Настройте ACCESS_TOKEN и WABA_ID для управления шаблонами.",
   "noTemplates": "Нет шаблонов. Нажмите «Создать».",
   "countOne": "1 шаблон в аккаунте",
-  "countMany": "{{count}} шаблонов в аккаунте",
+  "countMany": "{count} шаблонов в аккаунте",
   "noDrafts": "Нет доступных черновиков.",
   "readyForProd": "Готово к продакшену",
   "badgeText": "Текст",
