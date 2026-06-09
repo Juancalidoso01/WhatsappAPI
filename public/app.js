@@ -37,6 +37,7 @@ const state = {
   pollTimer: null,
   notesTimer: null,
   billingLedger: [],
+  billingMetaRows: [],
   activeBillEntry: null,
   highlightMessageId: null,
   billingTab: "resumen",
@@ -703,7 +704,7 @@ function variableGuideTableHtml(vars, { title = "Leyenda de variables" } = {}) {
       <td><code>${escapeHtml(s.example || "—")}</code></td>
     </tr>`;
   }).join("");
-  return `<p class="tpl-var-guide-title">${escapeHtml(title)}</p>
+  return `${title ? `<p class="tpl-var-guide-title">${escapeHtml(title)}</p>` : ""}
     <table class="tpl-var-guide-table">
       <thead><tr><th>Variable</th><th>Tipo</th><th>Formato aceptado</th><th>Ejemplo</th></tr></thead>
       <tbody>${rows}</tbody>
@@ -1276,7 +1277,9 @@ async function initTemplateModal(presetKey) {
   if (meta.ok) {
     tpState.limits = meta.limits || tpState.limits;
     tpState.emojis = meta.emojis || [];
+    if (meta.variableCatalog) state.variableCatalog = meta.variableCatalog;
   }
+  if (!state.variableCatalog.length) await loadTplVariableCatalog();
   await loadTemplatePresets();
   $("tpHint").textContent = "";
   $("tpHint").className = "hint";
@@ -1690,6 +1693,86 @@ function renderBillingFlowRows(rows) {
   );
 }
 
+function buildBillMetaTipHtml(row) {
+  if (!row) return "";
+  const p = row.portal || {};
+  const items = p.items || [];
+  let portalBlock = "";
+  if (p.matchCount > 0) {
+    const list = items.slice(0, 8).map((it) => {
+      const cost = it.isFree ? "gratis" : fmtUsd(it.estimatedCost || 0);
+      const label = it.preview || it.templateName || it.flowName || it.kindLabel || "Mensaje";
+      return `<li><strong>${escapeHtml(fmtBillDate(it.sentAt))}</strong> · ${escapeHtml(it.phoneFormatted || it.phone)}<br><span class="muted">${escapeHtml(label)}</span> · ${escapeHtml(cost)}</li>`;
+    }).join("");
+    const more = p.matchCount > items.length
+      ? `<li class="muted">+ ${p.matchCount - items.length} más en «Nuestros envíos»</li>`
+      : (p.matchCount > 8 ? `<li class="muted">+ ${p.matchCount - 8} más…</li>` : "");
+    portalBlock = `<p><strong>En Punto Pago (${p.matchCount} envío${p.matchCount === 1 ? "" : "s"}):</strong></p><ul>${list}${more}</ul>`
+      + (p.estimatedCost ? `<p>Estimado portal: <strong>${fmtUsd(p.estimatedCost)}</strong> (${p.freeCount || 0} gratis)</p>` : "");
+  } else {
+    portalBlock = `<p class="muted">Sin envíos registrados en el portal para esta fila. Pueden ser mensajes entrantes, webhooks o envíos anteriores al registro local.</p>`;
+  }
+  const zeroNote = row.costZeroReason
+    ? `<p>${escapeHtml(row.costZeroReason)}</p>`
+    : "";
+  return `
+    <div class="bill-tip-source">Fuente: ${escapeHtml(row.sourceLabel || "Meta")} · datos agregados (no lista mensaje por mensaje)</div>
+    <p><strong>${escapeHtml(countryName(row.country))}</strong> · ${escapeHtml(categoryBillingLabel(row.category))}</p>
+    <p>Meta reporta <strong>${fmtNum(row.volume)}</strong> mensaje(s) entregado(s) · costo <strong>${fmtCost(row.cost)}</strong></p>
+    ${zeroNote}
+    ${portalBlock}
+    <p class="bill-tip-hint">Clic en la fila abre el primer envío del portal (si hay). Pestaña «Nuestros envíos» lista todos.</p>`;
+}
+
+function positionBillMetaTip(evt) {
+  const tip = $("billMetaTip");
+  if (!tip || tip.classList.contains("hidden")) return;
+  const pad = 14;
+  const rect = tip.getBoundingClientRect();
+  let x = evt.clientX + pad;
+  let y = evt.clientY + pad;
+  if (x + rect.width > window.innerWidth - 8) x = evt.clientX - rect.width - pad;
+  if (y + rect.height > window.innerHeight - 8) y = evt.clientY - rect.height - pad;
+  tip.style.left = `${Math.max(8, x)}px`;
+  tip.style.top = `${Math.max(8, y)}px`;
+}
+
+function showBillMetaTip(row, evt) {
+  const tip = $("billMetaTip");
+  if (!tip || !row) return;
+  tip.innerHTML = buildBillMetaTipHtml(row);
+  tip.classList.remove("hidden");
+  tip.setAttribute("aria-hidden", "false");
+  positionBillMetaTip(evt);
+}
+
+function hideBillMetaTip() {
+  const tip = $("billMetaTip");
+  if (!tip) return;
+  tip.classList.add("hidden");
+  tip.setAttribute("aria-hidden", "true");
+}
+
+function bindBillMetaRowTips(rows) {
+  const tbody = $("billRows");
+  if (!tbody) return;
+  tbody.querySelectorAll(".bill-meta-row").forEach((tr) => {
+    const idx = Number(tr.dataset.metaI);
+    const row = rows[idx];
+    tr.addEventListener("mouseenter", (e) => showBillMetaTip(row, e));
+    tr.addEventListener("mousemove", (e) => positionBillMetaTip(e));
+    tr.addEventListener("mouseleave", hideBillMetaTip);
+    tr.addEventListener("click", () => {
+      if (row && row.portal && row.portal.items && row.portal.items.length) {
+        hideBillMetaTip();
+        openBillDetail(row.portal.items[0]);
+      }
+    });
+  });
+  const wrap = $("billMetaTableWrap");
+  if (wrap) wrap.addEventListener("mouseleave", hideBillMetaTip);
+}
+
 async function loadBilling() {
   const days = $("billRange").value;
   const tbody = $("billRows");
@@ -1757,19 +1840,28 @@ async function loadBilling() {
     alert.innerHTML = "";
   }
 
-  if (!res.rows.length) {
+  state.billingMetaRows = res.rows || [];
+  hideBillMetaTip();
+  if (!state.billingMetaRows.length) {
     tbody.innerHTML = `<tr><td colspan="4" class="muted center">Sin datos Meta en este periodo.</td></tr>`;
   } else {
-    tbody.innerHTML = res.rows
-      .map((r) => `<tr>
+    tbody.innerHTML = state.billingMetaRows
+      .map((r, i) => {
+        const hasPortal = r.portal && r.portal.matchCount > 0;
+        const tipTitle = hasPortal
+          ? `${r.portal.matchCount} envío(s) del portal en esta fila`
+          : "Pasa el mouse para ver el detalle";
+        return `<tr class="bill-meta-row" data-meta-i="${i}" title="${escapeHtml(tipTitle)}">
         <td><span class="country-cell"><span class="flag">${countryFlag(r.country)}</span>${escapeHtml(countryName(r.country))}</span></td>
         <td><span class="cat-tag ${escapeHtml(r.category)}">${escapeHtml(categoryBillingLabel(r.category))}</span></td>
-        <td class="num">${fmtNum(r.volume)}</td>
-        <td class="num">${fmtCost(r.cost)}</td>
-      </tr>`)
+        <td class="num bill-tip-cell">${fmtNum(r.volume)}${hasPortal ? `<span class="muted sm"> · ${r.portal.matchCount} local</span>` : ""}</td>
+        <td class="num bill-tip-cell">${fmtCost(r.cost)}</td>
+      </tr>`;
+      })
       .join("");
+    bindBillMetaRowTips(state.billingMetaRows);
   }
-  note.innerHTML = `Datos Meta en moneda WABA. <strong>Estimado portal</strong> usa tarifas de referencia sobre envíos registrados desde Punto Pago. Costo <strong>0</strong> = servicio gratis o número de prueba.`;
+  note.innerHTML = `Pasa el mouse sobre una fila para ver de dónde salen los números. Meta entrega totales agregados; el portal cruza con envíos registrados. Costo <strong>0</strong> en Servicio = gratis (ventana 24 h).`;
   setBillingTab(state.billingTab);
 }
 

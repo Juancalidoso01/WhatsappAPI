@@ -159,6 +159,57 @@ async function list({ since = 0, limit = 100, country = null, category = null, k
   return rows.slice(0, limit);
 }
 
+function groupByCountryCategory(rows) {
+  const map = {};
+  (rows || []).forEach((r) => {
+    const cat = String(r.category || "UTILITY").toUpperCase();
+    const cc = String(r.country || "OTHER").toUpperCase();
+    const key = `${cc}|${cat}`;
+    if (!map[key]) {
+      map[key] = { items: [], count: 0, estimatedCost: 0, freeCount: 0, billableCount: 0 };
+    }
+    map[key].items.push(r);
+    map[key].count += 1;
+    map[key].estimatedCost += r.estimatedCost || 0;
+    if (r.isFree) map[key].freeCount += 1;
+    else map[key].billableCount += 1;
+  });
+  return map;
+}
+
+function enrichMetaRows(metaRows, ledgerRows) {
+  const grouped = groupByCountryCategory(ledgerRows);
+  return (metaRows || []).map((row) => {
+    const cat = String(row.category || "").toUpperCase();
+    const cc = String(row.country || "").toUpperCase();
+    const key = `${cc}|${cat}`;
+    const match = grouped[key] || { items: [], count: 0, estimatedCost: 0, freeCount: 0, billableCount: 0 };
+    let costZeroReason = null;
+    if (!row.cost) {
+      if (cat === "SERVICE") {
+        costZeroReason = "Categoría Servicio: respuestas dentro de la ventana de 24 h (sin cargo Meta).";
+      } else {
+        costZeroReason = "Costo 0 en Meta: número de prueba, sandbox o tráfico aún sin tarifa facturada.";
+      }
+    }
+    return {
+      ...row,
+      category: cat,
+      country: cc,
+      source: "meta_pricing_analytics",
+      sourceLabel: "WhatsApp · pricing_analytics",
+      portal: {
+        matchCount: match.count,
+        estimatedCost: match.estimatedCost,
+        freeCount: match.freeCount,
+        billableCount: match.billableCount,
+        items: match.items.slice(0, 20),
+      },
+      costZeroReason,
+    };
+  });
+}
+
 function summarize(rows) {
   const out = {
     count: rows.length,
@@ -200,6 +251,8 @@ module.exports = {
   record,
   list,
   summarize,
+  enrichMetaRows,
+  groupByCountryCategory,
   classifyFlowBilling,
   kindLabel,
 };

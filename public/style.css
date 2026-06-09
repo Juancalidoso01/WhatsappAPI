@@ -632,6 +632,22 @@ input, textarea, select { font-family: inherit; }
 .bill-detail-body dd { margin: 0; font-size: 12px; }
 .bill-cost-free { color: var(--green); font-weight: 600; }
 .bill-cost-paid { font-weight: 600; }
+.bill-meta-row { cursor: help; }
+.bill-meta-row:hover { background: var(--brand-50) !important; }
+.bill-meta-row .num.bill-tip-cell { text-decoration: underline dotted; text-underline-offset: 3px; }
+.bill-meta-tip {
+  position: fixed; z-index: 200; max-width: min(380px, 92vw); pointer-events: none;
+  background: var(--text); color: #f4f5fb; border-radius: 12px; padding: 12px 14px;
+  font-size: 11px; line-height: 1.5; box-shadow: var(--shadow-lg);
+}
+.bill-meta-tip.hidden { display: none; }
+.bill-meta-tip strong { color: #fff; font-size: 11px; }
+.bill-meta-tip .bill-tip-source { color: #a8adc8; font-size: 10px; margin-bottom: 8px; }
+.bill-meta-tip ul { margin: 6px 0 0; padding-left: 16px; }
+.bill-meta-tip li { margin: 4px 0; }
+.bill-meta-tip .bill-tip-hint { margin-top: 8px; color: #a8adc8; font-size: 10px; }
+.bill-meta-tip .muted { color: #b8bdd4 !important; }
+.billing-table .muted.sm { font-size: 10px; margin-left: 4px; }
 .billing-table thead tr:first-child th:first-child { border-top-left-radius: calc(var(--radius) - 1px); }
 .billing-table thead tr:first-child th:last-child { border-top-right-radius: calc(var(--radius) - 1px); }
 .billing-table:not(.price-table) tbody tr:last-child td:first-child { border-bottom-left-radius: calc(var(--radius) - 1px); }

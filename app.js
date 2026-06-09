@@ -1413,7 +1413,7 @@ app.get('/api/billing', async (req, res) => {
       byCategory[p.pricing_category] = (byCategory[p.pricing_category] || 0) + (p.cost || 0);
     });
 
-    const rows = Object.values(map).sort((a, b) => b.cost - a.cost || b.volume - a.volume);
+    const metaRows = Object.values(map).sort((a, b) => b.cost - a.cost || b.volume - a.volume);
 
     let templateSummary = { total: 0, pendingReclass: 0, reclassified: 0, withBillingImpact: 0 };
     try {
@@ -1441,6 +1441,8 @@ app.get('/api/billing', async (req, res) => {
     } catch (ledgerErr) {
       console.error('billing ledger error:', ledgerErr.message);
     }
+
+    const rows = BillingLedger.enrichMetaRows(metaRows, ledgerRows);
 
     res.json({
       ok: true,
