@@ -44,6 +44,8 @@ const state = {
   billingLastSync: null,
   billingRangeDirty: false,
   variableCatalog: [],
+  currentScreen: "chats",
+  screenCache: {},
 };
 
 /* ---------- tiny helpers ---------- */
@@ -93,6 +95,7 @@ async function init() {
     state.config = await api("/api/config");
   } catch (_) {}
   applyBranding();
+  initSidebar();
   bindEvents();
   loadWorkspace().catch(() => {});
   await loadConversations();
@@ -106,12 +109,13 @@ async function init() {
 function applyBranding() {
   const ws = state.config.workspace || {};
   const name = ws.displayName || state.config.brandName || "Punto Pago";
-  document.title = name + " · Inbox";
+  document.title = name + " · WhatsApp";
   const dot = $("connDot");
   if (dot) {
     dot.className = "conn-dot " + (state.config.persistent ? "online" : "offline");
     dot.title = state.config.persistent ? "Persistencia activa" : "Modo memoria";
   }
+  if ($("sidebarBrandName")) $("sidebarBrandName").textContent = name;
   updateWorkspaceHubPreview(name, ws.hasProfilePhoto);
 }
 
@@ -120,17 +124,15 @@ function avatarSrc(hasPhoto) {
 }
 
 function updateWorkspaceHubPreview(name, hasPhoto) {
-  const av = $("wsFlyoutAvatar");
   const portal = $("wsPortalPhoto");
-  const railLogo = $("railLogo");
   const src = avatarSrc(hasPhoto);
-  if ($("wsFlyoutName")) $("wsFlyoutName").textContent = name;
-  if ($("wsFlyoutStatus")) {
-    $("wsFlyoutStatus").textContent = state.config.persistent ? "En línea · datos persistentes" : "Modo memoria";
-  }
-  if (av) av.src = src;
+  const status = state.config.persistent ? "En línea · datos persistentes" : "Modo memoria";
+  ["wsFlyoutName", "wsHubName"].forEach((id) => { if ($(id)) $(id).textContent = name; });
+  ["wsFlyoutStatus", "wsHubStatus"].forEach((id) => { if ($(id)) $(id).textContent = status; });
+  ["wsFlyoutAvatar", "wsHubAvatar", "wsMobileAvatar"].forEach((id) => { if ($(id)) $(id).src = src; });
   if (portal) portal.src = src;
-  if (railLogo && hasPhoto) railLogo.src = src;
+  const railLogo = $("railLogo");
+  if (railLogo) railLogo.src = hasPhoto ? src : "/logo.png";
 }
 
 /* ---------- conversations ---------- */
@@ -173,6 +175,16 @@ function renderConversations() {
   list.querySelectorAll(".conv").forEach((el) =>
     el.addEventListener("click", () => openConversation(el.dataset.phone, el.dataset.name))
   );
+}
+
+function closeChatView() {
+  state.activePhone = null;
+  state.highlightMessageId = null;
+  $("emptyState").classList.remove("hidden");
+  $("chatView").classList.add("hidden");
+  const chats = document.querySelector("#screenChats");
+  if (chats) chats.classList.remove("show-chat");
+  renderConversations();
 }
 
 async function openConversation(phone, name, highlightMessageId = null) {
@@ -2365,11 +2377,13 @@ async function initIntegrationScreen() {
 /* ---------- workspace hub ---------- */
 function toggleWorkspaceFlyout(force) {
   const fly = $("workspaceFlyout");
-  const btn = $("workspaceHubBtn");
-  if (!fly || !btn) return;
+  if (!fly) return;
   const open = force != null ? force : fly.classList.contains("hidden");
   fly.classList.toggle("hidden", !open);
-  btn.setAttribute("aria-expanded", open ? "true" : "false");
+  ["workspaceHubBtn", "mobileWsBtn"].forEach((id) => {
+    const btn = $(id);
+    if (btn) btn.setAttribute("aria-expanded", open ? "true" : "false");
+  });
 }
 
 function openWorkspaceTab(tab) {
@@ -3532,8 +3546,20 @@ async function initFlowsScreen() {
 function showModal(id) { $(id).classList.remove("hidden"); }
 function closeModals() { document.querySelectorAll(".modal").forEach((m) => m.classList.add("hidden")); }
 
+function initSidebar() {
+  const nav = $("appNav");
+  if (!nav) return;
+  if (localStorage.getItem("pp-nav-collapsed") === "1") nav.classList.add("collapsed");
+}
+
 function switchScreen(name) {
-  document.querySelectorAll(".rail-btn").forEach((b) => b.classList.toggle("active", b.dataset.screen === name));
+  if (!name || name === state.currentScreen) return;
+  const prev = state.currentScreen;
+  state.currentScreen = name;
+
+  document.querySelectorAll(".nav-item[data-screen]").forEach((b) =>
+    b.classList.toggle("active", b.dataset.screen === name)
+  );
   $("screenChats").classList.toggle("hidden", name !== "chats");
   $("screenTemplates").classList.toggle("hidden", name !== "templates");
   $("screenBulk").classList.toggle("hidden", name !== "bulk");
@@ -3541,17 +3567,59 @@ function switchScreen(name) {
   $("screenWorkspace").classList.toggle("hidden", name !== "workspace");
   $("screenFlows").classList.toggle("hidden", name !== "flows");
   $("screenBilling").classList.toggle("hidden", name !== "billing");
-  if (name === "templates") {
-    loadTemplates().then(renderTemplateList);
-    initTemplateStudio();
+
+  if (prev === "chats" && name !== "chats") stopPolling();
+  if (name === "chats") {
+    loadConversations();
+    startPolling();
   }
-  if (name === "bulk") { initBulkScreen(); }
-  if (name === "integration") { initIntegrationScreen(); }
-  if (name === "workspace") { initWorkspaceScreen(); }
-  if (name === "flows") { initFlowsScreen(); }
-  if (name === "billing") { loadBilling(); renderPrices(); }
+
+  const cache = state.screenCache;
+  if (name === "templates") {
+    if (!cache.templates) {
+      cache.templates = true;
+      Promise.all([loadTemplates().then(renderTemplateList), initTemplateStudio()]);
+    } else {
+      renderTemplateList();
+    }
+  }
+  if (name === "bulk") {
+    if (!cache.bulk) {
+      cache.bulk = true;
+      initBulkScreen();
+    } else {
+      fillBulkTemplates();
+    }
+  }
+  if (name === "integration") {
+    if (!cache.integration) {
+      cache.integration = true;
+      initIntegrationScreen();
+    } else if (window.IntegrationApiModule) {
+      window.IntegrationApiModule.setTemplates(state.templates);
+    }
+  }
+  if (name === "workspace") {
+    if (!cache.workspace) {
+      cache.workspace = true;
+      initWorkspaceScreen();
+    }
+  }
+  if (name === "flows") {
+    if (!cache.flows) {
+      cache.flows = true;
+      initFlowsScreen();
+    }
+  }
+  if (name === "billing") {
+    if (!cache.billing) {
+      cache.billing = true;
+      loadBilling();
+      renderPrices();
+    }
+  }
   if (name !== "bulk") stopBulkPolling();
-  if (name !== "workspace") toggleWorkspaceFlyout(false);
+  toggleWorkspaceFlyout(false);
 }
 
 /* ---------- polling ---------- */
@@ -3571,9 +3639,27 @@ function stopPolling() { if (state.pollTimer) clearInterval(state.pollTimer); st
 
 /* ---------- events ---------- */
 function bindEvents() {
-  document.querySelectorAll(".rail-btn").forEach((b) =>
+  document.querySelectorAll(".nav-item[data-screen]").forEach((b) =>
     b.addEventListener("click", () => switchScreen(b.dataset.screen))
   );
+  const collapseBtn = $("sidebarCollapseBtn");
+  if (collapseBtn) {
+    collapseBtn.addEventListener("click", () => {
+      const nav = $("appNav");
+      if (!nav) return;
+      nav.classList.toggle("collapsed");
+      localStorage.setItem("pp-nav-collapsed", nav.classList.contains("collapsed") ? "1" : "0");
+    });
+  }
+  const chatBack = $("chatBackBtn");
+  if (chatBack) chatBack.addEventListener("click", closeChatView);
+  const mobileWs = $("mobileWsBtn");
+  if (mobileWs) {
+    mobileWs.addEventListener("click", (e) => {
+      e.stopPropagation();
+      toggleWorkspaceFlyout();
+    });
+  }
   $("searchInput").addEventListener("input", (e) => { state.filter = e.target.value; renderConversations(); });
   $("composer").addEventListener("submit", (e) => { e.preventDefault(); sendText($("messageInput").value); });
   $("newChatBtn").addEventListener("click", () => openNewChat());
@@ -3632,8 +3718,12 @@ function bindEvents() {
     btn.addEventListener("click", () => switchScreen(btn.dataset.screenJump))
   );
   document.addEventListener("click", (e) => {
-    const wrap = document.querySelector(".workspace-hub-wrap");
-    if (wrap && !wrap.contains(e.target)) toggleWorkspaceFlyout(false);
+    const fly = $("workspaceFlyout");
+    if (!fly || fly.classList.contains("hidden")) return;
+    if (fly.contains(e.target)) return;
+    if ($("workspaceHubBtn")?.contains(e.target)) return;
+    if ($("mobileWsBtn")?.contains(e.target)) return;
+    toggleWorkspaceFlyout(false);
   });
   $("newTemplateBtn").addEventListener("click", () => { initTemplateModal(); showModal("modalTemplate"); });
   const tplSyncMetaBtn = $("tplSyncMetaBtn");

@@ -3,58 +3,94 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Punto Pago · Inbox</title>
+  <title>Punto Pago · WhatsApp Business</title>
   <link rel="icon" href="/logo.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/style.css" />
 </head>
 <body>
   <div class="app">
-    <!-- Far-left nav rail -->
-    <nav class="rail">
-      <img src="/logo.png" alt="logo" class="rail-logo" id="railLogo" />
-      <button class="rail-btn active" data-screen="chats" title="Conversaciones" aria-label="Conversaciones">
-        <svg viewBox="0 0 24 24" fill-rule="evenodd"><path d="M12 3C6.48 3 2 6.7 2 11.25c0 2.56 1.42 4.84 3.66 6.35L4.8 21.3a.6.6 0 0 0 .86.68l4.2-2.25c.76.13 1.54.2 2.34.2 5.52 0 10-3.7 10-8.68C22 6.7 17.52 3 12 3zm-4 9.75a1.25 1.25 0 1 1 0-2.5 1.25 1.25 0 0 1 0 2.5zm4 0a1.25 1.25 0 1 1 0-2.5 1.25 1.25 0 0 1 0 2.5zm4 0a1.25 1.25 0 1 1 0-2.5 1.25 1.25 0 0 1 0 2.5z"/></svg>
-      </button>
-      <button class="rail-btn" data-screen="templates" title="Plantillas" aria-label="Plantillas">
-        <svg viewBox="0 0 24 24" fill-rule="evenodd"><path d="M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2zm1 4v2.4h12V7H6zm0 4.4V17h5.2v-5.6H6zm7.2 0V17H18v-5.6h-4.8z"/></svg>
-      </button>
-      <button class="rail-btn" data-screen="bulk" title="Cargas masivas" aria-label="Cargas masivas">
-        <svg viewBox="0 0 24 24" fill-rule="evenodd"><path d="M4 6h16v2H4V6zm0 5h10v2H4v-2zm0 5h16v2H4v-2zm12-5h4v2h-4v-2z"/></svg>
-      </button>
-      <button class="rail-btn" data-screen="integration" title="Integración API" aria-label="Integración API">
-        <svg viewBox="0 0 24 24" fill-rule="evenodd"><path d="M8 4h8a2 2 0 0 1 2 2v2H6V6a2 2 0 0 1 2-2zm-2 6h12v10a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V10zm4 2v6h2v-6h-2zm4 0v6h2v-6h-2z"/></svg>
-      </button>
-      <button class="rail-btn" data-screen="flows" title="WhatsApp Flows" aria-label="WhatsApp Flows">
-        <svg viewBox="0 0 24 24" fill-rule="evenodd"><path d="M4 4h6v6H4V4zm10 0h6v6h-6V4zM4 14h6v6H4v-6zm10 3h6v3h-6v-3zm0-3h2v2h-2v-2zm4 0h2v2h-2v-2z"/></svg>
-      </button>
-      <button class="rail-btn" data-screen="billing" title="Facturación" aria-label="Facturación">
-        <svg viewBox="0 0 24 24" fill-rule="evenodd"><path d="M4 4h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2zm0 4v2.2h16V8H4zm2 5.4v2h6v-2H6zm9 0v2h3v-2h-3z"/></svg>
-      </button>
-      <span class="rail-spacer"></span>
-      <div class="workspace-hub-wrap">
+    <!-- Navegación principal -->
+    <nav class="app-nav" id="appNav" aria-label="Menú principal">
+      <div class="app-nav-brand">
+        <img src="/logo.png" alt="Punto Pago" class="app-nav-logo" id="railLogo" />
+        <div class="app-nav-brand-text">
+          <strong id="sidebarBrandName">Punto Pago</strong>
+          <span class="app-nav-sub">WhatsApp Business</span>
+        </div>
+        <button type="button" id="sidebarCollapseBtn" class="app-nav-collapse" title="Contraer menú" aria-label="Contraer menú">
+          <svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg>
+        </button>
+      </div>
+
+      <div class="app-nav-items">
+        <button class="nav-item active" data-screen="chats" title="Conversaciones">
+          <span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill-rule="evenodd"><path d="M12 3C6.48 3 2 6.7 2 11.25c0 2.56 1.42 4.84 3.66 6.35L4.8 21.3a.6.6 0 0 0 .86.68l4.2-2.25c.76.13 1.54.2 2.34.2 5.52 0 10-3.7 10-8.68C22 6.7 17.52 3 12 3zm-4 9.75a1.25 1.25 0 1 1 0-2.5 1.25 1.25 0 0 1 0 2.5zm4 0a1.25 1.25 0 1 1 0-2.5 1.25 1.25 0 0 1 0 2.5zm4 0a1.25 1.25 0 1 1 0-2.5 1.25 1.25 0 0 1 0 2.5z"/></svg></span>
+          <span class="nav-label">Conversaciones</span>
+          <span class="nav-short">Chats</span>
+        </button>
+        <button class="nav-item" data-screen="templates" title="Plantillas">
+          <span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill-rule="evenodd"><path d="M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2zm1 4v2.4h12V7H6zm0 4.4V17h5.2v-5.6H6zm7.2 0V17H18v-5.6h-4.8z"/></svg></span>
+          <span class="nav-label">Plantillas</span>
+          <span class="nav-short">Plantillas</span>
+        </button>
+        <button class="nav-item" data-screen="bulk" title="Cargas masivas">
+          <span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill-rule="evenodd"><path d="M4 6h16v2H4V6zm0 5h10v2H4v-2zm0 5h16v2H4v-2zm12-5h4v2h-4v-2z"/></svg></span>
+          <span class="nav-label">Cargas masivas</span>
+          <span class="nav-short">Masivas</span>
+        </button>
+        <button class="nav-item" data-screen="integration" title="Integración API">
+          <span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill-rule="evenodd"><path d="M8 4h8a2 2 0 0 1 2 2v2H6V6a2 2 0 0 1 2-2zm-2 6h12v10a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V10zm4 2v6h2v-6h-2zm4 0v6h2v-6h-2z"/></svg></span>
+          <span class="nav-label">Integración API</span>
+          <span class="nav-short">API</span>
+        </button>
+        <button class="nav-item" data-screen="flows" title="WhatsApp Flows">
+          <span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill-rule="evenodd"><path d="M4 4h6v6H4V4zm10 0h6v6h-6V4zM4 14h6v6H4v-6zm10 3h6v3h-6v-3zm0-3h2v2h-2v-2zm4 0h2v2h-2v-2z"/></svg></span>
+          <span class="nav-label">WhatsApp Flows</span>
+          <span class="nav-short">Flows</span>
+        </button>
+        <button class="nav-item" data-screen="billing" title="Facturación">
+          <span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill-rule="evenodd"><path d="M4 4h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2zm0 4v2.2h16V8H4zm2 5.4v2h6v-2H6zm9 0v2h3v-2h-3z"/></svg></span>
+          <span class="nav-label">Facturación</span>
+          <span class="nav-short">Costos</span>
+        </button>
+        <button type="button" class="nav-item nav-item-ws-mobile" id="mobileWsBtn" title="Espacio de trabajo">
+          <span class="nav-icon nav-icon-avatar"><img id="wsMobileAvatar" src="/logo.png" alt="" /></span>
+          <span class="nav-label">Espacio de trabajo</span>
+          <span class="nav-short">Perfil</span>
+        </button>
+      </div>
+
+      <div class="app-nav-footer workspace-hub-wrap">
         <button type="button" id="workspaceHubBtn" class="workspace-hub-btn" title="Espacio de trabajo" aria-label="Espacio de trabajo" aria-expanded="false">
+          <img id="wsHubAvatar" src="/logo.png" alt="" class="ws-hub-avatar" />
+          <span class="workspace-hub-text">
+            <strong id="wsHubName">Punto Pago</strong>
+            <span id="wsHubStatus" class="muted">Espacio de trabajo</span>
+          </span>
           <span id="connDot" class="conn-dot"></span>
         </button>
-        <div id="workspaceFlyout" class="workspace-flyout hidden" role="menu">
-          <header class="ws-flyout-head">
-            <img id="wsFlyoutAvatar" src="/logo.png" alt="" class="ws-flyout-avatar" />
-            <div class="ws-flyout-meta">
-              <strong id="wsFlyoutName">Punto Pago</strong>
-              <span class="muted" id="wsFlyoutStatus">Espacio de trabajo</span>
-            </div>
-          </header>
-          <button type="button" class="ws-flyout-item" data-ws-tab="profile" role="menuitem">Perfil WhatsApp</button>
-          <button type="button" class="ws-flyout-item" data-ws-tab="workspace" role="menuitem">Espacio de trabajo</button>
-          <button type="button" class="ws-flyout-item" data-ws-tab="reports" role="menuitem">Informes</button>
-          <button type="button" class="ws-flyout-item ws-flyout-soon" data-ws-tab="language" role="menuitem" disabled>
-            Idioma del portal <span class="ws-badge">Próximamente</span>
-          </button>
-        </div>
+      </div>
+      <div id="workspaceFlyout" class="workspace-flyout hidden" role="menu">
+        <header class="ws-flyout-head">
+          <img id="wsFlyoutAvatar" src="/logo.png" alt="" class="ws-flyout-avatar" />
+          <div class="ws-flyout-meta">
+            <strong id="wsFlyoutName">Punto Pago</strong>
+            <span class="muted" id="wsFlyoutStatus">Espacio de trabajo</span>
+          </div>
+        </header>
+        <button type="button" class="ws-flyout-item" data-ws-tab="profile" role="menuitem">Perfil WhatsApp</button>
+        <button type="button" class="ws-flyout-item" data-ws-tab="workspace" role="menuitem">Espacio de trabajo</button>
+        <button type="button" class="ws-flyout-item" data-ws-tab="reports" role="menuitem">Informes</button>
+        <button type="button" class="ws-flyout-item ws-flyout-soon" data-ws-tab="language" role="menuitem" disabled>
+          Idioma del portal <span class="ws-badge">Próximamente</span>
+        </button>
       </div>
     </nav>
+
+    <div class="app-main">
 
     <!-- ============ SCREEN: CHATS ============ -->
     <section class="screen" id="screenChats">
@@ -85,6 +121,9 @@
 
         <section id="chatView" class="chat-view hidden">
           <header class="chat-header">
+            <button type="button" id="chatBackBtn" class="icon-btn ghost chat-back" title="Volver a conversaciones" aria-label="Volver">
+              <svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg>
+            </button>
             <div class="avatar" id="chatAvatar">?</div>
             <div class="chat-peer">
               <h2 id="chatName">—</h2>
