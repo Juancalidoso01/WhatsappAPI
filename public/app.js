@@ -3,6 +3,12 @@
 const POLL_MS = 6000;
 const DAY_MS = 24 * 60 * 60 * 1000;
 const t = (key, vars) => (window.I18n ? I18n.t(key, vars) : key);
+const localeCode = () => (window.I18n ? I18n.getLocale() : "es");
+const localeDateTime = (ms) => {
+  const loc = localeCode();
+  const tag = loc === "ru" ? "ru" : loc === "en" ? "en-US" : "es";
+  return new Date(ms).toLocaleString(tag, { dateStyle: "medium", timeStyle: "short" });
+};
 const LEAD_TYPE_VALUES = ["", "prospecto", "cliente", "lead_caliente", "lead_frio", "soporte", "otro"];
 const LEAD_USER_VALUES = ["", "titular", "beneficiario", "representante", "empleado", "otro"];
 
@@ -130,12 +136,17 @@ async function initI18n() {
 
 async function onLocaleChange() {
   initLeadFormOptions();
-  if (state.activePhone && state.conversationDetail) renderDetailPanel();
+  if (state.activePhone && state.conversationDetail) {
+    renderDetailPanel();
+    updateWindow();
+  }
   renderConversations();
   if (state.currentScreen === "templates") {
     renderTemplateList();
     renderTplPresetCards();
     renderTpMetaRules();
+    updateTplSyncHint();
+    if (state.variableCatalog.length) loadTplVariableCatalog();
     if (tpState.validation && ($("tpBody") || {}).value.trim()) renderTpValidation(tpState.validation);
   }
   if (state.currentScreen === "billing" && state.billingLedger) {
@@ -206,7 +217,7 @@ function renderConversations() {
     (c) => !q || String(c.name).toLowerCase().includes(q) || String(c.phone).includes(q)
   );
   if (!items.length) {
-    list.innerHTML = `<li class="muted" style="padding:24px;text-align:center">Sin conversaciones todavía</li>`;
+    list.innerHTML = `<li class="muted" style="padding:24px;text-align:center">${escapeHtml(t("chats.emptyList"))}</li>`;
     return;
   }
   list.innerHTML = items
@@ -646,7 +657,7 @@ function renderMessages() {
       const tplClass = m.type === "template" ? " tpl" : "";
       const media = renderMedia(m);
       const caption = m.text ? escapeHtml(m.text) : "";
-      const time = new Date(m.timestamp).toLocaleTimeString("es", { hour: "2-digit", minute: "2-digit" });
+      const time = new Date(m.timestamp).toLocaleTimeString(localeCode() === "ru" ? "ru" : localeCode() === "en" ? "en-US" : "es", { hour: "2-digit", minute: "2-digit" });
       const isHi = hi && (m.id === hi);
       return `<div class="msg-row ${m.direction}" data-msg-id="${escapeHtml(m.id)}"${isHi ? ' id="billHighlightMsg"' : ""}>
         <div class="bubble${tplClass}${isHi ? " msg-highlight" : ""}">
@@ -690,19 +701,19 @@ function updateWindow() {
     const hrs = Math.floor(remain / 3600000);
     const mins = Math.floor((remain % 3600000) / 60000);
     pill.className = "window-pill open";
-    pill.textContent = `Abierta · ${hrs}h ${mins}m`;
-    expiryEl.textContent = `Cierra: ${new Date(expiryMs).toLocaleString("es", { dateStyle: "medium", timeStyle: "short" })}`;
+    pill.textContent = t("chats.windowOpen", { hrs, mins });
+    expiryEl.textContent = t("chats.windowCloses", { when: localeDateTime(expiryMs) });
     banner.classList.add("hidden");
   } else {
     pill.className = "window-pill closed";
-    pill.textContent = "Cerrada";
+    pill.textContent = t("chats.windowClosed");
     if (detail && detail.windowExpiresAt) {
-      expiryEl.textContent = `Expiró: ${new Date(detail.windowExpiresAt * 1000).toLocaleString("es", { dateStyle: "medium", timeStyle: "short" })}`;
+      expiryEl.textContent = t("chats.windowExpired", { when: localeDateTime(detail.windowExpiresAt * 1000) });
     } else {
-      expiryEl.textContent = "Sin mensajes recientes del cliente";
+      expiryEl.textContent = t("chats.windowNoRecent");
     }
     banner.classList.remove("hidden");
-    banner.innerHTML = `La ventana de 24h está cerrada. Para escribir, envía una <strong>plantilla</strong> primero.`;
+    banner.innerHTML = t("chats.windowClosedBanner");
   }
 }
 
@@ -791,7 +802,7 @@ function renderTemplateRow(t, i) {
     <td class="tpl-preview-cell muted">${escapeHtml(snippet)}</td>
     <td class="tpl-action-cell">
       ${canSend
-    ? `<button type="button" class="btn-ghost sm tpl-send-btn" data-i="${i}">Enviar</button>`
+    ? `<button type="button" class="btn-ghost sm tpl-send-btn" data-i="${i}">${escapeHtml(t("templates.sendBtn"))}</button>`
     : `<span class="muted">—</span>`}
     </td>
   </tr>`;
@@ -941,20 +952,21 @@ function clientVarSchema(v, index) {
   };
 }
 
-function variableGuideTableHtml(vars, { title = "Leyenda de variables" } = {}) {
+function variableGuideTableHtml(vars, { title } = {}) {
   if (!vars || !vars.length) return "";
+  const titleText = title != null ? title : t("templates.varGuideDefault");
   const rows = vars.map((v, i) => {
     const s = v.typeLabel ? v : clientVarSchema(v, i);
     return `<tr>
       <td><span class="tpl-var-ph">${escapeHtml(s.placeholder || `{{${i + 1}}}`)}</span><br><strong>${escapeHtml(s.label)}</strong>${s.key ? `<br><code class="muted sm">${escapeHtml(s.key)}</code>` : ""}</td>
-      <td><span class="tpl-var-type">${escapeHtml(s.typeLabel || "Texto")}</span>${s.mapsTo ? `<div class="muted sm">${escapeHtml(s.mapsTo)}</div>` : ""}</td>
+      <td><span class="tpl-var-type">${escapeHtml(s.typeLabel || t("modals.msgTypes.text"))}</span>${s.mapsTo ? `<div class="muted sm">${escapeHtml(s.mapsTo)}</div>` : ""}</td>
       <td class="muted sm">${escapeHtml(s.accept || "—")}</td>
       <td><code>${escapeHtml(s.example || "—")}</code></td>
     </tr>`;
   }).join("");
-  return `${title ? `<p class="tpl-var-guide-title">${escapeHtml(title)}</p>` : ""}
+  return `${titleText ? `<p class="tpl-var-guide-title">${escapeHtml(titleText)}</p>` : ""}
     <table class="tpl-var-guide-table">
-      <thead><tr><th>Variable</th><th>Tipo</th><th>Formato aceptado</th><th>Ejemplo</th></tr></thead>
+      <thead><tr><th>${escapeHtml(t("templates.varGuideColVariable"))}</th><th>${escapeHtml(t("templates.varGuideColType"))}</th><th>${escapeHtml(t("templates.varGuideColFormat"))}</th><th>${escapeHtml(t("templates.varGuideColExample"))}</th></tr></thead>
       <tbody>${rows}</tbody>
     </table>`;
 }
@@ -985,7 +997,7 @@ function renderTplDraftInputs(guide) {
   if (!box) return;
   const items = guide && guide.length ? guide : [];
   if (!items.length) {
-    box.innerHTML = `<p class="muted sm">Sin variables configuradas.</p>`;
+    box.innerHTML = `<p class="muted sm">${escapeHtml(t("templates.noVarsConfigured"))}</p>`;
     renderVariableGuide($("tplDraftVarGuide"), []);
     return;
   }
@@ -1010,17 +1022,17 @@ function renderTplDraftInputs(guide) {
       updatePayAuthFlowPreview();
     });
   });
-  renderVariableGuide($("tplDraftVarGuide"), items, { title: "Qué significa cada variable" });
+  renderVariableGuide($("tplDraftVarGuide"), items, { title: t("templates.varGuideDraft") });
 }
 
 function renderPayAuthVarGuide(guide) {
-  renderVariableGuide($("payAuthVarGuide"), guide, { title: "Variables del mensaje de verificación 3DS" });
+  renderVariableGuide($("payAuthVarGuide"), guide, { title: t("templates.varGuidePayAuth") });
 }
 
 function updateTpVarGuide() {
   const vars = collectTpVariables().filter((v) => v.key || v.example);
   const guide = vars.map((v, i) => clientVarSchema(v, i));
-  renderVariableGuide($("tpVarGuide"), guide, { title: "Guía de variables que estás definiendo" });
+  renderVariableGuide($("tpVarGuide"), guide, { title: t("templates.varGuideDefining") });
 }
 
 function tplPreviewOverrides() {
@@ -1041,7 +1053,7 @@ function formatPreviewAmount(raw) {
 function renderWaMessagePreview(container, data) {
   if (!container || !data) return;
   const now = new Date();
-  const time = now.toLocaleTimeString("es", { hour: "2-digit", minute: "2-digit" });
+  const time = now.toLocaleTimeString(localeCode() === "ru" ? "ru" : localeCode() === "en" ? "en-US" : "es", { hour: "2-digit", minute: "2-digit" });
   const header = data.headerText ? `<div class="wa-preview-header">${escapeHtml(data.headerText)}</div>` : "";
   const footer = data.footerText ? `<div class="wa-preview-footer">${escapeHtml(data.footerText)}</div>` : "";
   const cta = data.flowCta || data.cta
@@ -1058,7 +1070,7 @@ function renderWaMessagePreview(container, data) {
         ${cta}
       </div>
     </div>
-    <div class="wa-preview-note">Vista previa · el Flow se abre al tocar el botón</div>`;
+    <div class="wa-preview-note">${escapeHtml(t("templates.waPreviewNote"))}</div>`;
 }
 
 function templateHasFlowButtonMeta(t) {
@@ -1072,14 +1084,10 @@ function presetMetaForKey(key) {
 
 function metaStatusBadge(status, fallbackLabel) {
   const st = String(status || "NOT_SUBMITTED").toLowerCase();
-  const labels = {
-    approved: "Aprobada",
-    pending: "En revisión",
-    rejected: "Rechazada",
-    not_submitted: "Sin enviar",
-  };
+  const labelKey = `templates.metaStatus.${st.replace(/-/g, "_")}`;
+  const translated = t(labelKey);
   const cls = st === "approved" ? "approved" : st === "rejected" ? "rejected" : st === "pending" ? "pending" : "draft";
-  const text = labels[st] || fallbackLabel || status || "—";
+  const text = translated !== labelKey ? translated : (fallbackLabel || status || "—");
   return `<span class="status-badge ${cls}">${escapeHtml(text)}</span>`;
 }
 
@@ -1089,13 +1097,13 @@ async function loadTplVariableCatalog() {
   const box = $("tplVarCatalogBody");
   if (!box) return;
   if (!state.variableCatalog.length) {
-    box.textContent = res && res.error ? res.error : "Sin catálogo.";
+    box.textContent = res && res.error ? res.error : t("templates.noCatalog");
     return;
   }
   box.innerHTML = state.variableCatalog.map((g) => `
     <div class="tpl-var-catalog-group">
       <h4>${escapeHtml(g.label)}
-        <span class="tpl-var-status ${escapeHtml(g.status)}">${g.status === "active" ? "En uso" : "Futuro"}</span>
+        <span class="tpl-var-status ${escapeHtml(g.status)}">${g.status === "active" ? t("templates.catalogActive") : t("templates.catalogFuture")}</span>
       </h4>
       <p class="muted sm">${escapeHtml(g.note || "")}</p>
       ${variableGuideTableHtml(g.variables, { title: "" })}
@@ -1114,7 +1122,7 @@ function renderTpVarCatalogPick() {
     return;
   }
   box.classList.remove("hidden");
-  box.innerHTML = `<span class="muted sm" style="flex:1 1 100%;margin-bottom:2px">Claves sugeridas (referencia; no envía nada a Meta):</span>`
+  box.innerHTML = `<span class="muted sm" style="flex:1 1 100%;margin-bottom:2px">${escapeHtml(t("templates.varCatalogPick"))}</span>`
     + picks.map((v) =>
       `<button type="button" class="tpl-var-pick-btn" data-key="${escapeHtml(v.key)}" title="${escapeHtml(v.label + " — " + (v.accept || ""))}">${escapeHtml(v.key)}</button>`
     ).join("");
@@ -1152,11 +1160,11 @@ async function syncTemplatesWithMeta() {
   const btn = $("tplSyncMetaBtn");
   const hint = $("tplSyncMetaHint");
   if (btn) btn.disabled = true;
-  if (hint) hint.textContent = "Sincronizando…";
+  if (hint) hint.textContent = t("common.syncing");
   const res = await post("/api/templates/sync-meta", {});
   if (btn) btn.disabled = false;
   if (!res.ok) {
-    if (hint) hint.textContent = res.error || "No se pudo sincronizar.";
+    if (hint) hint.textContent = res.error || t("templates.syncFailed");
     toast(res.error || t("toast.syncMetaError"), "error");
     return;
   }
@@ -1180,7 +1188,7 @@ function renderTplDraftMetaBar(key) {
     return;
   }
   if (!ms) {
-    el.innerHTML = `<p class="muted sm tpl-draft-meta-hint">Pulsa «Sincronizar con Meta» arriba para ver el estado de aprobación.</p>`;
+    el.innerHTML = `<p class="muted sm tpl-draft-meta-hint">${escapeHtml(t("templates.draftMetaSyncHint"))}</p>`;
     return;
   }
   const textBadge = metaStatusBadge(ms.text && ms.text.status);
@@ -1188,11 +1196,11 @@ function renderTplDraftMetaBar(key) {
     ? metaStatusBadge(ms.flow && ms.flow.status)
     : "";
   const readyTag = ms.readyForProduction
-    ? `<span class="tpl-preset-tag tpl-ready-prod">Lista para producción</span>`
-    : `<p class="muted sm tpl-draft-meta-hint">Cuando Texto y + Flow estén aprobadas, los envíos usarán la plantilla oficial con botón Flow.</p>`;
+    ? `<span class="tpl-preset-tag tpl-ready-prod">${escapeHtml(t("templates.readyForProd"))}</span>`
+    : `<p class="muted sm tpl-draft-meta-hint">${escapeHtml(t("templates.draftMetaReadyHint"))}</p>`;
   el.innerHTML = `
-    <span class="tpl-preset-tag">Texto ${textBadge}</span>
-    ${preset.templateFlowName ? `<span class="tpl-preset-tag">+ Flow ${flowBadge}</span>` : ""}
+    <span class="tpl-preset-tag">${escapeHtml(t("templates.badgeText"))} ${textBadge}</span>
+    ${preset.templateFlowName ? `<span class="tpl-preset-tag">${escapeHtml(t("templates.badgeFlow"))} ${flowBadge}</span>` : ""}
     ${readyTag}`;
 }
 
@@ -1200,13 +1208,10 @@ function updateTplSyncHint() {
   const hint = $("tplSyncMetaHint");
   if (!hint) return;
   if (!state.tplMetaSyncedAt) {
-    hint.textContent = "Actualiza estados de aprobación (Texto / + Flow).";
+    hint.textContent = t("templates.syncHintDefault");
     return;
   }
-  const when = new Date(state.tplMetaSyncedAt).toLocaleString("es", {
-    day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit",
-  });
-  hint.textContent = `Actualizado ${when}`;
+  hint.textContent = t("templates.syncHintUpdated", { when: localeDateTime(state.tplMetaSyncedAt) });
 }
 
 function renderTplPresetCards() {
@@ -1473,7 +1478,7 @@ function updateTpFieldCounts() {
     if (!el || !box) return;
     const len = tpGraphemeLen(el.value);
     const max = tpState.limits[kind] || 1024;
-    box.textContent = `${len} / ${max} caracteres`;
+    box.textContent = t("templates.charCount", { len, max });
     box.className = "field-count muted" + (len > max ? " over" : len > max * 0.9 ? " warn" : "");
   });
 }
@@ -1643,7 +1648,7 @@ async function createTemplate() {
   const hint = $("tpHint");
   if (!payload.name || !payload.bodyText) {
     hint.className = "hint error";
-    hint.textContent = "Nombre y cuerpo son obligatorios.";
+    hint.textContent = t("templates.nameBodyRequired");
     return;
   }
 
@@ -1651,12 +1656,12 @@ async function createTemplate() {
   if (!tpState.validation.ok) {
     hint.className = "hint error";
     hint.textContent = (tpState.validation.errors && tpState.validation.errors[0])
-      || "Corrige las reglas de variables antes de enviar a Meta.";
+      || t("templates.fixVarsBeforeMeta");
     return;
   }
 
   hint.className = "hint";
-  hint.textContent = "Creando…";
+  hint.textContent = t("templates.creating");
   const res = await post("/api/templates", payload);
   if (res.ok) {
     closeModals();
@@ -1672,7 +1677,7 @@ async function createTemplate() {
     await loadTemplatePresets();
   } else {
     hint.className = "hint error";
-    hint.textContent = res.error || "No se pudo crear.";
+    hint.textContent = res.error || t("templates.createFailed");
   }
 }
 
@@ -1708,45 +1713,54 @@ function templateNeedsConfig(t) {
   return Boolean(headerSpec(t)) || bodyVarCount(t) > 0 || buttonSpecs(t).length > 0;
 }
 
-function renderTemplateFields(t) {
+function renderTemplateFields(tpl) {
   const box = $("ncFields");
   const guideEl = $("ncVarGuide");
-  if (!t) {
+  if (!tpl) {
     box.innerHTML = "";
     renderVariableGuide(guideEl, []);
     return;
   }
   const parts = [];
-  const hs = headerSpec(t);
-  if (hs && hs.kind === "text") parts.push(`<label>Encabezado (variable)<input data-field="header" type="text" placeholder="Texto del encabezado" /></label>`);
-  if (hs && hs.kind === "media") parts.push(`<label>${hs.format === "IMAGE" ? "Imagen" : hs.format === "VIDEO" ? "Video" : "Documento"} del encabezado (URL)<input data-field="headerMedia" type="text" placeholder="https://…" /></label>`);
+  const hs = headerSpec(tpl);
+  if (hs && hs.kind === "text") {
+    parts.push(`<label>${escapeHtml(t("templates.tplHeaderVar"))}<input data-field="header" type="text" placeholder="${escapeHtml(t("templates.tplHeaderVarPlaceholder"))}" /></label>`);
+  }
+  if (hs && hs.kind === "media") {
+    const typeKey = hs.format === "IMAGE" ? "image" : hs.format === "VIDEO" ? "video" : "document";
+    const typeLabel = t(`modals.msgTypes.${typeKey}`);
+    parts.push(`<label>${escapeHtml(t("templates.tplHeaderMedia", { type: typeLabel }))}<input data-field="headerMedia" type="text" placeholder="https://…" /></label>`);
+  }
 
-  const n = bodyVarCount(t);
-  for (let i = 1; i <= n; i++) parts.push(`<label>Variable del cuerpo {{${i}}}<input data-field="body${i}" type="text" placeholder="Valor para {{${i}}}" /></label>`);
+  const n = bodyVarCount(tpl);
+  for (let i = 1; i <= n; i++) {
+    const ph = `{{${i}}}`;
+    parts.push(`<label>${escapeHtml(t("templates.tplBodyVar", { placeholder: ph }))}<input data-field="body${i}" type="text" placeholder="${escapeHtml(t("templates.tplBodyPlaceholder", { placeholder: ph }))}" /></label>`);
+  }
 
-  buttonSpecs(t).forEach((s) => {
-    if (s.kind === "url") parts.push(`<label>URL del botón “${escapeHtml(s.text)}”<input data-field="btnurl${s.idx}" type="text" placeholder="parte dinámica de la URL" /></label>`);
-    else if (s.kind === "copy") parts.push(`<label>Código del botón “${escapeHtml(s.text)}”<input data-field="btncode${s.idx}" type="text" placeholder="CUPON20" /></label>`);
-    else if (s.kind === "flow") parts.push(`<label>Token del Flow “${escapeHtml(s.text)}” (opcional)<input data-field="flow${s.idx}" type="text" placeholder="unused" /></label>`);
+  buttonSpecs(tpl).forEach((s) => {
+    if (s.kind === "url") parts.push(`<label>${escapeHtml(t("templates.tplBtnUrl", { text: s.text }))}<input data-field="btnurl${s.idx}" type="text" placeholder="${escapeHtml(t("templates.tplBtnUrlPlaceholder"))}" /></label>`);
+    else if (s.kind === "copy") parts.push(`<label>${escapeHtml(t("templates.tplBtnCode", { text: s.text }))}<input data-field="btncode${s.idx}" type="text" placeholder="CUPON20" /></label>`);
+    else if (s.kind === "flow") parts.push(`<label>${escapeHtml(t("templates.tplBtnFlow", { text: s.text }))}<input data-field="flow${s.idx}" type="text" placeholder="unused" /></label>`);
   });
 
   box.innerHTML = parts.length
-    ? `<div class="field-group"><div class="fg-title">Parámetros de la plantilla</div>${parts.join("")}</div>`
-    : `<div class="tpl-none">Esta plantilla no requiere parámetros.</div>`;
+    ? `<div class="field-group"><div class="fg-title">${escapeHtml(t("templates.tplParamsTitle"))}</div>${parts.join("")}</div>`
+    : `<div class="tpl-none">${escapeHtml(t("templates.tplNoParams"))}</div>`;
 
-  loadTemplateVariableGuide(t);
+  loadTemplateVariableGuide(tpl);
 }
 
-async function loadTemplateVariableGuide(t) {
+async function loadTemplateVariableGuide(tpl) {
   const guideEl = $("ncVarGuide");
-  if (!t || !guideEl) {
+  if (!tpl || !guideEl) {
     renderVariableGuide(guideEl, []);
     return;
   }
   try {
-    const res = await api(`/api/templates/${encodeURIComponent(t.name)}/variables?language=${encodeURIComponent(t.language || "es")}`);
+    const res = await api(`/api/templates/${encodeURIComponent(tpl.name)}/variables?language=${encodeURIComponent(tpl.language || "es")}`);
     const guide = (res && res.ok && (res.variableGuide || res.eventVariables)) || [];
-    renderVariableGuide(guideEl, guide, { title: "Leyenda de variables de esta plantilla" });
+    renderVariableGuide(guideEl, guide, { title: t("templates.varGuideThisTpl") });
     guide.forEach((v, i) => {
       const s = v.typeLabel ? v : clientVarSchema(v, i);
       const field = v.component === "header"
@@ -1811,7 +1825,7 @@ async function openNewChat(prefillName) {
   if (!approved.length) {
     sel.innerHTML = `<option value="">${escapeHtml(t("bulk.noApprovedTemplates"))}</option>`;
     hint.className = "hint error";
-    hint.textContent = "No tienes plantillas aprobadas. Crea una en Plantillas y espera la aprobación de Meta.";
+    hint.textContent = t("templates.ncNoApprovedHint");
     return;
   }
   sel.innerHTML = approved
@@ -1833,13 +1847,13 @@ function updateNewChatCategoryHint() {
   const info = tpl.categoryInfo;
   if (info && info.impactsBilling && info.hint) {
     hint.className = "hint warn";
-    hint.textContent = `Facturación actual: ${info.billingLabel}. ${info.hint}`;
+    hint.textContent = t("templates.ncBillingWarn", { label: info.billingLabel, hint: info.hint });
     return;
   }
   hint.className = "hint";
   hint.textContent = info
-    ? `Se facturará como ${info.billingLabel}. Configura los parámetros y envía.`
-    : "Configura los parámetros y envía para abrir la conversación.";
+    ? t("templates.ncBillingInfo", { label: info.billingLabel })
+    : t("templates.ncBillingDefault");
 }
 
 async function sendNewChat() {

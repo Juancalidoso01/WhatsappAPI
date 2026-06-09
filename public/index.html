@@ -272,20 +272,20 @@
           <div class="tpl-drafts-head">
             <div>
               <h2 class="section-title" data-i18n="templates.draftsTitle">Borradores Punto Pago</h2>
-              <p class="muted sm">Listos para revisar y enviar a Meta. Al abrir un borrador verás la leyenda de variables (qué es cada dato y formato). Los testigos <strong>Texto</strong> / <strong>+ Flow</strong> se actualizan al sincronizar.</p>
+              <p class="muted sm" data-i18n="templates.draftsIntro">Listos para revisar y enviar a Meta. Al abrir un borrador verás la leyenda de variables (qué es cada dato y formato). Los testigos <strong>Texto</strong> / <strong>+ Flow</strong> se actualizan al sincronizar.</p>
             </div>
             <div class="tpl-drafts-actions">
               <button type="button" id="tplSyncMetaBtn" class="btn-ghost sm" data-i18n="templates.syncMeta">Sincronizar con Meta</button>
               <span id="tplSyncMetaHint" class="muted sm"></span>
             </div>
           </div>
-          <div id="tplPresetCards" class="tpl-preset-cards">Cargando borradores…</div>
+          <div id="tplPresetCards" class="tpl-preset-cards" data-i18n="templates.loadingDrafts">Cargando borradores…</div>
         </section>
 
         <details class="tpl-var-catalog" id="tplVarCatalog">
-          <summary class="tpl-var-catalog-summary">Biblioteca de variables <span class="muted">· referencia para operadores</span></summary>
-          <p class="muted sm tpl-var-catalog-intro">Solo guía humana: qué dato va en cada campo y formato correcto. <strong>No cambia</strong> las plantillas ya aprobadas en Meta. Las marcadas «Futuro» son para cuando pidamos nuevas aprobaciones.</p>
-          <div id="tplVarCatalogBody" class="tpl-var-catalog-body muted sm">Cargando…</div>
+          <summary class="tpl-var-catalog-summary"><span data-i18n="templates.varCatalogSummary">Biblioteca de variables</span> <span class="muted" data-i18n="templates.varCatalogSummaryHint">· referencia para operadores</span></summary>
+          <p class="muted sm tpl-var-catalog-intro" data-i18n="templates.varCatalogIntro">Solo guía humana: qué dato va en cada campo y formato correcto. <strong>No cambia</strong> las plantillas ya aprobadas en Meta. Las marcadas «Futuro» son para cuando pidamos nuevas aprobaciones.</p>
+          <div id="tplVarCatalogBody" class="tpl-var-catalog-body muted sm" data-i18n="common.loading">Cargando…</div>
         </details>
 
         <h2 class="section-title tpl-approved-title" data-i18n="templates.approvedTitle">Plantillas en tu cuenta</h2>
