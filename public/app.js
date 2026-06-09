@@ -36,6 +36,9 @@ const state = {
   filter: "",
   pollTimer: null,
   notesTimer: null,
+  leadTimer: null,
+  leadSaveHintTimer: null,
+  leadOptions: null,
   billingLedger: [],
   billingMetaRows: [],
   activeBillEntry: null,
@@ -96,6 +99,7 @@ async function init() {
   } catch (_) {}
   applyBranding();
   initSidebar();
+  initLeadFormOptions();
   bindEvents();
   loadWorkspace().catch(() => {});
   await loadConversations();
@@ -184,6 +188,7 @@ function closeChatView() {
   $("chatView").classList.add("hidden");
   const chats = document.querySelector("#screenChats");
   if (chats) chats.classList.remove("show-chat");
+  setDetailPaneOpen(false);
   renderConversations();
 }
 
@@ -247,6 +252,185 @@ const TYPE_LABELS = {
   interactive: "Interactivo",
 };
 
+const DEFAULT_LEAD_OPTIONS = {
+  types: [
+    { value: "", label: "Sin clasificar" },
+    { value: "prospecto", label: "Prospecto" },
+    { value: "cliente", label: "Cliente" },
+    { value: "lead_caliente", label: "Lead caliente" },
+    { value: "lead_frio", label: "Lead frío" },
+    { value: "soporte", label: "Soporte" },
+    { value: "otro", label: "Otro" },
+  ],
+  userTypes: [
+    { value: "", label: "Sin definir" },
+    { value: "titular", label: "Titular" },
+    { value: "beneficiario", label: "Beneficiario" },
+    { value: "representante", label: "Representante" },
+    { value: "empleado", label: "Empleado" },
+    { value: "otro", label: "Otro" },
+  ],
+};
+
+function initLeadFormOptions(options) {
+  const opts = options || state.leadOptions || DEFAULT_LEAD_OPTIONS;
+  state.leadOptions = opts;
+  const typeSel = $("leadType");
+  const userSel = $("leadUserType");
+  if (typeSel && !typeSel.options.length) {
+    typeSel.innerHTML = (opts.types || DEFAULT_LEAD_OPTIONS.types)
+      .map((o) => `<option value="${escapeHtml(o.value)}">${escapeHtml(o.label)}</option>`)
+      .join("");
+  }
+  if (userSel && !userSel.options.length) {
+    userSel.innerHTML = (opts.userTypes || DEFAULT_LEAD_OPTIONS.userTypes)
+      .map((o) => `<option value="${escapeHtml(o.value)}">${escapeHtml(o.label)}</option>`)
+      .join("");
+  }
+}
+
+function renderDetailActivityKv(lead) {
+  const box = $("detailActivityKv");
+  if (!box || !lead) return;
+  const r = lead.readonly || {};
+  const rows = [
+    ["Número de WhatsApp", r.whatsappNumber || "—"],
+    ["Primera vez visto", r.firstSeenLabel || "—"],
+    ["Última vez visto", r.lastSeenLabel || "—"],
+    ["Último contacto (enviado)", r.lastContactedLabel || "—"],
+    ["Última respuesta del cliente", r.lastHeardFromLabel || "—"],
+  ];
+  box.innerHTML = rows.map(([k, v]) =>
+    `<div class="detail-kv-row"><dt>${escapeHtml(k)}</dt><dd>${escapeHtml(v)}</dd></div>`
+  ).join("");
+}
+
+function renderDetailAndroidKv(lead) {
+  const box = $("detailAndroidKv");
+  if (!box || !lead) return;
+  const na = "No disponible vía WhatsApp";
+  const rows = [
+    ["Última vez en Android", na],
+    ["Sesiones Android", na],
+    ["Versión app Android", na],
+    ["Dispositivo Android", na],
+    ["Versión SO Android", na],
+    ["Versión SDK Android", na],
+  ];
+  box.innerHTML = rows.map(([k, v]) =>
+    `<div class="detail-kv-row"><dt>${escapeHtml(k)}</dt><dd>${escapeHtml(v)}</dd></div>`
+  ).join("");
+}
+
+function renderDetailLeadForm(lead) {
+  if (!lead) return;
+  initLeadFormOptions(lead.options);
+  const e = lead.editable || {};
+  const setIfIdle = (id, val) => {
+    const el = $(id);
+    if (!el || document.activeElement === el) return;
+    el.value = val != null ? String(val) : "";
+  };
+  setIfIdle("leadName", e.name);
+  setIfIdle("leadCompany", e.company);
+  setIfIdle("leadType", e.type);
+  setIfIdle("leadUserType", e.userType);
+  setIfIdle("leadLocation", e.location || (lead.readonly && lead.readonly.inferredLocation) || "");
+  setIfIdle("leadOwner", e.owner);
+  setIfIdle("leadEmail", e.email);
+  setIfIdle("leadUserId", e.userId);
+  setIfIdle("leadSignedUp", e.signedUp);
+  setIfIdle("leadLastOpenedEmail", e.lastOpenedEmail);
+  const phoneEl = $("leadPhone");
+  if (phoneEl) phoneEl.value = (lead.readonly && lead.readonly.phone) || "";
+
+  const alert = $("detailLeadAlert");
+  if (alert) {
+    alert.classList.toggle("hidden", !lead.needsQualification);
+  }
+}
+
+function collectLeadPayload() {
+  return {
+    name: ($("leadName") || {}).value.trim(),
+    lead: {
+      company: ($("leadCompany") || {}).value.trim(),
+      type: ($("leadType") || {}).value,
+      userType: ($("leadUserType") || {}).value,
+      location: ($("leadLocation") || {}).value.trim(),
+      owner: ($("leadOwner") || {}).value.trim(),
+      email: ($("leadEmail") || {}).value.trim(),
+      userId: ($("leadUserId") || {}).value.trim(),
+      signedUp: ($("leadSignedUp") || {}).value,
+      lastOpenedEmail: ($("leadLastOpenedEmail") || {}).value.trim(),
+    },
+  };
+}
+
+function setDetailPaneOpen(open) {
+  const pane = $("detailPane");
+  const backdrop = $("detailPaneBackdrop");
+  if (pane) pane.classList.toggle("open", Boolean(open));
+  if (backdrop) {
+    backdrop.classList.toggle("show", Boolean(open));
+    backdrop.setAttribute("aria-hidden", open ? "false" : "true");
+  }
+}
+
+async function saveLeadProfile() {
+  const phone = state.activePhone;
+  if (!phone) return;
+  const payload = collectLeadPayload();
+  const d = state.conversationDetail;
+  if (!d || !d.lead) return;
+
+  const prev = d.lead.editable || {};
+  const same = payload.name === (d.name || "") &&
+    payload.lead.company === (prev.company || "") &&
+    payload.lead.type === (prev.type || "") &&
+    payload.lead.userType === (prev.userType || "") &&
+    payload.lead.location === (prev.location || "") &&
+    payload.lead.owner === (prev.owner || "") &&
+    payload.lead.email === (prev.email || "") &&
+    payload.lead.userId === (prev.userId || "") &&
+    payload.lead.signedUp === (prev.signedUp || "") &&
+    payload.lead.lastOpenedEmail === (prev.lastOpenedEmail || "");
+  if (same) return;
+
+  const res = await patch(`/api/conversations/${encodeURIComponent(phone)}`, payload);
+  if (!res.ok) return;
+
+  if (payload.name) {
+    d.name = payload.name;
+    $("detailName").textContent = payload.name;
+    if (state.activePhone === phone) {
+      $("chatName").textContent = payload.name;
+      $("chatAvatar").textContent = initials(payload.name);
+      $("detailAvatar").textContent = initials(payload.name);
+    }
+    const conv = state.conversations.find((c) => c.phone === phone);
+    if (conv) conv.name = payload.name;
+    renderConversations();
+  }
+
+  Object.assign(d.lead.editable, payload.lead, { name: payload.name });
+  d.lead.needsQualification = (d.stats && d.stats.in > 0) && !payload.lead.type;
+  const alert = $("detailLeadAlert");
+  if (alert) alert.classList.toggle("hidden", !d.lead.needsQualification);
+
+  const hint = $("detailLeadSaveHint");
+  if (hint) {
+    hint.classList.remove("hidden");
+    clearTimeout(state.leadSaveHintTimer);
+    state.leadSaveHintTimer = setTimeout(() => hint.classList.add("hidden"), 1800);
+  }
+}
+
+function scheduleLeadSave() {
+  clearTimeout(state.leadTimer);
+  state.leadTimer = setTimeout(saveLeadProfile, 700);
+}
+
 function renderDetailPanel() {
   const d = state.conversationDetail;
   if (!d) return;
@@ -276,10 +460,11 @@ function renderDetailPanel() {
     <div class="detail-stat"><span>Salientes</span><span>${stats.out || 0}</span></div>
     ${typeLines}`;
 
-  const first = d.firstSeen;
-  $("detailFirstSeen").textContent = first
-    ? `Primer contacto: ${new Date(first).toLocaleString("es", { dateStyle: "medium", timeStyle: "short" })}`
-    : "";
+  if (d.lead) {
+    renderDetailLeadForm(d.lead);
+    renderDetailActivityKv(d.lead);
+    renderDetailAndroidKv(d.lead);
+  }
 
   const notesEl = $("detailNotes");
   if (document.activeElement !== notesEl) {
@@ -3838,7 +4023,28 @@ function bindEvents() {
   if ($("flowEndpointSetupBtn")) $("flowEndpointSetupBtn").addEventListener("click", setupFlowEndpoint);
   if ($("payAuthSendBtn")) $("payAuthSendBtn").addEventListener("click", sendPaymentAuthTest);
   $("detailTemplateBtn").addEventListener("click", () => openNewChat());
-  $("detailToggle").addEventListener("click", () => $("detailPane").classList.toggle("collapsed"));
+  $("detailToggle").addEventListener("click", () => {
+    const pane = $("detailPane");
+    if (!pane) return;
+    if (window.matchMedia("(max-width: 1100px)").matches) {
+      setDetailPaneOpen(!pane.classList.contains("open"));
+    } else {
+      pane.classList.toggle("collapsed");
+    }
+  });
+  const detailBackdrop = $("detailPaneBackdrop");
+  if (detailBackdrop) {
+    detailBackdrop.addEventListener("click", () => setDetailPaneOpen(false));
+  }
+  [
+    "leadName", "leadCompany", "leadType", "leadUserType", "leadLocation",
+    "leadOwner", "leadEmail", "leadUserId", "leadSignedUp", "leadLastOpenedEmail",
+  ].forEach((id) => {
+    const el = $(id);
+    if (!el) return;
+    el.addEventListener("input", scheduleLeadSave);
+    el.addEventListener("change", scheduleLeadSave);
+  });
   $("detailNotes").addEventListener("blur", saveNotes);
   $("detailNotes").addEventListener("input", () => {
     clearTimeout(state.notesTimer);

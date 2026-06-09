@@ -10,7 +10,7 @@
  *
  * Redis layout (prefixed with "wa:" so it can safely share a database):
  *   wa:convos              ZSET   score=lastActivity, member=phone
- *   wa:convo:<phone>       HASH   { name, phoneNumberId, firstSeen, notes, conversationOrigin, windowExpiresAt }
+ *   wa:convo:<phone>       HASH   { name, phoneNumberId, firstSeen, notes, leadProfile, conversationOrigin, windowExpiresAt }
  *   wa:msgs:<phone>        LIST   JSON messages (oldest -> newest)
  *   wa:tplmeta             HASH   templateKey -> JSON { requestedCategory, pendingCategory, ... }
  */
@@ -19,6 +19,7 @@
 
 const EventEmitter = require("events");
 const redis = require("./upstash");
+const leadProfile = require("./lead-profile");
 
 const PREFIX = "wa:";
 const MAX_CONVOS = 100;
@@ -172,6 +173,7 @@ function parseConvoMeta(meta, phone) {
     conversationOrigin: meta.conversationOrigin || null,
     windowExpiresAt: meta.windowExpiresAt ? Number(meta.windowExpiresAt) : null,
     notes: meta.notes || "",
+    leadProfile: leadProfile.parse(meta.leadProfile),
   };
 }
 
@@ -197,19 +199,23 @@ function computeMessageStats(messages) {
   const stats = { total: 0, in: 0, out: 0, byType: {} };
   let firstSeen = null;
   let lastInbound = null;
+  let lastOutbound = null;
+  let lastSeen = null;
   (messages || []).forEach((m) => {
     stats.total++;
     if (m.direction === "in") {
       stats.in++;
-      lastInbound = m.timestamp;
+      if (!lastInbound || m.timestamp > lastInbound) lastInbound = m.timestamp;
     } else {
       stats.out++;
+      if (!lastOutbound || m.timestamp > lastOutbound) lastOutbound = m.timestamp;
     }
     const t = m.type || "text";
     stats.byType[t] = (stats.byType[t] || 0) + 1;
     if (!firstSeen || m.timestamp < firstSeen) firstSeen = m.timestamp;
+    if (!lastSeen || m.timestamp > lastSeen) lastSeen = m.timestamp;
   });
-  return { stats, firstSeen, lastInbound };
+  return { stats, firstSeen, lastInbound, lastOutbound, lastSeen };
 }
 
 async function getConversation(phone) {
@@ -229,12 +235,14 @@ async function getConversationMeta(phone) {
 async function getConversationDetail(phone) {
   const p = String(phone);
   const [meta, messages] = await Promise.all([getConversationMeta(p), getMessages(p)]);
-  const { stats, firstSeen, lastInbound } = computeMessageStats(messages);
+  const { stats, firstSeen, lastInbound, lastOutbound, lastSeen } = computeMessageStats(messages);
   return {
-    ...(meta || { phone: p, name: p, phoneNumberId: null, notes: "" }),
+    ...(meta || { phone: p, name: p, phoneNumberId: null, notes: "", leadProfile: {} }),
     firstSeen: (meta && meta.firstSeen) || firstSeen,
     stats,
     lastInbound,
+    lastOutbound,
+    lastSeen,
   };
 }
 

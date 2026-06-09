@@ -21,6 +21,7 @@ const Conversation = require('./services/conversation');
 const GraphApi = require('./services/graph-api');
 const Store = require('./services/store');
 const phoneMeta = require('./services/phone-meta');
+const leadProfile = require('./services/lead-profile');
 const templateCategory = require('./services/template-category');
 const CampaignStore = require('./services/campaign-store');
 const CampaignRunner = require('./services/campaign-runner');
@@ -1666,15 +1667,20 @@ app.get('/api/conversations/:phone/detail', async (req, res) => {
     const detail = await Store.getConversationDetail(req.params.phone);
     if (!detail) return res.status(404).json({ error: 'Conversación no encontrada.' });
     const country = phoneMeta.inferCountry(detail.phone);
+    const countryPayload = {
+      code: country.code,
+      name: country.name,
+      flag: phoneMeta.countryFlag(country.code),
+    };
     res.json({
       ...detail,
-      country: {
-        code: country.code,
-        name: country.name,
-        flag: phoneMeta.countryFlag(country.code),
-      },
+      country: countryPayload,
       phoneFormatted: phoneMeta.formatPhone(detail.phone),
       originLabel: phoneMeta.originLabel(detail.conversationOrigin),
+      lead: leadProfile.buildDetailView(
+        { ...detail, phoneFormatted: phoneMeta.formatPhone(detail.phone) },
+        countryPayload
+      ),
     });
   } catch (err) {
     console.error('getConversationDetail error:', err.message);
@@ -1682,18 +1688,26 @@ app.get('/api/conversations/:phone/detail', async (req, res) => {
   }
 });
 
-// Update internal CRM notes for a conversation
+// Actualizar notas y perfil de lead (calificación CRM)
 app.patch('/api/conversations/:phone', apiJson, async (req, res) => {
-  const { notes } = req.body || {};
-  if (typeof notes !== 'string') {
-    return res.status(400).json({ error: 'Se requiere "notes" (texto).' });
+  const { notes, name, lead } = req.body || {};
+  const fields = {};
+  if (typeof notes === 'string') fields.notes = notes;
+  if (typeof name === 'string' && name.trim()) fields.name = name.trim();
+  if (lead && typeof lead === 'object') {
+    const meta = await Store.getConversationMeta(req.params.phone);
+    const merged = leadProfile.merge(meta && meta.leadProfile, leadProfile.sanitizePatch(lead));
+    fields.leadProfile = leadProfile.serialize(merged);
+  }
+  if (!Object.keys(fields).length) {
+    return res.status(400).json({ error: 'Nada que actualizar (notes, name o lead).' });
   }
   try {
-    await Store.updateConversationMeta(req.params.phone, { notes });
+    await Store.updateConversationMeta(req.params.phone, fields);
     res.json({ ok: true });
   } catch (err) {
-    console.error('updateConversationNotes error:', err.message);
-    res.status(500).json({ error: 'No se pudieron guardar las notas.' });
+    console.error('updateConversationMeta error:', err.message);
+    res.status(500).json({ error: 'No se pudo guardar el perfil.' });
   }
 });
 

@@ -157,8 +157,77 @@
           <h3 id="detailName">—</h3>
           <span class="muted" id="detailPhone"></span>
         </div>
+        <div id="detailLeadAlert" class="detail-lead-alert hidden" role="status">
+          El cliente escribió. Completa la calificación del lead.
+        </div>
+
+        <div class="detail-section" id="detailLeadSection">
+          <span class="detail-label">Calificación del lead</span>
+          <p class="detail-hint muted sm">Si el cliente escribe, clasifica el contacto para el equipo comercial.</p>
+          <div class="detail-lead-form">
+            <label class="detail-field">
+              <span>Nombre</span>
+              <input type="text" id="leadName" placeholder="Nombre del contacto" autocomplete="off" />
+            </label>
+            <label class="detail-field">
+              <span>Empresa</span>
+              <input type="text" id="leadCompany" placeholder="Empresa u organización" autocomplete="off" />
+            </label>
+            <label class="detail-field">
+              <span>Tipo</span>
+              <select id="leadType"></select>
+            </label>
+            <label class="detail-field">
+              <span>Usuario</span>
+              <select id="leadUserType"></select>
+            </label>
+            <label class="detail-field">
+              <span>Ubicación</span>
+              <input type="text" id="leadLocation" placeholder="Ciudad, país…" autocomplete="off" />
+            </label>
+            <label class="detail-field">
+              <span>Responsable</span>
+              <input type="text" id="leadOwner" placeholder="Agente o dueño del lead" autocomplete="off" />
+            </label>
+            <label class="detail-field">
+              <span>Correo electrónico</span>
+              <input type="email" id="leadEmail" placeholder="correo@ejemplo.com" autocomplete="off" />
+            </label>
+            <label class="detail-field">
+              <span>Teléfono</span>
+              <input type="text" id="leadPhone" readonly tabindex="-1" />
+            </label>
+            <label class="detail-field">
+              <span>ID de usuario</span>
+              <input type="text" id="leadUserId" placeholder="ID interno o CRM" autocomplete="off" />
+            </label>
+            <label class="detail-field">
+              <span>Fecha de registro</span>
+              <input type="date" id="leadSignedUp" />
+            </label>
+          </div>
+          <p id="detailLeadSaveHint" class="detail-hint muted sm hidden">Guardado</p>
+        </div>
+
         <div class="detail-section">
-          <span class="detail-label">País</span>
+          <span class="detail-label">Actividad en WhatsApp</span>
+          <dl class="detail-kv" id="detailActivityKv"></dl>
+        </div>
+
+        <details class="detail-section detail-more-channels">
+          <summary class="detail-label">Correo y app Android</summary>
+          <p class="detail-hint muted sm">Estos datos no los provee WhatsApp. Complétalos solo si los tienes de otro canal.</p>
+          <div class="detail-lead-form">
+            <label class="detail-field">
+              <span>Último correo abierto</span>
+              <input type="text" id="leadLastOpenedEmail" placeholder="Fecha o referencia" autocomplete="off" />
+            </label>
+          </div>
+          <dl class="detail-kv detail-kv-muted" id="detailAndroidKv"></dl>
+        </details>
+
+        <div class="detail-section">
+          <span class="detail-label">País (inferido)</span>
           <div id="detailCountry" class="detail-value">—</div>
         </div>
         <div class="detail-section">
@@ -171,9 +240,8 @@
           <div id="detailOrigin" class="detail-value">—</div>
         </div>
         <div class="detail-section">
-          <span class="detail-label">Actividad</span>
+          <span class="detail-label">Resumen de mensajes</span>
           <div id="detailStats" class="detail-stats"></div>
-          <p class="detail-hint muted" id="detailFirstSeen"></p>
         </div>
         <div class="detail-section">
           <span class="detail-label">Notas internas</span>
@@ -185,6 +253,7 @@
           <button class="btn-ghost block" id="detailMediaBtn">Enviar imagen/archivo</button>
         </div>
       </aside>
+      <div id="detailPaneBackdrop" class="detail-pane-backdrop" aria-hidden="true"></div>
     </section>
 
     <!-- ============ SCREEN: TEMPLATES ============ -->
