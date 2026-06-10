@@ -121,6 +121,12 @@ input, textarea, select { font-family: inherit; }
 .app-notif-item:hover { background: var(--bg-soft); }
 .app-notif-item.unread { background: rgba(0, 168, 89, .06); }
 .app-notif-item.unread:hover { background: rgba(0, 168, 89, .1); }
+.app-notif-item.read { opacity: .72; }
+.app-notif-item.read .app-notif-title { font-weight: 500; color: var(--muted); }
+.app-notif-section {
+  padding: 6px 10px 2px; margin: 0; font-size: 11px;
+  font-weight: 600; text-transform: uppercase; letter-spacing: .04em;
+}
 .app-notif-avatar {
   width: 36px; height: 36px; border-radius: 50%; flex-shrink: 0;
   background: var(--brand); color: #fff; font-size: 12px; font-weight: 700;

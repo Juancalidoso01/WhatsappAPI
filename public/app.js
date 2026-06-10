@@ -376,6 +376,7 @@ function handleLiveNotification(ev) {
     const isActive = state.activePhone === phone && state.currentScreen === "chats";
     if (isActive) {
       loadMessages(phone);
+      markChatNotificationsRead(phone);
       return;
     }
     const pseudo = {
@@ -430,18 +431,66 @@ async function loadNotifications() {
   } catch (_) { /* polling must not break chats */ }
 }
 
+function applyNotifReadState(patch) {
+  const { ids, chatPhone, type, all, unread } = patch || {};
+  const idSet = ids && ids.length ? new Set(ids) : null;
+  state.notifications.forEach((e) => {
+    if (all) {
+      e.read = true;
+      return;
+    }
+    if (idSet && idSet.has(e.id)) e.read = true;
+    if (chatPhone && e.type === "chat" && e.meta && String(e.meta.phone) === String(chatPhone)) {
+      e.read = true;
+    }
+    if (type && e.type === type) e.read = true;
+  });
+  const count = unread != null ? unread : state.notifications.filter((e) => !e.read).length;
+  updateNotifBadges(count);
+  if (state.notifPanelOpen) renderNotifPanel();
+}
+
+async function markChatNotificationsRead(phone) {
+  if (!phone) return;
+  const res = await post("/api/portal/notifications/read", { chatPhone: String(phone) });
+  if (!res || !res.ok) return;
+  applyNotifReadState({
+    ids: res.ids,
+    chatPhone: String(phone),
+    unread: res.unread,
+  });
+}
+
+async function markTemplateNotificationsRead() {
+  const res = await post("/api/portal/notifications/read", { type: "template" });
+  if (!res || !res.ok) return;
+  applyNotifReadState({ type: "template", ids: res.ids, unread: res.unread });
+}
+
+function sortNotifItems(items) {
+  return [...items].sort((a, b) => {
+    if (Boolean(a.read) !== Boolean(b.read)) return a.read ? 1 : -1;
+    return (b.at || 0) - (a.at || 0);
+  });
+}
+
 function renderNotifPanel() {
   const box = $("notifList");
   if (!box) return;
-  const items = state.notifications || [];
+  const items = sortNotifItems(state.notifications || []);
+  const unreadItems = items.filter((e) => !e.read);
   if (!items.length) {
     box.innerHTML = `<p class="muted" style="padding:12px">${escapeHtml(t("notifications.empty"))}</p>`;
     return;
   }
-  box.innerHTML = items.map((ev) => {
+  let html = "";
+  if (unreadItems.length && items.length > unreadItems.length) {
+    html += `<p class="app-notif-section muted sm">${escapeHtml(t("notifications.sectionUnread"))}</p>`;
+  }
+  html += items.map((ev) => {
     const { title, body, icon, tpl } = notifLabel(ev);
     const unread = !ev.read;
-    return `<button type="button" class="app-notif-item${unread ? " unread" : ""}" data-notif-id="${escapeHtml(ev.id)}" data-notif-type="${escapeHtml(ev.type)}">
+    return `<button type="button" class="app-notif-item${unread ? " unread" : " read"}" data-notif-id="${escapeHtml(ev.id)}" data-notif-type="${escapeHtml(ev.type)}">
       <span class="app-notif-avatar${tpl ? " tpl" : ""}">${tpl ? icon : escapeHtml(icon)}</span>
       <span class="app-notif-body">
         <p class="app-notif-title">${escapeHtml(title)}</p>
@@ -450,6 +499,14 @@ function renderNotifPanel() {
       </span>
     </button>`;
   }).join("");
+  if (unreadItems.length && items.length > unreadItems.length) {
+    const readIdx = html.indexOf('class="app-notif-item read"');
+    if (readIdx > -1) {
+      const label = `<p class="app-notif-section muted sm">${escapeHtml(t("notifications.sectionRead"))}</p>`;
+      html = html.slice(0, readIdx) + label + html.slice(readIdx);
+    }
+  }
+  box.innerHTML = html;
   box.querySelectorAll(".app-notif-item").forEach((btn) => {
     btn.addEventListener("click", () => handleNotifItemClick(btn.dataset.notifId, btn.dataset.notifType));
   });
@@ -458,17 +515,18 @@ function renderNotifPanel() {
 async function handleNotifItemClick(id, type) {
   const ev = state.notifications.find((e) => e.id === id);
   if (!ev) return;
-  await post("/api/portal/notifications/read", { ids: [id] });
-  ev.read = true;
-  updateNotifBadges(state.notifications.filter((e) => !e.read).length);
-  renderNotifPanel();
+  const res = await post("/api/portal/notifications/read", { ids: [id] });
+  applyNotifReadState({ ids: [id], unread: res && res.unread });
   toggleNotifPanel(false);
   if (type === "chat" && ev.meta) {
     switchScreen("chats");
-    openConversation(ev.meta.phone, ev.meta.name);
+    await openConversation(ev.meta.phone, ev.meta.name);
     return;
   }
-  if (type === "template") switchScreen("templates");
+  if (type === "template") {
+    switchScreen("templates");
+    markTemplateNotificationsRead();
+  }
 }
 
 function toggleNotifPanel(open) {
@@ -488,10 +546,8 @@ function toggleNotifPanel(open) {
 }
 
 async function markAllNotificationsRead() {
-  await post("/api/portal/notifications/read", { all: true });
-  state.notifications.forEach((e) => { e.read = true; });
-  updateNotifBadges(0);
-  renderNotifPanel();
+  const res = await post("/api/portal/notifications/read", { all: true });
+  applyNotifReadState({ all: true, unread: res && res.unread != null ? res.unread : 0 });
 }
 
 function toggleNotifySound() {
@@ -724,6 +780,7 @@ async function openConversation(phone, name, highlightMessageId = null) {
   renderConversations();
   await Promise.all([loadMessages(phone), loadConversationDetail(phone)]);
   markConversationRead(phone);
+  markChatNotificationsRead(phone);
   renderConversations();
   if (state.highlightMessageId) {
     requestAnimationFrame(() => {
@@ -747,6 +804,7 @@ async function loadMessages(phone) {
       updateWindow();
       if (phone === state.activePhone && state.currentScreen === "chats") {
         markConversationRead(phone);
+        markChatNotificationsRead(phone);
         renderConversations();
       }
     }
@@ -4318,6 +4376,7 @@ function switchScreen(name) {
 
   const cache = state.screenCache;
   if (name === "templates") {
+    markTemplateNotificationsRead();
     if (!cache.templates) {
       cache.templates = true;
       loadTemplates().then(renderTemplateList);

@@ -107,6 +107,30 @@ async function markAllRead() {
   return markRead(rows.map((r) => r.id));
 }
 
+async function markChatReadForPhone(phone) {
+  const target = String(phone || "");
+  if (!target) return { ok: true, marked: 0, ids: [] };
+  const rows = await listRecent(MAX_EVENTS);
+  const readIds = await getReadIds();
+  const ids = rows
+    .filter((e) => e.type === "chat"
+      && String(e.meta && e.meta.phone) === target
+      && !readIds.has(e.id))
+    .map((e) => e.id);
+  const result = await markRead(ids);
+  return { ...result, ids };
+}
+
+async function markTypeRead(type) {
+  const rows = await listRecent(MAX_EVENTS);
+  const readIds = await getReadIds();
+  const ids = rows
+    .filter((e) => e.type === type && !readIds.has(e.id))
+    .map((e) => e.id);
+  const result = await markRead(ids);
+  return { ...result, ids };
+}
+
 async function unreadCount() {
   const [rows, readIds] = await Promise.all([listRecent(50), getReadIds()]);
   return rows.filter((e) => !readIds.has(e.id)).length;
@@ -184,5 +208,7 @@ module.exports = {
   enrichWithRead,
   markRead,
   markAllRead,
+  markChatReadForPhone,
+  markTypeRead,
   unreadCount,
 };

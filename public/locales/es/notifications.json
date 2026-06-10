@@ -2,6 +2,8 @@
   "title": "Notificaciones",
   "empty": "Sin notificaciones recientes.",
   "markAllRead": "Marcar todo leído",
+  "sectionUnread": "Sin leer",
+  "sectionRead": "Leídas",
   "soundOn": "Sonido activado",
   "soundOff": "Sonido desactivado",
   "enableBrowser": "Alertas en el escritorio",

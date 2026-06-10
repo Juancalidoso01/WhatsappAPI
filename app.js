@@ -1681,13 +1681,19 @@ app.get('/api/portal/notifications', async (req, res) => {
 app.post('/api/portal/notifications/read', apiJson, async (req, res) => {
   try {
     const body = req.body || {};
+    let result = { marked: 0 };
     if (body.all) {
-      const result = await PortalEvents.markAllRead();
-      return res.json({ ok: true, ...result });
+      result = await PortalEvents.markAllRead();
+    } else if (body.chatPhone) {
+      result = await PortalEvents.markChatReadForPhone(body.chatPhone);
+    } else if (body.type) {
+      result = await PortalEvents.markTypeRead(String(body.type));
+    } else {
+      const ids = Array.isArray(body.ids) ? body.ids : [];
+      result = await PortalEvents.markRead(ids);
     }
-    const ids = Array.isArray(body.ids) ? body.ids : [];
-    const result = await PortalEvents.markRead(ids);
-    res.json({ ok: true, ...result });
+    const unread = await PortalEvents.unreadCount();
+    res.json({ ok: true, ...result, unread });
   } catch (err) {
     res.status(500).json({ ok: false, error: String(err.message || err) });
   }
