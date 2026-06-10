@@ -3887,10 +3887,11 @@ function switchScreen(name) {
   if (name === "templates") {
     if (!cache.templates) {
       cache.templates = true;
-      Promise.all([loadTemplates().then(renderTemplateList), initTemplateStudio()]);
+      loadTemplates().then(renderTemplateList);
     } else {
       renderTemplateList();
     }
+    initTemplateStudio();
   }
   if (name === "bulk") {
     if (!cache.bulk) {

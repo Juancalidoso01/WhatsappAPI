@@ -84,7 +84,7 @@ const KEY_SCHEMA = {
     mapsTo: "Nombre que saluda el mensaje",
     example: "Juan Pablo",
     status: "active",
-    usedIn: "punto_pago_3ds_confirmar_pago",
+    usedIn: "punto_pago_3ds_confirmar_pago, recordatorio_pago, recordatorio_mora, confirmacion_pago, bienvenida_cliente",
   },
   monto: {
     key: "monto",
@@ -93,7 +93,7 @@ const KEY_SCHEMA = {
     mapsTo: "Importe que el cliente debe confirmar",
     example: "USD 45.90",
     status: "active",
-    usedIn: "punto_pago_3ds_confirmar_pago",
+    usedIn: "punto_pago_3ds_confirmar_pago, recordatorio_pago, confirmacion_pago",
   },
   comercio: {
     key: "comercio",
@@ -119,7 +119,8 @@ const KEY_SCHEMA = {
     type: "id_ref",
     mapsTo: "Identificador único del cliente en Punto Pago / core bancario",
     example: "CLI-10482",
-    status: "reference",
+    status: "active",
+    usedIn: "bienvenida_cliente",
   },
   numero_factura: {
     key: "numero_factura",
@@ -135,7 +136,8 @@ const KEY_SCHEMA = {
     type: "code",
     mapsTo: "Referencia de transacción o comprobante de pago",
     example: "PAG-8829103",
-    status: "reference",
+    status: "active",
+    usedIn: "confirmacion_pago",
   },
   fecha_pago: {
     key: "fecha_pago",
@@ -143,7 +145,8 @@ const KEY_SCHEMA = {
     type: "date",
     mapsTo: "Día en que se realizó o se programó el pago",
     example: "08 jun 2026",
-    status: "reference",
+    status: "active",
+    usedIn: "confirmacion_pago",
   },
   fecha_vencimiento: {
     key: "fecha_vencimiento",
@@ -151,7 +154,8 @@ const KEY_SCHEMA = {
     type: "date",
     mapsTo: "Límite para pagar una deuda o cuota",
     example: "15 jun 2026",
-    status: "reference",
+    status: "active",
+    usedIn: "recordatorio_pago, recordatorio_mora",
   },
   saldo_deuda: {
     key: "saldo_deuda",
@@ -159,7 +163,8 @@ const KEY_SCHEMA = {
     type: "money",
     mapsTo: "Monto total adeudado al momento del mensaje",
     example: "USD 128.40",
-    status: "reference",
+    status: "active",
+    usedIn: "recordatorio_mora",
   },
   monto_cuota: {
     key: "monto_cuota",
@@ -167,7 +172,8 @@ const KEY_SCHEMA = {
     type: "money",
     mapsTo: "Importe de la cuota o abono mínimo",
     example: "USD 35.00",
-    status: "reference",
+    status: "active",
+    usedIn: "recordatorio_mora",
   },
   dias_mora: {
     key: "dias_mora",
@@ -175,7 +181,8 @@ const KEY_SCHEMA = {
     type: "integer",
     mapsTo: "Días transcurridos después del vencimiento",
     example: "12",
-    status: "reference",
+    status: "active",
+    usedIn: "recordatorio_mora",
   },
   telefono_cliente: {
     key: "telefono_cliente",
@@ -184,6 +191,15 @@ const KEY_SCHEMA = {
     mapsTo: "Número WhatsApp o móvil del destinatario (solo si va en el texto)",
     example: "50763163152",
     status: "reference",
+  },
+  codigo_otp: {
+    key: "codigo_otp",
+    label: "Código OTP",
+    type: "code",
+    mapsTo: "Código numérico de un solo uso para verificación",
+    example: "847291",
+    status: "active",
+    usedIn: "codigo_verificacion",
   },
 };
 
@@ -211,9 +227,23 @@ const VARIABLE_CATALOG_GROUPS = [
     keys: ["numero_pago", "numero_factura", "fecha_pago"],
   },
   {
+    id: "cobranza",
+    label: "En uso · recordatorios y cobranza",
+    note: "Borradores recordatorio_pago y recordatorio_mora. Envía a Meta antes de usar en producción.",
+    status: "active",
+    keys: ["nombre_cliente", "monto", "fecha_vencimiento", "saldo_deuda", "monto_cuota", "dias_mora"],
+  },
+  {
+    id: "confirmaciones",
+    label: "En uso · confirmaciones y bienvenida",
+    note: "Comprobantes de pago, onboarding y códigos OTP.",
+    status: "active",
+    keys: ["nombre_cliente", "monto", "fecha_pago", "numero_pago", "id_cliente", "codigo_otp"],
+  },
+  {
     id: "deudas",
-    label: "Deudas y mora",
-    note: "Recordatorios de saldo, vencimiento y días en mora.",
+    label: "Deudas y mora (referencia)",
+    note: "Mismas claves que cobranza; guía extendida para operadores.",
     status: "reference",
     keys: ["saldo_deuda", "monto_cuota", "fecha_vencimiento", "dias_mora"],
   },
@@ -223,6 +253,11 @@ const VARIABLE_CATALOG_GROUPS = [
 const TEMPLATE_GUIDES = {
   punto_pago_3ds_confirmar_pago: "punto_pago_autorizacion_pago",
   punto_pago_3ds_confirmar_pago_flow: "punto_pago_autorizacion_pago",
+  recordatorio_pago: "punto_pago_recordatorio_pago",
+  recordatorio_mora: "punto_pago_recordatorio_mora",
+  confirmacion_pago: "punto_pago_confirmacion_pago",
+  bienvenida_cliente: "punto_pago_bienvenida",
+  codigo_verificacion: "punto_pago_codigo_verificacion",
 };
 
 function inferTypeFromKey(key) {

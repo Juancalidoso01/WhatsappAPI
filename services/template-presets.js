@@ -64,6 +64,204 @@ const PRESETS = {
       cta: "Confirmar pago",
     },
   },
+  punto_pago_recordatorio_pago: {
+    key: "punto_pago_recordatorio_pago",
+    label: "Recordatorio de pago",
+    description: "Avisa un saldo pendiente con fecha límite. Compatible con campañas masivas vía API (plantilla recordatorio_pago).",
+    name: "recordatorio_pago",
+    category: "UTILITY",
+    language: "es",
+    headerText: "Recordatorio de pago",
+    bodyText:
+      "Hola {{1}},\n\n"
+      + "Tienes un saldo pendiente de {{2}} con vencimiento el {{3}}.\n\n"
+      + "Si ya pagaste, ignora este mensaje. Para consultas responde AYUDA.",
+    footerText: "Punto Pago",
+    variables: [
+      {
+        key: "nombre_cliente",
+        placeholder: "{{1}}",
+        label: "Nombre del cliente",
+        type: "text",
+        example: "Juan Pablo",
+        mapsTo: "Nombre del destinatario del recordatorio",
+      },
+      {
+        key: "monto",
+        placeholder: "{{2}}",
+        label: "Monto pendiente",
+        type: "money",
+        example: "USD 128.40",
+        mapsTo: "Importe adeudado o cuota a pagar",
+      },
+      {
+        key: "fecha_vencimiento",
+        placeholder: "{{3}}",
+        label: "Fecha de vencimiento",
+        type: "date",
+        example: "15 jun 2026",
+        mapsTo: "Último día para pagar sin mora",
+      },
+    ],
+  },
+  punto_pago_recordatorio_mora: {
+    key: "punto_pago_recordatorio_mora",
+    label: "Aviso de mora",
+    description: "Informa saldo vencido, días en mora y monto mínimo para regularizar la cuenta.",
+    name: "recordatorio_mora",
+    category: "UTILITY",
+    language: "es",
+    headerText: "Aviso de mora",
+    bodyText:
+      "Hola {{1}},\n\n"
+      + "Tu cuenta registra un saldo de {{2}} con {{3}} días en mora (venció el {{4}}).\n\n"
+      + "Puedes regularizar con un abono mínimo de {{5}}. Responde PAGO para opciones de pago.",
+    footerText: "Punto Pago · Cobranza",
+    variables: [
+      {
+        key: "nombre_cliente",
+        placeholder: "{{1}}",
+        label: "Nombre del cliente",
+        type: "text",
+        example: "María López",
+        mapsTo: "Titular de la deuda",
+      },
+      {
+        key: "saldo_deuda",
+        placeholder: "{{2}}",
+        label: "Saldo de deuda",
+        type: "money",
+        example: "USD 256.80",
+        mapsTo: "Monto total adeudado",
+      },
+      {
+        key: "dias_mora",
+        placeholder: "{{3}}",
+        label: "Días en mora",
+        type: "integer",
+        example: "12",
+        mapsTo: "Días transcurridos desde el vencimiento",
+      },
+      {
+        key: "fecha_vencimiento",
+        placeholder: "{{4}}",
+        label: "Fecha de vencimiento",
+        type: "date",
+        example: "28 may 2026",
+        mapsTo: "Fecha en que venció el saldo",
+      },
+      {
+        key: "monto_cuota",
+        placeholder: "{{5}}",
+        label: "Abono mínimo",
+        type: "money",
+        example: "USD 45.00",
+        mapsTo: "Cuota o abono mínimo para regularizar",
+      },
+    ],
+  },
+  punto_pago_confirmacion_pago: {
+    key: "punto_pago_confirmacion_pago",
+    label: "Confirmación de pago recibido",
+    description: "Acusa recibo de un pago con referencia y fecha. Útil tras abonos en canales digitales.",
+    name: "confirmacion_pago",
+    category: "UTILITY",
+    language: "es",
+    headerText: "Pago recibido",
+    bodyText:
+      "Hola {{1}},\n\n"
+      + "Confirmamos tu pago de {{2}} recibido el {{3}}.\n\n"
+      + "Referencia: {{4}}. Guarda este mensaje como comprobante.",
+    footerText: "Punto Pago",
+    variables: [
+      {
+        key: "nombre_cliente",
+        placeholder: "{{1}}",
+        label: "Nombre del cliente",
+        type: "text",
+        example: "Carlos Ruiz",
+        mapsTo: "Cliente que realizó el pago",
+      },
+      {
+        key: "monto",
+        placeholder: "{{2}}",
+        label: "Monto pagado",
+        type: "money",
+        example: "USD 89.50",
+        mapsTo: "Importe acreditado",
+      },
+      {
+        key: "fecha_pago",
+        placeholder: "{{3}}",
+        label: "Fecha de pago",
+        type: "date",
+        example: "08 jun 2026",
+        mapsTo: "Día en que se registró el abono",
+      },
+      {
+        key: "numero_pago",
+        placeholder: "{{4}}",
+        label: "Referencia de pago",
+        type: "code",
+        example: "PAG-8829103",
+        mapsTo: "Folio o número de transacción",
+      },
+    ],
+  },
+  punto_pago_bienvenida: {
+    key: "punto_pago_bienvenida",
+    label: "Bienvenida al cliente",
+    description: "Saludo inicial con ID de cliente. Para onboarding tras alta en Punto Pago.",
+    name: "bienvenida_cliente",
+    category: "MARKETING",
+    language: "es",
+    headerText: "Bienvenido a Punto Pago",
+    bodyText:
+      "Hola {{1}},\n\n"
+      + "Tu cuenta Punto Pago está activa. Tu ID de cliente es {{2}}.\n\n"
+      + "Desde este chat puedes consultar saldos, pagar y recibir avisos importantes.",
+    footerText: "Punto Pago",
+    variables: [
+      {
+        key: "nombre_cliente",
+        placeholder: "{{1}}",
+        label: "Nombre del cliente",
+        type: "text",
+        example: "Ana Torres",
+        mapsTo: "Nombre para el saludo de bienvenida",
+      },
+      {
+        key: "id_cliente",
+        placeholder: "{{2}}",
+        label: "ID de cliente",
+        type: "id_ref",
+        example: "CLI-10482",
+        mapsTo: "Identificador único en tu sistema",
+      },
+    ],
+  },
+  punto_pago_codigo_verificacion: {
+    key: "punto_pago_codigo_verificacion",
+    label: "Código de verificación",
+    description: "OTP de un solo uso para validar identidad o confirmar una acción sensible.",
+    name: "codigo_verificacion",
+    category: "AUTHENTICATION",
+    language: "es",
+    bodyText:
+      "Tu código de verificación Punto Pago es {{1}}.\n\n"
+      + "Válido por 10 minutos. No lo compartas con nadie.",
+    footerText: "Punto Pago · Seguridad",
+    variables: [
+      {
+        key: "codigo_otp",
+        placeholder: "{{1}}",
+        label: "Código OTP",
+        type: "code",
+        example: "847291",
+        mapsTo: "Código numérico de un solo uso",
+      },
+    ],
+  },
 };
 
 function listPresets() {
