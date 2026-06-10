@@ -4268,6 +4268,18 @@ async function loadFlowSendProfile(flowId) {
   applyFlowSendProfile(res);
 }
 
+function openFlowSendModal() {
+  if (!state.activeFlowId) {
+    toast(t("toast.selectFlow"), "error");
+    return;
+  }
+  const flowName = ($("flowsDetailName") && $("flowsDetailName").textContent) || "";
+  const title = $("flowSendModalTitle");
+  if (title) title.textContent = t("flows.sendModalTitle", { name: flowName });
+  updateFlowSendPreview();
+  showModal("modalFlowSend");
+}
+
 async function selectFlow(id) {
   state.activeFlowId = id;
   renderFlowsList();
@@ -4326,6 +4338,7 @@ async function sendActiveFlow() {
     toast(res.hint || res.error || t("toast.sendFailedGeneric"), "error");
     return;
   }
+  closeModals();
   toast(t("toast.flowSent", { mode: res.mode || "published" }), "ok");
   if (state.activeFlowId) await loadFlowDetail(state.activeFlowId);
   await loadFlowActivity();
@@ -4837,6 +4850,7 @@ function bindEvents() {
     const el = $(id);
     if (el) el.addEventListener("input", updateTpPreview);
   });
+  $("flowOpenSendBtn")?.addEventListener("click", openFlowSendModal);
   $("flowSendBtn")?.addEventListener("click", sendActiveFlow);
   ["flowSendBody", "flowSendCta"].forEach((id) => {
     const el = $(id);
