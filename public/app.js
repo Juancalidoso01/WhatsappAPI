@@ -2276,54 +2276,75 @@ function templateNeedsConfig(t) {
   return Boolean(headerSpec(t)) || bodyVarCount(t) > 0 || buttonSpecs(t).length > 0;
 }
 
+function ncPresetForTemplate(tpl) {
+  if (!tpl) return null;
+  return state.templatePresets.find((p) => p.name === tpl.name || p.templateFlowName === tpl.name) || null;
+}
+
 function renderTemplateFields(tpl) {
   const box = $("ncFields");
   const guideEl = $("ncVarGuide");
+  const guideWrap = $("ncVarGuideWrap");
   if (!tpl) {
     box.innerHTML = "";
     renderVariableGuide(guideEl, []);
+    guideWrap?.classList.add("hidden");
     return;
   }
+  const preset = ncPresetForTemplate(tpl);
   const parts = [];
   const hs = headerSpec(tpl);
   if (hs && hs.kind === "text") {
-    parts.push(`<label>${escapeHtml(t("templates.tplHeaderVar"))}<input data-field="header" type="text" placeholder="${escapeHtml(t("templates.tplHeaderVarPlaceholder"))}" /></label>`);
+    parts.push(`<label><span>${escapeHtml(t("templates.tplHeaderVar"))}</span><input data-field="header" type="text" placeholder="${escapeHtml(t("templates.tplHeaderVarPlaceholder"))}" /></label>`);
   }
   if (hs && hs.kind === "media") {
     const typeKey = hs.format === "IMAGE" ? "image" : hs.format === "VIDEO" ? "video" : "document";
     const typeLabel = t(`modals.msgTypes.${typeKey}`);
-    parts.push(`<label>${escapeHtml(t("templates.tplHeaderMedia", { type: typeLabel }))}<input data-field="headerMedia" type="text" placeholder="https://…" /></label>`);
+    parts.push(`<label><span>${escapeHtml(t("templates.tplHeaderMedia", { type: typeLabel }))}</span><input data-field="headerMedia" type="text" placeholder="https://…" /></label>`);
   }
 
   const n = bodyVarCount(tpl);
   for (let i = 1; i <= n; i++) {
     const ph = `{{${i}}}`;
-    parts.push(`<label>${escapeHtml(t("templates.tplBodyVar", { placeholder: ph }))}<input data-field="body${i}" type="text" placeholder="${escapeHtml(t("templates.tplBodyPlaceholder", { placeholder: ph }))}" /></label>`);
+    const v = preset && preset.variables ? preset.variables[i - 1] : null;
+    const label = (v && v.label) || t("templates.tplBodyVar", { placeholder: ph });
+    const placeholder = (v && v.example) || t("templates.tplBodyPlaceholder", { placeholder: ph });
+    parts.push(`<label><span>${escapeHtml(label)}</span><input data-field="body${i}" type="text" placeholder="${escapeHtml(placeholder)}" /></label>`);
   }
 
   buttonSpecs(tpl).forEach((s) => {
-    if (s.kind === "url") parts.push(`<label>${escapeHtml(t("templates.tplBtnUrl", { text: s.text }))}<input data-field="btnurl${s.idx}" type="text" placeholder="${escapeHtml(t("templates.tplBtnUrlPlaceholder"))}" /></label>`);
-    else if (s.kind === "copy") parts.push(`<label>${escapeHtml(t("templates.tplBtnCode", { text: s.text }))}<input data-field="btncode${s.idx}" type="text" placeholder="CUPON20" /></label>`);
-    else if (s.kind === "flow") parts.push(`<label>${escapeHtml(t("templates.tplBtnFlow", { text: s.text }))}<input data-field="flow${s.idx}" type="text" placeholder="unused" /></label>`);
+    if (s.kind === "url") parts.push(`<label><span>${escapeHtml(t("templates.tplBtnUrl", { text: s.text }))}</span><input data-field="btnurl${s.idx}" type="text" placeholder="${escapeHtml(t("templates.tplBtnUrlPlaceholder"))}" /></label>`);
+    else if (s.kind === "copy") parts.push(`<label><span>${escapeHtml(t("templates.tplBtnCode", { text: s.text }))}</span><input data-field="btncode${s.idx}" type="text" placeholder="CUPON20" /></label>`);
+    else if (s.kind === "flow") parts.push(`<label><span>${escapeHtml(t("templates.tplBtnFlow", { text: s.text }))}</span><input data-field="flow${s.idx}" type="text" placeholder="unused" /></label>`);
   });
 
   box.innerHTML = parts.length
-    ? `<div class="field-group"><div class="fg-title">${escapeHtml(t("templates.tplParamsTitle"))}</div>${parts.join("")}</div>`
+    ? `<div class="nc-params">${parts.join("")}</div>`
     : `<div class="tpl-none">${escapeHtml(t("templates.tplNoParams"))}</div>`;
 
-  loadTemplateVariableGuide(tpl);
+  const complexTpl = n > 1 || (hs && hs.kind) || buttonSpecs(tpl).length > 0;
+  if (complexTpl) {
+    loadTemplateVariableGuide(tpl);
+  } else {
+    renderVariableGuide(guideEl, []);
+    guideWrap?.classList.add("hidden");
+  }
 }
 
 async function loadTemplateVariableGuide(tpl) {
   const guideEl = $("ncVarGuide");
+  const guideWrap = $("ncVarGuideWrap");
   if (!tpl || !guideEl) {
     renderVariableGuide(guideEl, []);
+    guideWrap?.classList.add("hidden");
     return;
   }
   try {
     const res = await api(`/api/templates/${encodeURIComponent(tpl.name)}/variables?language=${encodeURIComponent(tpl.language || "es")}`);
     const guide = (res && res.ok && (res.variableGuide || res.eventVariables)) || [];
-    renderVariableGuide(guideEl, guide, { title: t("templates.varGuideThisTpl") });
+    renderVariableGuide(guideEl, guide, { title: "" });
+    if (guide.length) guideWrap?.classList.remove("hidden");
+    else guideWrap?.classList.add("hidden");
     guide.forEach((v, i) => {
       const s = v.typeLabel ? v : clientVarSchema(v, i);
       const field = v.component === "header"
@@ -2344,6 +2365,16 @@ async function loadTemplateVariableGuide(tpl) {
     });
   } catch (_) {
     renderVariableGuide(guideEl, []);
+    guideWrap?.classList.add("hidden");
+  }
+}
+
+function syncNcNameToBodyVar() {
+  const name = ($("ncName") && $("ncName").value.trim()) || "";
+  const body1 = $("ncFields") && $("ncFields").querySelector('[data-field="body1"]');
+  if (body1 && name && !body1.value.trim()) {
+    body1.value = name;
+    updateNcPreview();
   }
 }
 
@@ -2457,9 +2488,13 @@ function updateNcFlowSection() {
   const tplName = ($("ncTemplate") && $("ncTemplate").value) || "";
   const ctx = getNcPresetContext(tplName);
   const section = $("ncFlowSection");
+  const approvedBox = $("ncFlowApproved");
+  const pendingBox = $("ncFlowPendingBox");
   const cb = $("ncIncludeFlow");
-  const hint = $("ncFlowHint");
+  const readyHint = $("ncFlowReadyHint");
+  const pendingHint = $("ncFlowHint");
   if (!section) return;
+  section.classList.remove("is-ready", "is-pending");
   if (!ctx || !ctx.flowTemplateName) {
     section.classList.add("hidden");
     updateNcPreview();
@@ -2467,17 +2502,29 @@ function updateNcFlowSection() {
   }
   if (ctx.isFlowTpl) {
     section.classList.add("hidden");
+  } else if (ctx.flowApproved) {
+    section.classList.remove("hidden");
+    section.classList.add("is-ready");
+    approvedBox?.classList.remove("hidden");
+    pendingBox?.classList.add("hidden");
+    if (cb) {
+      cb.disabled = false;
+      if (!cb.dataset.touched) cb.checked = true;
+    }
+    if (readyHint) readyHint.textContent = t("templates.ncFlowReady", { name: ctx.flowTemplateName });
   } else {
     section.classList.remove("hidden");
-    if (cb) {
-      cb.disabled = !ctx.flowApproved;
-      if (!ctx.flowApproved) cb.checked = false;
-      else if (!cb.dataset.touched) cb.checked = true;
-    }
-    if (hint) {
-      hint.textContent = ctx.flowApproved
-        ? t("templates.ncFlowReady", { name: ctx.flowTemplateName })
-        : t("templates.ncFlowPending", { name: ctx.flowTemplateName });
+    section.classList.add("is-pending");
+    approvedBox?.classList.add("hidden");
+    pendingBox?.classList.remove("hidden");
+    if (cb) cb.checked = false;
+    if (pendingHint) pendingHint.textContent = t("templates.ncFlowPending", { name: ctx.flowTemplateName });
+    const reqBtn = $("ncRequestFlowTplBtn");
+    if (reqBtn) {
+      reqBtn.onclick = () => {
+        const c = getNcPresetContext(($("ncTemplate") && $("ncTemplate").value) || "");
+        if (c && c.preset && c.preset.key) openTplDraftModal(c.preset.key);
+      };
     }
   }
   updateNcPreview();
@@ -2497,11 +2544,13 @@ async function ensureNcFlowPreviewProfile(tplName) {
 }
 
 async function openNewChat(prefillName, opts) {
+  if (window.I18n) await I18n.ensureModules(["templates", "modals"]);
   showModal("modalNewChat");
   const sel = $("ncTemplate");
   const hint = $("ncHint");
   $("ncFields").innerHTML = "";
   renderVariableGuide($("ncVarGuide"), []);
+  $("ncVarGuideWrap")?.classList.add("hidden");
   if ($("ncIncludeFlow")) {
     $("ncIncludeFlow").checked = false;
     delete $("ncIncludeFlow").dataset.touched;
@@ -2531,6 +2580,7 @@ async function openNewChat(prefillName, opts) {
   else if (state.activePhone && $("ncPhone") && !($("ncPhone").value)) $("ncPhone").value = state.activePhone;
   updateNewChatCategoryHint();
   renderTemplateFields(tplByName(sel.value));
+  syncNcNameToBodyVar();
   await ensureNcFlowPreviewProfile(sel.value);
   updateNcFlowSection();
 }
@@ -4544,6 +4594,7 @@ async function updateFlowLaunchPreview() {
 }
 
 async function openFlowLaunchModal() {
+  if (window.I18n) await I18n.ensureModules(["templates", "modals"]);
   const ctx = state.flowLaunchContext || buildFlowLaunchContext(state.activeFlowPerformance);
   if (!ctx.canSend) {
     toast(t("flows.launch.blocked"), "error");
@@ -4988,10 +5039,12 @@ function bindEvents() {
   $("newChatBtn").addEventListener("click", () => openNewChat());
   $("ncTemplate").addEventListener("change", async (e) => {
     renderTemplateFields(tplByName(e.target.value));
+    syncNcNameToBodyVar();
     updateNewChatCategoryHint();
     await ensureNcFlowPreviewProfile(e.target.value);
     updateNcFlowSection();
   });
+  $("ncName")?.addEventListener("input", syncNcNameToBodyVar);
   const ncIncludeFlow = $("ncIncludeFlow");
   if (ncIncludeFlow) {
     ncIncludeFlow.addEventListener("change", () => {

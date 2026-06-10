@@ -7,12 +7,12 @@
 (function (global) {
   const LOCALES = ["es", "en", "ru"];
   const SCREEN_MODULES = {
-    chats: ["chats", "detail", "modals"],
+    chats: ["chats", "detail", "modals", "templates"],
     templates: ["templates", "modals"],
     bulk: ["bulk", "modals"],
     integration: ["integration"],
     workspace: ["workspace"],
-    flows: ["flows", "modals"],
+    flows: ["flows", "modals", "templates"],
     billing: ["billing"],
   };
   const BASE_MODULES = ["common", "nav", "toast", "notifications"];
