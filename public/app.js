@@ -180,6 +180,7 @@ async function onLocaleChange() {
     if (state.activeCampaignId) refreshCampaignDetail();
   }
   if (state.currentScreen === "flows") {
+    if (window.I18n) I18n.applyDom($("screenFlows"));
     loadFlowCapability();
     renderFlowsList();
     if (state.activeFlowId) loadFlowDetail(state.activeFlowId);
@@ -190,13 +191,13 @@ async function onLocaleChange() {
       loadPaymentAuthPanel();
     }
     renderFlowUseCaseGrid();
-    if (window.I18n) I18n.applyDom($("screenFlows"));
   }
   if (state.currentScreen === "integration" && window.IntegrationApiModule) {
     IntegrationApiModule.renderGuide($("screenIntegration"));
   }
   if (state.workspace) fillWorkspaceForms(state.workspace);
   setWorkspaceTab(state.workspaceTab || "profile");
+  updateSidebarCollapseBtn();
 }
 
 function applyBranding() {
@@ -3820,10 +3821,37 @@ async function initFlowsScreen() {
 function showModal(id) { $(id).classList.remove("hidden"); }
 function closeModals() { document.querySelectorAll(".modal").forEach((m) => m.classList.add("hidden")); }
 
+function updateSidebarCollapseBtn() {
+  const nav = $("appNav");
+  const btn = $("sidebarCollapseBtn");
+  if (!nav || !btn) return;
+  const collapsed = nav.classList.contains("collapsed");
+  const key = collapsed ? "nav.expand" : "nav.collapse";
+  btn.title = t(key);
+  btn.setAttribute("aria-label", t(key));
+}
+
+function toggleSidebarCollapsed(forceExpand) {
+  const nav = $("appNav");
+  if (!nav) return;
+  if (forceExpand === true) nav.classList.remove("collapsed");
+  else if (forceExpand === false) nav.classList.add("collapsed");
+  else nav.classList.toggle("collapsed");
+  localStorage.setItem("pp-nav-collapsed", nav.classList.contains("collapsed") ? "1" : "0");
+  updateSidebarCollapseBtn();
+}
+
 function initSidebar() {
   const nav = $("appNav");
   if (!nav) return;
   if (localStorage.getItem("pp-nav-collapsed") === "1") nav.classList.add("collapsed");
+  updateSidebarCollapseBtn();
+  const logo = $("railLogo");
+  if (logo) {
+    logo.addEventListener("click", () => {
+      if (nav.classList.contains("collapsed")) toggleSidebarCollapsed(true);
+    });
+  }
 }
 
 function switchScreen(name) {
@@ -3924,14 +3952,7 @@ function bindEvents() {
     b.addEventListener("click", () => switchScreen(b.dataset.screen))
   );
   const collapseBtn = $("sidebarCollapseBtn");
-  if (collapseBtn) {
-    collapseBtn.addEventListener("click", () => {
-      const nav = $("appNav");
-      if (!nav) return;
-      nav.classList.toggle("collapsed");
-      localStorage.setItem("pp-nav-collapsed", nav.classList.contains("collapsed") ? "1" : "0");
-    });
-  }
+  if (collapseBtn) collapseBtn.addEventListener("click", () => toggleSidebarCollapsed());
   const chatBack = $("chatBackBtn");
   if (chatBack) chatBack.addEventListener("click", closeChatView);
   const mobileWs = $("mobileWsBtn");

@@ -82,9 +82,13 @@
 
   function applyDom(root) {
     const scope = root || document;
-    scope.querySelectorAll("[data-i18n]").forEach((el) => {
+    scope.querySelectorAll("[data-i18n]:not([data-i18n-dynamic])").forEach((el) => {
       const k = el.getAttribute("data-i18n");
-      if (k) el.textContent = t(k);
+      if (!k) return;
+      if (el.querySelector("[data-i18n], [data-i18n-placeholder], input, select, textarea, button, table, ul, ol")) {
+        return;
+      }
+      el.textContent = t(k);
     });
     scope.querySelectorAll("[data-i18n-placeholder]").forEach((el) => {
       const k = el.getAttribute("data-i18n-placeholder");

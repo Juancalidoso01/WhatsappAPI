@@ -7,6 +7,7 @@
   "billing": { "label": "Billing", "short": "Costs", "title": "Billing" },
   "workspace": { "label": "Workspace", "short": "Profile", "title": "Workspace" },
   "collapse": "Collapse menu",
+  "expand": "Expand menu",
   "mainMenu": "Main menu",
   "flyout": {
     "profile": "WhatsApp profile",

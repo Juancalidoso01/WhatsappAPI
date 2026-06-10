@@ -279,13 +279,13 @@
               <span id="tplSyncMetaHint" class="muted sm"></span>
             </div>
           </div>
-          <div id="tplPresetCards" class="tpl-preset-cards" data-i18n="templates.loadingDrafts">Cargando borradores…</div>
+          <div id="tplPresetCards" class="tpl-preset-cards" data-i18n-dynamic>Cargando borradores…</div>
         </section>
 
         <details class="tpl-var-catalog" id="tplVarCatalog">
           <summary class="tpl-var-catalog-summary"><span data-i18n="templates.varCatalogSummary">Biblioteca de variables</span> <span class="muted" data-i18n="templates.varCatalogSummaryHint">· referencia para operadores</span></summary>
           <p class="muted sm tpl-var-catalog-intro" data-i18n="templates.varCatalogIntro">Solo guía humana: qué dato va en cada campo y formato correcto. <strong>No cambia</strong> las plantillas ya aprobadas en Meta. Las marcadas «Futuro» son para cuando pidamos nuevas aprobaciones.</p>
-          <div id="tplVarCatalogBody" class="tpl-var-catalog-body muted sm" data-i18n="common.loading">Cargando…</div>
+          <div id="tplVarCatalogBody" class="tpl-var-catalog-body muted sm" data-i18n-dynamic>Cargando…</div>
         </details>
 
         <h2 class="section-title tpl-approved-title" data-i18n="templates.approvedTitle">Plantillas en tu cuenta</h2>
@@ -329,7 +329,7 @@
 
           <section class="bulk-panel wide">
             <h2 class="section-title"><span data-i18n="bulk.campaignsTitle">Cargas</span> <span class="muted" id="bulkListHint"></span></h2>
-            <div id="bulkCampaignList" class="bulk-campaign-list muted" data-i18n="bulk.loading">Cargando…</div>
+            <div id="bulkCampaignList" class="bulk-campaign-list muted" data-i18n-dynamic>Cargando…</div>
           </section>
         </div>
 
@@ -477,7 +477,7 @@
           <div class="ws-card">
             <h2 data-i18n="workspace.languageTitle">Idioma del portal</h2>
             <p class="muted" data-i18n="workspace.languageHint">Elige el idioma de la interfaz. No afecta el idioma de las plantillas de WhatsApp enviadas a Meta.</p>
-            <label data-i18n="workspace.languageLabel">Idioma preferido
+            <label><span data-i18n="workspace.languageLabel">Idioma preferido</span>
               <select id="wsPortalLang" data-i18n-options="workspace">
                 <option value="es" data-i18n-opt="langEs">Español</option>
                 <option value="en" data-i18n-opt="langEn">English</option>
@@ -583,7 +583,7 @@
                 </div>
                 <button type="button" id="flowAddBtn" class="btn-primary sm" data-i18n="flows.addFlow">+ Agregar flujo</button>
               </div>
-              <div id="flowsList" class="flows-list muted" data-i18n="flows.loading">Cargando…</div>
+              <div id="flowsList" class="flows-list muted" data-i18n-dynamic>Cargando…</div>
             </section>
 
             <div class="flows-detail-col">
@@ -659,7 +659,7 @@
 
             <div id="flowCreatePicker" class="flow-create-picker hidden">
               <p class="muted sm" data-i18n="flows.studio.presetsHint">Atajos listos para casos frecuentes (autorización de pago, encuestas, etc.)</p>
-              <div id="flowUseCaseGrid" class="flow-use-case-grid" data-i18n="flows.loading">Cargando…</div>
+              <div id="flowUseCaseGrid" class="flow-use-case-grid" data-i18n-dynamic>Cargando…</div>
             </div>
 
             <div class="flow-studio-body">
@@ -738,7 +738,7 @@
                   </tr>
                 </thead>
                 <tbody id="flowActivityRows">
-                  <tr><td colspan="6" class="muted center" data-i18n="flows.loading">Cargando…</td></tr>
+                  <tr><td colspan="6" class="muted center" data-i18n-dynamic>Cargando…</td></tr>
                 </tbody>
               </table>
             </div>

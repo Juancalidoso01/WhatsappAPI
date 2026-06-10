@@ -7,6 +7,7 @@
   "billing": { "label": "Биллинг", "short": "Расходы", "title": "Биллинг" },
   "workspace": { "label": "Рабочее пространство", "short": "Профиль", "title": "Рабочее пространство" },
   "collapse": "Свернуть меню",
+  "expand": "Развернуть меню",
   "mainMenu": "Главное меню",
   "flyout": {
     "profile": "Профиль WhatsApp",
