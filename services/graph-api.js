@@ -326,6 +326,22 @@ module.exports = class GraphApi {
     return json;
   }
 
+  static async updateFlowJson(flowId, flowJson) {
+    const jsonStr = typeof flowJson === "string" ? flowJson : JSON.stringify(flowJson);
+    const form = new FormData();
+    form.append("name", "flow.json");
+    form.append("asset_type", "FLOW_JSON");
+    form.append("file", new Blob([jsonStr], { type: "application/json" }), "flow.json");
+
+    const url = `https://graph.facebook.com/v21.0/${flowId}/assets?access_token=${config.accessToken}`;
+    const res = await fetch(url, { method: "POST", body: form });
+    const json = await res.json();
+    if (json.error) {
+      throw new Error(json.error.error_user_msg || json.error.message || "Error al actualizar Flow JSON.");
+    }
+    return json;
+  }
+
   static async uploadFlowPublicKey(phoneNumberId, publicKeyPem) {
     const url = `https://graph.facebook.com/v21.0/${phoneNumberId}/whatsapp_business_encryption?access_token=${config.accessToken}`;
     const res = await fetch(url, {

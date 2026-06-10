@@ -923,6 +923,38 @@ app.get('/api/flows/:id', async (req, res) => {
   }
 });
 
+app.get('/api/flows/:id/send-profile', async (req, res) => {
+  if (!config.accessToken) return res.status(400).json({ ok: false, error: 'Falta ACCESS_TOKEN.' });
+  try {
+    const flow = await GraphApi.getFlow(req.params.id, 'id,name,status,endpoint_uri');
+    const profile = flowSamples.resolveSendProfileByFlowName(flow.name);
+    res.json({
+      ok: true,
+      flowId: req.params.id,
+      flowName: flow.name || '',
+      flowStatus: flow.status || '',
+      profile: profile || {
+        sampleKey: null,
+        label: flow.name || '',
+        dynamic: Boolean(flow.endpoint_uri),
+        flowAction: flow.endpoint_uri ? 'data_exchange' : 'navigate',
+        defaultScreen: 'WELCOME_SCREEN',
+        defaultCta: 'Abrir',
+        sendDefaults: {
+          headerText: '',
+          bodyText: '',
+          footerText: '',
+          cta: 'Abrir',
+          screen: 'WELCOME_SCREEN',
+        },
+        screens: [],
+      },
+    });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: String(err.message || err) });
+  }
+});
+
 app.post('/api/flows', apiJson, async (req, res) => {
   const { sample, name, publish } = req.body || {};
   if (!config.accessToken || !config.wabaId) {
@@ -984,7 +1016,7 @@ app.post('/api/flows/:id/publish', async (req, res) => {
 });
 
 app.post('/api/flows/:id/send', apiJson, async (req, res) => {
-  const { phone, bodyText, cta, screen, flowToken, mode, flowAction } = req.body || {};
+  const { phone, bodyText, cta, screen, flowToken, mode, flowAction, headerText, footerText } = req.body || {};
   if (!phone) return res.status(400).json({ ok: false, error: 'Se requiere "phone".' });
   if (!config.phoneNumberId || !config.accessToken) {
     return res.status(400).json({ ok: false, error: 'Falta PHONE_NUMBER_ID o ACCESS_TOKEN.' });
@@ -1008,6 +1040,8 @@ app.post('/api/flows/:id/send', apiJson, async (req, res) => {
       cta,
       bodyText,
       screen,
+      headerText,
+      footerText,
       mode: sendMode === 'draft' ? 'draft' : undefined,
       flowAction: action,
     });

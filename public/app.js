@@ -60,6 +60,7 @@ const state = {
   cardImageUrl: null,
   flowsDetailTab: "preview",
   activeFlowPerformance: null,
+  flowSendProfile: null,
   activeActivityRow: null,
   flowActivity: [],
   activePhone: null,
@@ -3894,8 +3895,6 @@ async function createFlowFromStudio() {
   await loadFlows();
   closeFlowCreate();
   if (res.flow && res.flow.id) {
-    if (res.defaultScreen) $("flowSendScreen").value = res.defaultScreen;
-    if (res.defaultCta) $("flowSendCta").value = res.defaultCta;
     selectFlow(res.flow.id);
     openTemplateFromFlow(def);
   }
@@ -4146,12 +4145,81 @@ function renderFlowsList() {
   );
 }
 
+function renderFlowSendJourney(screens, activeId) {
+  const box = $("flowSendJourney");
+  if (!box) return;
+  if (!screens || !screens.length) {
+    box.innerHTML = `<p class="muted sm">${escapeHtml(t("flows.sendUnknownFlow"))}</p>`;
+    return;
+  }
+  const steps = screens.map((s) => {
+    const active = s.id === activeId ? " active" : "";
+    const terminal = s.terminal ? " terminal" : "";
+    const start = s.id === activeId ? ` · ${escapeHtml(t("flows.sendJourneyStart"))}` : "";
+    return `<span class="flows-send-journey-step${active}${terminal}" title="${escapeHtml(s.id)}">${escapeHtml(t("flows.sendJourneyStep", { n: s.index, title: s.title }))}${start}</span>`;
+  }).join("");
+  box.innerHTML = `<strong>${escapeHtml(t("flows.sendJourneyTitle"))}</strong><div class="flows-send-journey-steps">${steps}</div>`;
+}
+
+function populateFlowSendScreenOptions(screens, selectedId) {
+  const sel = $("flowSendScreen");
+  if (!sel) return;
+  const list = screens && screens.length
+    ? screens
+    : [{ id: selectedId || "WELCOME_SCREEN", title: selectedId || "WELCOME_SCREEN", index: 1 }];
+  sel.innerHTML = list.map((s) =>
+    `<option value="${escapeHtml(s.id)}"${s.id === selectedId ? " selected" : ""}>${escapeHtml(`${s.index}. ${s.title}`)} (${escapeHtml(s.id)})</option>`
+  ).join("");
+}
+
+function updateFlowSendPreview() {
+  const profile = state.flowSendProfile;
+  const defaults = (profile && profile.sendDefaults) || {};
+  renderWaMessagePreview($("flowSendPreview"), {
+    headerText: defaults.headerText || "",
+    bodyText: ($("flowSendBody") && $("flowSendBody").value.trim()) || defaults.bodyText || "—",
+    footerText: defaults.footerText || "",
+    flowCta: ($("flowSendCta") && $("flowSendCta").value.trim()) || defaults.cta || t("flows.send"),
+  });
+  renderFlowSendJourney(
+    profile && profile.screens,
+    $("flowSendScreen") ? $("flowSendScreen").value : (defaults.screen || "")
+  );
+}
+
+function applyFlowSendProfile(profileRes) {
+  const profile = (profileRes && profileRes.profile) || null;
+  state.flowSendProfile = profile;
+  const defaults = (profile && profile.sendDefaults) || {};
+  const intro = $("flowSendIntro");
+  if (intro) {
+    intro.textContent = profile && profile.sampleKey
+      ? t("flows.sendIntro")
+      : t("flows.sendUnknownFlow");
+  }
+  if ($("flowSendBody") && defaults.bodyText) $("flowSendBody").value = defaults.bodyText;
+  if ($("flowSendCta") && (defaults.cta || profile?.defaultCta)) {
+    $("flowSendCta").value = defaults.cta || profile.defaultCta;
+  }
+  const screenId = defaults.screen || profile?.defaultScreen || "WELCOME_SCREEN";
+  populateFlowSendScreenOptions(profile && profile.screens, screenId);
+  updateFlowSendPreview();
+}
+
+async function loadFlowSendProfile(flowId) {
+  const res = await api(`/api/flows/${encodeURIComponent(flowId)}/send-profile`);
+  if (!res.ok) {
+    state.flowSendProfile = null;
+    updateFlowSendPreview();
+    return;
+  }
+  applyFlowSendProfile(res);
+}
+
 async function selectFlow(id) {
   state.activeFlowId = id;
   renderFlowsList();
   setFlowsTab("mis");
-  const f = state.flows.find((x) => x.id === id);
-
   const detail = await api(`/api/flows/${encodeURIComponent(id)}`);
   state.activeFlowDetail = detail.ok ? detail.flow : null;
   if (detail.ok && detail.flow && detail.flow.preview && detail.flow.preview.preview_url) {
@@ -4162,11 +4230,7 @@ async function selectFlow(id) {
     $("flowPreviewLink").classList.add("hidden");
   }
 
-  await loadFlowDetail(id);
-  if (f && f.name && (f.name.includes("autorizacion") || f.name.includes("3ds"))) {
-    $("flowSendScreen").value = "AUTH";
-    $("flowSendCta").value = "Confirmar pago";
-  }
+  await Promise.all([loadFlowDetail(id), loadFlowSendProfile(id)]);
 }
 
 async function createFlowSampleKey(sample) {
@@ -4181,8 +4245,6 @@ async function createFlowSampleKey(sample) {
   await loadFlows();
   closeFlowCreate();
   if (res.flow && res.flow.id) {
-    if (res.defaultScreen) $("flowSendScreen").value = res.defaultScreen;
-    if (res.defaultCta) $("flowSendCta").value = res.defaultCta;
     selectFlow(res.flow.id);
   }
 }
@@ -4196,13 +4258,17 @@ async function sendActiveFlow() {
   if (!id) { toast(t("toast.selectFlow"), "error"); return; }
   const phone = $("flowSendPhone").value.trim();
   if (!phone) { toast(t("toast.phoneRequired"), "error"); return; }
-  const isDynamic = state.activeFlowDetail && state.activeFlowDetail.endpoint_uri;
+  const profile = state.flowSendProfile;
+  const defaults = (profile && profile.sendDefaults) || {};
+  const isDynamic = (profile && profile.dynamic) || (state.activeFlowDetail && state.activeFlowDetail.endpoint_uri);
   const res = await post(`/api/flows/${encodeURIComponent(id)}/send`, {
     phone,
     bodyText: $("flowSendBody").value.trim(),
     cta: $("flowSendCta").value.trim(),
     screen: $("flowSendScreen").value.trim(),
-    flowAction: isDynamic ? "data_exchange" : undefined,
+    headerText: defaults.headerText || undefined,
+    footerText: defaults.footerText || undefined,
+    flowAction: isDynamic ? "data_exchange" : (profile && profile.flowAction) || undefined,
   });
   if (!res.ok) {
     toast(res.hint || res.error || t("toast.sendFailedGeneric"), "error");
@@ -4719,6 +4785,12 @@ function bindEvents() {
     if (el) el.addEventListener("input", updateTpPreview);
   });
   $("flowSendBtn")?.addEventListener("click", sendActiveFlow);
+  ["flowSendBody", "flowSendCta", "flowSendScreen"].forEach((id) => {
+    const el = $(id);
+    if (!el) return;
+    el.addEventListener("input", updateFlowSendPreview);
+    el.addEventListener("change", updateFlowSendPreview);
+  });
   $("flowPublishBtn")?.addEventListener("click", publishActiveFlow);
   $("flowRefreshResponses")?.addEventListener("click", loadFlowActivity);
   if ($("flowEndpointSetupBtn")) $("flowEndpointSetupBtn").addEventListener("click", setupFlowEndpoint);
