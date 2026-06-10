@@ -599,8 +599,14 @@ function resolveSendProfileByFlowName(flowName) {
   const defaults = sample.sendDefaults || {};
   const defaultScreen = defaults.screen || sample.defaultScreen || screens[0]?.id || "WELCOME_SCREEN";
 
+  const PRESET_BY_SAMPLE = {
+    tarjeta_credito: "punto_pago_tarjeta_credito_bienvenida",
+    payment_auth: "punto_pago_autorizacion_pago",
+  };
+
   return {
     sampleKey: key,
+    presetKey: PRESET_BY_SAMPLE[key] || null,
     label: sample.description || sample.name,
     dynamic: Boolean(sample.dynamic),
     flowAction: sample.flowAction || "navigate",

@@ -3662,6 +3662,7 @@ async function loadFlowDetail(id) {
   setFlowsDetailTab(state.flowsDetailTab || "preview");
   $("flowsDetailPanel").classList.remove("hidden");
   $("flowsEmptyDetail").classList.add("hidden");
+  renderFlowLaunchPanel(perfRes);
 }
 
 const fsState = {
@@ -4366,6 +4367,229 @@ function applyFlowSendProfile(profileRes) {
   const screenId = defaults.screen || profile?.defaultScreen || "WELCOME_SCREEN";
   if ($("flowViewScreen")) $("flowViewScreen").value = screenId;
   updateFlowViewPreview();
+  if (state.activeFlowId && !$("flowsDetailPanel")?.classList.contains("hidden")) {
+    renderFlowLaunchPanel(state.activeFlowPerformance);
+  }
+}
+
+function buildFlowLaunchContext(perfRes) {
+  const profile = state.flowSendProfile || {};
+  const presetKey = profile.presetKey || null;
+  const preset = presetKey ? state.templatePresets.find((p) => p.key === presetKey) : null;
+  const meta = presetKey ? presetMetaForKey(presetKey) : null;
+  const flow = state.flows.find((x) => x.id === state.activeFlowId) || (perfRes && perfRes.flow) || state.activeFlowDetail || {};
+  const flowStatus = String(flow.status || (perfRes && perfRes.flow && perfRes.flow.status) || "").toUpperCase();
+  const flowPublished = flowStatus === "PUBLISHED";
+  const textApproved = Boolean(meta && meta.text && meta.text.approved);
+  const flowApproved = Boolean(meta && meta.flow && meta.flow.approved && meta.flow.hasFlowButton);
+  const useFlowTemplate = flowApproved;
+  const effectiveTemplateName = preset
+    ? (useFlowTemplate ? preset.templateFlowName : preset.name)
+    : null;
+  const canSend = Boolean(preset && textApproved && flowPublished);
+  return {
+    presetKey,
+    preset,
+    meta,
+    flowPublished,
+    textApproved,
+    flowApproved,
+    useFlowTemplate,
+    effectiveTemplateName,
+    canSend,
+    hasFlowVariant: Boolean(preset && preset.templateFlowName),
+  };
+}
+
+function flowLaunchChip(label, kind) {
+  return `<span class="flow-launch-chip ${kind}">${escapeHtml(label)}</span>`;
+}
+
+async function renderFlowLaunchPanel(perfRes) {
+  const panel = $("flowLaunchPanel");
+  if (!panel || !state.activeFlowId) return;
+  if (!state.templatePresets.length || !state.templates.length) {
+    await Promise.all([
+      state.templatePresets.length ? Promise.resolve() : loadTemplatePresets(),
+      state.templates.length ? Promise.resolve() : loadTemplates(),
+    ]);
+  }
+  const ctx = buildFlowLaunchContext(perfRes);
+  state.flowLaunchContext = ctx;
+  if (!ctx.presetKey || !ctx.preset) {
+    panel.classList.remove("hidden");
+    panel.innerHTML = `
+      <h4>${escapeHtml(t("flows.launch.panelTitle"))}</h4>
+      <p class="muted sm">${escapeHtml(t("flows.launch.noPreset"))}</p>
+      <div class="flow-launch-actions">
+        <button type="button" class="btn-ghost sm" id="flowLaunchViewBtn">${escapeHtml(t("flows.launch.viewTour"))}</button>
+      </div>`;
+    $("flowLaunchViewBtn")?.addEventListener("click", openFlowViewModal);
+    return;
+  }
+  const chips = [
+    flowLaunchChip(t("flows.launch.chipFlow"), ctx.flowPublished ? "ok" : "off"),
+    flowLaunchChip(t("flows.launch.chipTextTpl"), ctx.textApproved ? "ok" : "pending"),
+  ];
+  if (ctx.hasFlowVariant) {
+    chips.push(flowLaunchChip(t("flows.launch.chipFlowTpl"), ctx.flowApproved ? "ok" : "pending"));
+  }
+  panel.classList.remove("hidden");
+  panel.innerHTML = `
+    <h4>${escapeHtml(t("flows.launch.panelTitle"))}</h4>
+    <div class="flow-launch-chips">${chips.join("")}</div>
+    <p class="muted sm">${escapeHtml(t("flows.launch.panelIntro"))}</p>
+    <div class="flow-launch-actions">
+      <button type="button" class="btn-primary" id="flowLaunchOpenBtn" ${ctx.canSend ? "" : "disabled"}>${escapeHtml(t("flows.launch.sendPrimary"))}</button>
+      <button type="button" class="btn-ghost sm" id="flowLaunchViewBtn">${escapeHtml(t("flows.launch.viewTour"))}</button>
+      ${ctx.hasFlowVariant && !ctx.flowApproved ? `<button type="button" class="btn-ghost sm" id="flowLaunchRequestTplBtn">${escapeHtml(t("flows.launch.requestFlowTpl"))}</button>` : ""}
+    </div>`;
+  $("flowLaunchOpenBtn")?.addEventListener("click", openFlowLaunchModal);
+  $("flowLaunchViewBtn")?.addEventListener("click", openFlowViewModal);
+  $("flowLaunchRequestTplBtn")?.addEventListener("click", () => openTplDraftModal(ctx.presetKey));
+}
+
+function collectFlowLaunchOverrides() {
+  const box = $("flVarFields");
+  const overrides = {};
+  if (!box) return overrides;
+  box.querySelectorAll("[data-fl-var]").forEach((el) => {
+    const key = el.dataset.flVar;
+    const idx = el.dataset.flIndex;
+    const val = el.value.trim();
+    if (!val) return;
+    if (key) overrides[key] = val;
+    if (idx) overrides[`var${idx}`] = val;
+  });
+  return overrides;
+}
+
+function collectFlComponents(tpl) {
+  const box = $("flVarFields");
+  const val = (f) => {
+    const el = box && box.querySelector(`[data-field="${f}"]`);
+    if (el && el.value.trim()) return el.value.trim();
+    const m = f.match(/^body(\d+)$/);
+    if (m && box) {
+      const byIdx = box.querySelector(`[data-fl-index="${m[1]}"]`);
+      if (byIdx && byIdx.value.trim()) return byIdx.value.trim();
+    }
+    return "";
+  };
+  const comps = [];
+  const hs = headerSpec(tpl);
+  if (hs && hs.kind === "text" && val("header")) comps.push({ type: "header", parameters: [{ type: "text", text: val("header") }] });
+  if (hs && hs.kind === "media" && val("headerMedia")) {
+    const k = hs.format.toLowerCase();
+    comps.push({ type: "header", parameters: [{ type: k, [k]: { link: val("headerMedia") } }] });
+  }
+  const n = bodyVarCount(tpl);
+  if (n > 0) {
+    const params = [];
+    for (let i = 1; i <= n; i++) params.push({ type: "text", text: val("body" + i) || " " });
+    comps.push({ type: "body", parameters: params });
+  }
+  buttonSpecs(tpl).forEach((s) => {
+    if (s.kind === "url") comps.push({ type: "button", sub_type: "url", index: String(s.idx), parameters: [{ type: "text", text: val("btnurl" + s.idx) }] });
+    else if (s.kind === "copy") comps.push({ type: "button", sub_type: "copy_code", index: String(s.idx), parameters: [{ type: "coupon_code", coupon_code: val("btncode" + s.idx) }] });
+    else if (s.kind === "flow") comps.push({ type: "button", sub_type: "flow", index: String(s.idx), parameters: [{ type: "action", action: { flow_token: val("flow" + s.idx) || "unused" } }] });
+  });
+  return comps;
+}
+
+function renderFlowLaunchVarFields(preset) {
+  const box = $("flVarFields");
+  if (!box) return;
+  const vars = (preset && preset.variables) || [];
+  if (!vars.length) {
+    box.innerHTML = "";
+    return;
+  }
+  box.innerHTML = vars.map((v, i) => `
+    <label><span>${escapeHtml(v.label || v.key)}</span>
+      <input type="text" data-fl-var="${escapeHtml(v.key)}" data-fl-index="${i + 1}" placeholder="${escapeHtml(v.example || "")}" ${v.maxLength ? `maxlength="${v.maxLength}"` : ""} />
+    </label>`).join("");
+  box.querySelectorAll("input").forEach((inp) => inp.addEventListener("input", updateFlowLaunchPreview));
+}
+
+function flowLaunchStatusMessage(ctx) {
+  if (!ctx.canSend) return { cls: "partial", text: t("flows.launch.blocked") };
+  if (ctx.flowApproved) return { cls: "ready", text: t("flows.launch.readyFull", { tpl: ctx.effectiveTemplateName }) };
+  if (ctx.hasFlowVariant) return { cls: "partial", text: t("flows.launch.readyText", { tpl: ctx.effectiveTemplateName }) };
+  return { cls: "ready", text: t("flows.launch.readyTextOnly", { tpl: ctx.effectiveTemplateName }) };
+}
+
+async function updateFlowLaunchPreview() {
+  const ctx = state.flowLaunchContext || buildFlowLaunchContext(state.activeFlowPerformance);
+  const waBox = $("flWaPreview");
+  const flowWrap = $("flFlowPreviewWrap");
+  if (!waBox || !ctx.preset) return;
+  const q = new URLSearchParams(collectFlowLaunchOverrides()).toString();
+  const res = await api(`/api/templates/presets/${encodeURIComponent(ctx.preset.key)}${q ? `?${q}` : ""}`);
+  const preview = res && res.preview;
+  const showFlow = ctx.useFlowTemplate || templateHasFlowButtonMeta(tplByName(ctx.effectiveTemplateName));
+  renderWaMessagePreview(waBox, {
+    headerText: (preview && preview.headerText) || "",
+    bodyText: (preview && preview.bodyText) || "—",
+    footerText: (preview && preview.footerText) || "",
+    flowCta: showFlow ? ((preview && preview.flowCta) || ctx.preset.flowCta) : "",
+  });
+  if (flowWrap && showFlow && state.flowSendProfile) {
+    flowWrap.classList.remove("hidden");
+    const screenId = state.flowSendProfile.defaultScreen || "INTRO";
+    renderFlowScreenPreview($("flFlowPreview"), screenId, state.flowSendProfile);
+  } else if (flowWrap) {
+    flowWrap.classList.add("hidden");
+  }
+}
+
+async function openFlowLaunchModal() {
+  const ctx = state.flowLaunchContext || buildFlowLaunchContext(state.activeFlowPerformance);
+  if (!ctx.canSend) {
+    toast(t("flows.launch.blocked"), "error");
+    return;
+  }
+  if (!state.templates.length) await loadTemplates();
+  const flowName = ($("flowsDetailName") && $("flowsDetailName").textContent) || "";
+  const sub = $("flowLaunchSubtitle");
+  if (sub) sub.textContent = flowName;
+  const status = flowLaunchStatusMessage(ctx);
+  const statusEl = $("flowLaunchStatus");
+  if (statusEl) {
+    statusEl.className = `flow-launch-status ${status.cls}`;
+    statusEl.textContent = status.text;
+  }
+  renderFlowLaunchVarFields(ctx.preset);
+  if ($("flPhone") && state.activePhone && !$("flPhone").value) $("flPhone").value = state.activePhone;
+  await updateFlowLaunchPreview();
+  showModal("modalFlowLaunch");
+}
+
+async function sendFlowLaunch() {
+  const ctx = state.flowLaunchContext || buildFlowLaunchContext(state.activeFlowPerformance);
+  const phone = ($("flPhone") && $("flPhone").value || "").replace(/[^0-9]/g, "");
+  const tplName = ctx.effectiveTemplateName;
+  if (!phone || !tplName) { toast(t("toast.phoneAndTemplateRequired"), "error"); return; }
+  const tpl = tplByName(tplName);
+  const overrides = collectFlowLaunchOverrides();
+  const name = overrides.nombre_cliente || overrides.var1 || "";
+  const components = tpl ? collectFlComponents(tpl) : [];
+  const res = await post("/api/send-template", {
+    phone,
+    name,
+    template: tplName,
+    language: tpl ? tpl.language : "es",
+    components,
+  });
+  if (res.ok) {
+    closeModals();
+    toast(t("flows.launch.sent"), "ok");
+    switchScreen("chats");
+    await loadConversations();
+    openConversation(phone, name || phone);
+  } else {
+    toast(t("toast.sendFailed", { error: res.error || res.warning || "error" }), "error");
+  }
 }
 
 async function loadFlowSendProfile(flowId) {
@@ -4943,8 +5167,9 @@ function bindEvents() {
     const el = $(id);
     if (el) el.addEventListener("input", updateTpPreview);
   });
-  $("flowViewTourBtn")?.addEventListener("click", openFlowViewModal);
   $("flowPublishBtn")?.addEventListener("click", publishActiveFlow);
+  $("flSendBtn")?.addEventListener("click", sendFlowLaunch);
+  $("flPhone")?.addEventListener("input", updateFlowLaunchPreview);
   $("flowRefreshResponses")?.addEventListener("click", loadFlowActivity);
   if ($("flowEndpointSetupBtn")) $("flowEndpointSetupBtn").addEventListener("click", setupFlowEndpoint);
   if ($("payAuthSendBtn")) $("payAuthSendBtn").addEventListener("click", sendPaymentAuthTest);
