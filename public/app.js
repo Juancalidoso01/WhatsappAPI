@@ -9,6 +9,27 @@ const localeDateTime = (ms) => {
   const tag = loc === "ru" ? "ru" : loc === "en" ? "en-US" : "es";
   return new Date(ms).toLocaleString(tag, { dateStyle: "medium", timeStyle: "short" });
 };
+const localeActivityDate = (ts) => {
+  if (!ts) return "—";
+  const tag = localeCode() === "ru" ? "ru" : localeCode() === "en" ? "en-US" : "es";
+  return new Date(ts).toLocaleString(tag, { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
+};
+const flowStatusLabel = (st) => {
+  const key = `flows.status.${(st || "").toUpperCase()}`;
+  const lbl = t(key);
+  return lbl !== key ? lbl : (st || "—");
+};
+const flowKindLabel = (k) => {
+  const key = `flows.kind.${k}`;
+  const lbl = t(key);
+  return lbl !== key ? lbl : t("flows.kind.flow");
+};
+const flowDecisionLabel = (decision) => {
+  if (decision === "authorize") return t("flows.decision.authorized");
+  if (decision) return t("flows.decision.denied");
+  return t("flows.decision.pending");
+};
+const fsLayoutLabel = (id) => t(`flows.layouts.${id}`) || id;
 const LEAD_TYPE_VALUES = ["", "prospecto", "cliente", "lead_caliente", "lead_frio", "soporte", "otro"];
 const LEAD_USER_VALUES = ["", "titular", "beneficiario", "representante", "empleado", "otro"];
 
@@ -162,6 +183,14 @@ async function onLocaleChange() {
     loadFlowCapability();
     renderFlowsList();
     if (state.activeFlowId) loadFlowDetail(state.activeFlowId);
+    if (!$("flowsPanelCrear")?.classList.contains("hidden")) renderFlowStudio();
+    if (!$("flowsPanelActividad")?.classList.contains("hidden")) loadFlowActivity();
+    if (!$("flowsPanelProbar")?.classList.contains("hidden")) {
+      updatePayAuthFlowPreview();
+      loadPaymentAuthPanel();
+    }
+    renderFlowUseCaseGrid();
+    if (window.I18n) I18n.applyDom($("screenFlows"));
   }
   if (state.currentScreen === "integration" && window.IntegrationApiModule) {
     IntegrationApiModule.renderGuide($("screenIntegration"));
@@ -2788,18 +2817,17 @@ async function initWorkspaceScreen() {
 }
 
 /* ---------- WhatsApp Flows ---------- */
-const FLOW_STATUS_LABELS = { DRAFT: "Borrador", PUBLISHED: "Publicado", DEPRECATED: "Deprecado", BLOCKED: "Bloqueado", THROTTLED: "Limitado" };
 
 function getPayAuthFlowData() {
   const amount = formatPreviewAmount(($("payAuthAmount") || {}).value || "45.90");
   const card4 = ($("payAuthCard4") || {}).value || "4821";
   const merchant = ($("payAuthMerchant") || {}).value || "Supermercado XO";
-  const now = new Date().toLocaleString("es-PA", { dateStyle: "medium", timeStyle: "short" });
+  const now = localeDateTime(Date.now());
   const cardImg = state.cardImageUrl || "/assets/punto-pago-card.png";
   return {
     merchant,
     amount,
-    card_label: `Tarjeta Punto Pago •••• ${card4}`,
+    card_label: t("flows.preview.cardLabel", { last4: card4 }),
     card_image: cardImg + (String(cardImg).includes("?") ? "&" : "?") + "t=" + Date.now(),
     when: now,
   };
@@ -2808,46 +2836,46 @@ function getPayAuthFlowData() {
 function renderFlowPhonePreview(container, screen, data) {
   if (!container) return;
   const d = data || getPayAuthFlowData();
-  const title = screen === "RESULT" ? "Resultado" : "Verificación de pago";
+  const title = screen === "RESULT" ? t("flows.preview.resultTitle") : t("flows.preview.verifyTitle");
   let bodyHtml = "";
-  let footerLabel = "Continuar";
+  let footerLabel = t("flows.studio.continue");
 
   if (screen === "AUTH") {
     bodyHtml = `
-      <p class="flow-phone-brand">Punto Pago</p>
-      <h3>Confirma tu transacción</h3>
-      <p class="flow-phone-security">Por tu seguridad, valida este pago antes de procesarlo. Es el mismo paso de verificación que conoces como 3D Secure.</p>
+      <p class="flow-phone-brand">${escapeHtml(t("flows.preview.brand"))}</p>
+      <h3>${escapeHtml(t("flows.preview.confirmTx"))}</h3>
+      <p class="flow-phone-security">${escapeHtml(t("flows.preview.security"))}</p>
       <img class="flow-phone-img" src="${escapeHtml(d.card_image)}" alt="Tarjeta" onerror="this.src='/assets/punto-pago-card.png'" />
-      <p>Comercio: ${escapeHtml(d.merchant)}</p>
-      <p>Monto: ${escapeHtml(d.amount)}</p>
+      <p>${escapeHtml(t("flows.preview.merchant"))}: ${escapeHtml(d.merchant)}</p>
+      <p>${escapeHtml(t("flows.preview.amount"))}: ${escapeHtml(d.amount)}</p>
       <p>${escapeHtml(d.card_label)}</p>
-      <p>Fecha: ${escapeHtml(d.when)}</p>
-      <p class="flow-phone-caption">Si no reconoces esta compra, elige Rechazar y contáctanos de inmediato.</p>
-      <p class="flow-phone-caption">Elige una opción y pulsa Continuar para enviar tu respuesta.</p>
+      <p>${escapeHtml(t("flows.preview.date"))}: ${escapeHtml(d.when)}</p>
+      <p class="flow-phone-caption">${escapeHtml(t("flows.preview.unrecognized"))}</p>
+      <p class="flow-phone-caption">${escapeHtml(t("flows.preview.chooseOption"))}</p>
       <div class="flow-phone-radio">
-        <label class="selected"><span class="dot"></span> Aprobar transacción</label>
-        <label><span class="dot"></span> Rechazar transacción</label>
+        <label class="selected"><span class="dot"></span> ${escapeHtml(t("flows.preview.approve"))}</label>
+        <label><span class="dot"></span> ${escapeHtml(t("flows.preview.reject"))}</label>
       </div>`;
   } else {
     bodyHtml = `
-      <p class="flow-phone-brand">Punto Pago</p>
-      <h3>Pago aprobado</h3>
-      <p>El comercio procesará tu pago en breve.</p>
-      <p>Comercio: ${escapeHtml(d.merchant)}</p>
-      <p>Monto: ${escapeHtml(d.amount)}</p>`;
-    footerLabel = "Cerrar";
+      <p class="flow-phone-brand">${escapeHtml(t("flows.preview.brand"))}</p>
+      <h3>${escapeHtml(t("flows.preview.approvedTitle"))}</h3>
+      <p>${escapeHtml(t("flows.preview.approvedBody"))}</p>
+      <p>${escapeHtml(t("flows.preview.merchant"))}: ${escapeHtml(d.merchant)}</p>
+      <p>${escapeHtml(t("flows.preview.amount"))}: ${escapeHtml(d.amount)}</p>`;
+    footerLabel = t("flows.studio.close");
   }
 
   container.className = "flow-phone flow-phone-pp";
   container.innerHTML = `
     <div class="flow-phone-nav flow-phone-nav-pp">
-      <span class="flow-phone-cancel">Cancelar</span>
+      <span class="flow-phone-cancel">${escapeHtml(t("flows.preview.cancel"))}</span>
       <span class="flow-phone-title">${escapeHtml(title)}</span>
       <span class="flow-phone-menu">⋯</span>
     </div>
     <div class="flow-phone-body">${bodyHtml}</div>
     <div class="flow-phone-footer"><button type="button">${escapeHtml(footerLabel)}</button></div>
-    <div class="flow-phone-managed">Administrado por ${escapeHtml(brandDisplayName())}</div>`;
+    <div class="flow-phone-managed">${escapeHtml(t("flows.preview.managedBy", { brand: brandDisplayName() }))}</div>`;
 }
 
 function updatePayAuthFlowPreview() {
@@ -2869,14 +2897,14 @@ function renderFlowStatsCards(stats, isPaymentAuth) {
   const box = $("flowsStatsCards");
   if (!box || !stats) return;
   const cards = [
-    [stats.sent, "Enviados"],
-    [stats.opened, "Abiertos"],
-    [stats.responded, "Completados"],
-    [`${stats.completionRate || 0}%`, "Tasa completado"],
+    [stats.sent, t("flows.stats.sent")],
+    [stats.opened, t("flows.stats.opened")],
+    [stats.responded, t("flows.stats.responded")],
+    [`${stats.completionRate || 0}%`, t("flows.stats.completionRate")],
   ];
   if (isPaymentAuth) {
-    cards[2] = [stats.authorized, "Autorizados"];
-    cards[3] = [stats.denied, "Rechazados"];
+    cards[2] = [stats.authorized, t("flows.stats.authorized")];
+    cards[3] = [stats.denied, t("flows.stats.denied")];
   }
   box.innerHTML = cards.map(([n, l]) =>
     `<div class="flow-stat-card"><span class="n">${escapeHtml(String(n))}</span><span class="l">${escapeHtml(l)}</span></div>`
@@ -2898,14 +2926,14 @@ function renderFlowActivityList(rows, emptyMsg) {
   if (!rows || !rows.length) return `<p class="muted sm">${escapeHtml(emptyMsg)}</p>`;
   return `<div class="flow-activity-list">${rows.map((r) => {
     if (r.sentAt) {
-      return `<div class="flow-activity-row">📤 +${escapeHtml(r.phone)} · ${escapeHtml(new Date(r.sentAt).toLocaleString("es"))}${r.mode ? ` · ${escapeHtml(r.mode)}` : ""}</div>`;
+      return `<div class="flow-activity-row">📤 +${escapeHtml(r.phone)} · ${escapeHtml(localeActivityDate(r.sentAt))}${r.mode ? ` · ${escapeHtml(r.mode)}` : ""}</div>`;
     }
     if (r.receivedAt) {
       const decision = r.responseJson && (r.responseJson.decision || (r.responseJson.payload && r.responseJson.payload.decision));
-      return `<div class="flow-activity-row">✅ +${escapeHtml(r.phone)} · ${escapeHtml(new Date(r.receivedAt).toLocaleString("es"))}${decision ? ` · ${escapeHtml(decision)}` : ""}</div>`;
+      return `<div class="flow-activity-row">✅ +${escapeHtml(r.phone)} · ${escapeHtml(localeActivityDate(r.receivedAt))}${decision ? ` · ${escapeHtml(decision)}` : ""}</div>`;
     }
     if (r.merchant) {
-      const st = r.decision ? (r.decision === "authorize" ? "autorizado" : "rechazado") : "pendiente";
+      const st = flowDecisionLabel(r.decision);
       return `<div class="flow-activity-row">💳 ${escapeHtml(r.merchant)} · $${escapeHtml(r.amount)} · ${escapeHtml(st)}</div>`;
     }
     return "";
@@ -2917,30 +2945,26 @@ function renderFlowDetailPreview(performance) {
   if (!box) return;
   if (performance.isPaymentAuth) {
     box.innerHTML = `
-      <p class="muted sm" style="margin-bottom:10px">Así ve el cliente el mensaje y el formulario.</p>
+      <p class="muted sm" style="margin-bottom:10px">${escapeHtml(t("flows.detailPreviewHint"))}</p>
       <div class="flows-dual-preview">
         <div class="flows-preview-col"><div id="flowDetailWaPreview"></div></div>
         <div class="flows-preview-col"><div id="flowDetailFlowPreview"></div></div>
       </div>`;
-    const fm = {
-      headerText: "Confirma tu pago",
-      footerText: "Punto Pago · Verificación de seguridad",
-      flowCta: "Confirmar pago",
-    };
     const ov = tplPreviewOverrides();
     renderWaMessagePreview($("flowDetailWaPreview"), {
-      headerText: fm.headerText,
-      bodyText:
-        `Hola ${ov.nombre_cliente},\n\n`
-        + `Se requiere tu confirmación para un pago de ${ov.monto} en ${ov.comercio} `
-        + `con Tarjeta Punto Pago •••• ${ov.ultimos_4}.\n\n`
-        + "Toca abajo para aprobar o rechazar. Protege tu cuenta como el 3D Secure de tu banco.",
-      footerText: fm.footerText,
-      flowCta: fm.flowCta,
+      headerText: t("flows.preview.waHeader"),
+      bodyText: t("flows.preview.waBody", {
+        name: ov.nombre_cliente,
+        amount: ov.monto,
+        merchant: ov.comercio,
+        last4: ov.ultimos_4,
+      }),
+      footerText: t("flows.preview.waFooter"),
+      flowCta: t("flows.preview.waCta"),
     });
     renderFlowPhonePreview($("flowDetailFlowPreview"), "AUTH", getPayAuthFlowData());
   } else {
-    box.innerHTML = `<p class="muted sm">Vista previa disponible para Flows de autorización de pago. Usa «Abrir en Meta» para ver otros.</p>`;
+    box.innerHTML = `<p class="muted sm">${escapeHtml(t("flows.previewPayAuthOnly"))}</p>`;
   }
 }
 
@@ -2953,17 +2977,17 @@ async function loadFlowDetail(id) {
   const st = (f.status || "").toUpperCase();
   const stEl = $("flowsDetailStatus");
   if (stEl) {
-    stEl.textContent = FLOW_STATUS_LABELS[st] || st || "—";
+    stEl.textContent = flowStatusLabel(st);
     stEl.className = "flow-status " + st;
   }
   renderFlowStatsCards(perfRes.stats, perfRes.isPaymentAuth);
-  $("flowsDetailSends").innerHTML = renderFlowActivityList(perfRes.recentSends, "Aún no hay envíos registrados.");
+  $("flowsDetailSends").innerHTML = renderFlowActivityList(perfRes.recentSends, t("flows.emptySends"));
   const respRows = perfRes.isPaymentAuth && perfRes.recentPayAuth.length
     ? perfRes.recentPayAuth
     : perfRes.recentResponses;
   $("flowsDetailResponses").innerHTML = renderFlowActivityList(
     respRows,
-    "Aún no hay respuestas. Cuando alguien complete el Flow, aparecerá aquí."
+    t("flows.emptyResponses")
   );
   renderFlowDetailPreview(perfRes);
   const probarBtn = $("flowDetailProbarBtn");
@@ -2980,38 +3004,34 @@ const fsState = {
   screens: [],
 };
 
-const FS_LAYOUTS = [
-  { id: "message", label: "Título y texto" },
-  { id: "form", label: "Formulario" },
-  { id: "confirm", label: "Pantalla final" },
-];
+const FS_LAYOUTS = ["message", "form", "confirm"];
 
 function defaultFsScreens() {
   return [
     {
       layout: "message",
-      title: "Paso 1",
-      heading: "Título claro",
-      body: "Usa texto breve. Explica qué debe hacer la persona en esta pantalla.",
-      buttonLabel: "Continuar",
+      title: t("flows.defaults.step1Title"),
+      heading: t("flows.defaults.step1Heading"),
+      body: t("flows.defaults.step1Body"),
+      buttonLabel: t("flows.studio.continue"),
       buttonAction: "next",
       fields: [],
     },
     {
       layout: "message",
-      title: "Paso 2",
-      heading: "Más detalle",
-      body: "Puedes agregar imágenes o pasos extra en pantallas siguientes.",
-      buttonLabel: "Continuar",
+      title: t("flows.defaults.step2Title"),
+      heading: t("flows.defaults.step2Heading"),
+      body: t("flows.defaults.step2Body"),
+      buttonLabel: t("flows.studio.continue"),
       buttonAction: "next",
       fields: [],
     },
     {
       layout: "confirm",
-      title: "Gracias",
-      heading: "¡Listo!",
-      body: "Recibimos tu respuesta. Te contactaremos pronto.",
-      buttonLabel: "Cerrar",
+      title: t("flows.defaults.thanksTitle"),
+      heading: t("flows.defaults.thanksHeading"),
+      body: t("flows.defaults.thanksBody"),
+      buttonLabel: t("flows.studio.close"),
       buttonAction: "complete",
       fields: [],
     },
@@ -3033,8 +3053,11 @@ async function initFlowStudio() {
   fsState.activeIndex = 0;
   fsState.viewMode = "all";
   if ($("fsName") && !$("fsName").value) $("fsName").value = "";
+  if ($("fsCta") && ($("fsCta").value === "Abrir formulario" || $("fsCta").value === "Open form" || $("fsCta").value === "Открыть форму")) {
+    $("fsCta").value = t("flows.studio.defaultCta");
+  }
   if ($("fsChatBody") && !$("fsChatBody").value.trim()) {
-    $("fsChatBody").value = "Hola, completa este formulario para continuar.";
+    $("fsChatBody").value = t("flows.studio.defaultChatBody");
   }
   renderFlowStudio();
 }
@@ -3051,7 +3074,7 @@ function syncFsFromSidebar() {
   if ($("fsButton")) scr.buttonLabel = $("fsButton").value;
   const action = document.querySelector('input[name="fsAction"]:checked');
   if (action) scr.buttonAction = action.value;
-  scr.title = scr.heading.slice(0, 40) || scr.title || `Paso ${fsState.activeIndex + 1}`;
+  scr.title = scr.heading.slice(0, 40) || scr.title || t("flows.studio.step", { n: fsState.activeIndex + 1 });
 }
 
 function loadFsSidebarFromScreen() {
@@ -3059,7 +3082,7 @@ function loadFsSidebarFromScreen() {
   if (!scr) return;
   if ($("fsHeading")) $("fsHeading").value = scr.heading || "";
   if ($("fsBody")) $("fsBody").value = scr.body || "";
-  if ($("fsButton")) $("fsButton").value = scr.buttonLabel || "Continuar";
+  if ($("fsButton")) $("fsButton").value = scr.buttonLabel || t("flows.studio.continue");
   document.querySelectorAll('input[name="fsAction"]').forEach((r) => {
     r.checked = r.value === (scr.buttonAction || "next");
   });
@@ -3075,9 +3098,9 @@ function renderFsLayoutGrid() {
   const box = $("fsLayoutGrid");
   if (!box) return;
   const scr = fsActiveScreen();
-  box.innerHTML = FS_LAYOUTS.map((l) =>
-    `<button type="button" class="fs-layout-btn${scr && scr.layout === l.id ? " active" : ""}" data-layout="${l.id}">
-      <span class="fs-layout-icon"></span>${escapeHtml(l.label)}
+  box.innerHTML = FS_LAYOUTS.map((id) =>
+    `<button type="button" class="fs-layout-btn${scr && scr.layout === id ? " active" : ""}" data-layout="${id}">
+      <span class="fs-layout-icon"></span>${escapeHtml(fsLayoutLabel(id))}
     </button>`
   ).join("");
   box.querySelectorAll(".fs-layout-btn").forEach((btn) =>
@@ -3087,11 +3110,11 @@ function renderFsLayoutGrid() {
       if (!s) return;
       s.layout = btn.dataset.layout;
       if (s.layout === "form" && !(s.fields || []).length) {
-        s.fields = [{ type: "text", label: "Nombre", required: true }];
+        s.fields = [{ type: "text", label: t("flows.studio.defaultFieldName"), required: true }];
       }
       if (s.layout === "confirm") {
         s.buttonAction = "complete";
-        s.buttonLabel = s.buttonLabel || "Cerrar";
+        s.buttonLabel = s.buttonLabel || t("flows.studio.close");
       }
       loadFsSidebarFromScreen();
       renderFlowStudio();
@@ -3104,7 +3127,7 @@ function fsFieldTypeOptions(selected) {
     { id: "text", label: "Texto" },
     { id: "email", label: "Correo" },
     { id: "rating", label: "1–5" },
-  ]).map((t) => `<option value="${escapeHtml(t.id)}"${t.id === selected ? " selected" : ""}>${escapeHtml(t.label)}</option>`).join("");
+  ]).map((ft) => `<option value="${escapeHtml(ft.id)}"${ft.id === selected ? " selected" : ""}>${escapeHtml(ft.label)}</option>`).join("");
 }
 
 function renderFsFieldsList() {
@@ -3114,7 +3137,7 @@ function renderFsFieldsList() {
   scr.fields = scr.fields || [];
   box.innerHTML = scr.fields.map((f, fi) => `
     <div class="fs-field-row" data-fi="${fi}">
-      <input type="text" class="fs-f-label" placeholder="Etiqueta" value="${escapeHtml(f.label || "")}" />
+      <input type="text" class="fs-f-label" placeholder="${escapeHtml(t("flows.studio.fieldLabel"))}" value="${escapeHtml(f.label || "")}" />
       <select class="fs-f-type">${fsFieldTypeOptions(f.type)}</select>
       <button type="button" class="btn-ghost sm fs-f-remove">×</button>
     </div>`).join("");
@@ -3151,24 +3174,25 @@ function syncFsFieldsFromDom() {
 
 function renderFsPhonePreview(scr, index, editing) {
   const isLast = index === fsState.screens.length - 1;
-  const btnLabel = scr.buttonLabel || (isLast ? "Cerrar" : "Continuar");
+  const btnLabel = scr.buttonLabel || (isLast ? t("flows.studio.close") : t("flows.studio.continue"));
   let bodyHtml = "";
   if (scr.layout === "form" && (scr.fields || []).length) {
     bodyHtml = (scr.fields || []).map((f) =>
-      `<p style="margin:8px 0;padding:10px;border:1px solid #e9edef;border-radius:8px;font-size:12px;color:#667781">${escapeHtml(f.label || "Campo")}</p>`
+      `<p style="margin:8px 0;padding:10px;border:1px solid #e9edef;border-radius:8px;font-size:12px;color:#667781">${escapeHtml(f.label || t("flows.studio.fieldDefault"))}</p>`
     ).join("");
   }
+  const stepTitle = scr.title || t("flows.studio.step", { n: index + 1 });
   return `
     <div class="fs-phone-wrap${editing ? " editing" : ""}" data-fs-i="${index}">
       <div class="flow-phone fs-phone-mini">
         <div class="flow-phone-nav">
           <span class="flow-phone-cancel">✕</span>
-          <span class="flow-phone-title">${escapeHtml(scr.title || `Paso ${index + 1}`)}</span>
+          <span class="flow-phone-title">${escapeHtml(stepTitle)}</span>
           <span class="flow-phone-menu">⋯</span>
         </div>
         <div class="flow-phone-body">
-          <h3>${escapeHtml(scr.heading || "Título")}</h3>
-          <p>${escapeHtml(scr.body || "Texto de la pantalla…")}</p>
+          <h3>${escapeHtml(scr.heading || t("flows.studio.screenTitle"))}</h3>
+          <p>${escapeHtml(scr.body || t("flows.studio.screenBody"))}</p>
           ${bodyHtml}
         </div>
         <div class="flow-phone-footer">
@@ -3192,11 +3216,11 @@ function renderFlowStudio() {
   const max = fsState.schema?.limits?.maxScreens || 8;
   strip.innerHTML = fsState.screens.map((scr, i) =>
     `<button type="button" class="fs-thumb${i === fsState.activeIndex ? " active" : ""}" data-fs-i="${i}" title="${escapeHtml(scr.title || "")}">
-      <div class="fs-thumb-inner">${escapeHtml((scr.heading || scr.title || "Pantalla").slice(0, 24))}</div>
+      <div class="fs-thumb-inner">${escapeHtml((scr.heading || scr.title || t("flows.studio.screenDefault")).slice(0, 24))}</div>
     </button>`
   ).join("")
     + (fsState.screens.length < max
-      ? `<button type="button" class="fs-thumb-add" id="fsAddScreen" title="Agregar pantalla">+</button>`
+      ? `<button type="button" class="fs-thumb-add" id="fsAddScreen" title="${escapeHtml(t("flows.studio.addScreen"))}">+</button>`
       : "");
 
   strip.querySelectorAll(".fs-thumb").forEach((btn) => {
@@ -3252,10 +3276,10 @@ function fsAddScreen() {
   const insertAt = confirmIdx >= 0 ? confirmIdx : fsState.screens.length;
   fsState.screens.splice(insertAt, 0, {
     layout: "message",
-    title: `Paso ${insertAt + 1}`,
-    heading: "Nueva pantalla",
-    body: "Describe aquí el contenido.",
-    buttonLabel: "Continuar",
+    title: t("flows.studio.step", { n: insertAt + 1 }),
+    heading: t("flows.studio.newScreenHeading"),
+    body: t("flows.studio.newScreenBody"),
+    buttonLabel: t("flows.studio.continue"),
     buttonAction: "next",
     fields: [],
   });
@@ -3283,41 +3307,41 @@ function collectFsDefinition() {
     if (s.layout === "form") {
       return {
         type: "form",
-        title: s.title || `Paso ${i + 1}`,
+        title: s.title || t("flows.studio.step", { n: i + 1 }),
         introHeading: s.heading,
         introBody: s.body,
-        footerLabel: s.buttonLabel || "Enviar",
+        footerLabel: s.buttonLabel || t("flows.studio.submit"),
         fields: (s.fields && s.fields.length)
           ? s.fields.map((f) => ({ ...f }))
-          : [{ type: "text", label: "Respuesta", required: true }],
+          : [{ type: "text", label: t("flows.studio.response"), required: true }],
       };
     }
     if (s.layout === "confirm" || (isLast && s.buttonAction === "complete")) {
       return {
         type: "confirm",
-        title: s.title || "Gracias",
+        title: s.title || t("flows.studio.thanks"),
         heading: s.heading,
         body: s.body,
-        footerLabel: s.buttonLabel || "Cerrar",
+        footerLabel: s.buttonLabel || t("flows.studio.close"),
       };
     }
     return {
       type: "message",
-      title: s.title || `Paso ${i + 1}`,
+      title: s.title || t("flows.studio.step", { n: i + 1 }),
       heading: s.heading,
       body: s.body,
-      footerLabel: s.buttonLabel || (isLast ? "Cerrar" : "Continuar"),
+      footerLabel: s.buttonLabel || (isLast ? t("flows.studio.close") : t("flows.studio.continue")),
     };
   });
   const hasConfirm = screens.some((s) => s.type === "confirm");
   if (!hasConfirm && screens.length) {
     const last = screens[screens.length - 1];
-    if (last.type === "message") last.footerLabel = last.footerLabel || "Cerrar";
+    if (last.type === "message") last.footerLabel = last.footerLabel || t("flows.studio.close");
   }
   return {
     name: ($("fsName") || {}).value.trim(),
     category: ($("fsCategory") || {}).value || "OTHER",
-    cta: ($("fsCta") || {}).value.trim() || "Abrir formulario",
+    cta: ($("fsCta") || {}).value.trim() || t("flows.studio.defaultCta"),
     chatBody: ($("fsChatBody") || {}).value.trim(),
     publish: false,
     screens,
@@ -3375,12 +3399,12 @@ async function loadPaymentAuthPanel() {
   if (!box) return;
   const rows = (recent && recent.data) || [];
   if (!rows.length) {
-    box.textContent = "Sin autorizaciones de prueba aún.";
+    box.textContent = t("flows.noTestAuths");
     return;
   }
   box.innerHTML = rows.slice(0, 5).map((r) => {
-    const st = r.decision ? (r.decision === "authorize" ? "autorizado" : "rechazado") : "pendiente";
-    return `<div>${escapeHtml(r.merchant)} · $${escapeHtml(r.amount)} · ${escapeHtml(st)} · ${escapeHtml(new Date(r.createdAt).toLocaleString("es"))}</div>`;
+    const st = flowDecisionLabel(r.decision);
+    return `<div>${escapeHtml(r.merchant)} · $${escapeHtml(r.amount)} · ${escapeHtml(st)} · ${escapeHtml(localeActivityDate(r.createdAt))}</div>`;
   }).join("");
 }
 
@@ -3463,27 +3487,27 @@ function renderFlowUseCaseGrid() {
   const box = $("flowUseCaseGrid");
   if (!box) return;
   if (!state.flowUseCases.length) {
-    box.innerHTML = `<p class="muted">No hay plantillas disponibles.</p>`;
+    box.innerHTML = `<p class="muted">${escapeHtml(t("flows.noTemplates"))}</p>`;
     return;
   }
   const cards = [];
   state.flowUseCases.forEach((u) => {
     if (u.status === "soon" || !u.templates || !u.templates.length) return;
-    u.templates.forEach((t) => {
+    u.templates.forEach((tpl) => {
       cards.push(`
-        <article class="flow-template-card${t.key === "payment_auth" ? " featured" : ""}">
-          <h3>${escapeHtml(t.name || t.key)}</h3>
-          <p class="muted sm">${escapeHtml(u.label)} · ${escapeHtml(t.description || "")}</p>
+        <article class="flow-template-card${tpl.key === "payment_auth" ? " featured" : ""}">
+          <h3>${escapeHtml(tpl.name || tpl.key)}</h3>
+          <p class="muted sm">${escapeHtml(u.label)} · ${escapeHtml(tpl.description || "")}</p>
           <div class="flows-actions">
-            <button type="button" class="btn-primary sm flow-create-sample" data-sample="${escapeHtml(t.key)}">Crear en Meta</button>
-            ${t.key === "payment_auth" ? `<button type="button" class="btn-ghost sm flow-go-probar">Probar</button>` : ""}
+            <button type="button" class="btn-primary sm flow-create-sample" data-sample="${escapeHtml(tpl.key)}">${escapeHtml(t("flows.studio.createInMeta"))}</button>
+            ${tpl.key === "payment_auth" ? `<button type="button" class="btn-ghost sm flow-go-probar">${escapeHtml(t("flows.studio.tryBtn"))}</button>` : ""}
           </div>
         </article>`);
     });
   });
   box.innerHTML = cards.length
     ? cards.join("")
-    : `<p class="muted">Plantillas en camino. Usa el editor visual de arriba.</p>`;
+    : `<p class="muted">${escapeHtml(t("flows.studio.comingSoon"))}</p>`;
   box.querySelectorAll(".flow-create-sample").forEach((btn) =>
     btn.addEventListener("click", () => createFlowSampleKey(btn.dataset.sample))
   );
@@ -3505,21 +3529,21 @@ async function loadFlowEndpointSetup() {
         hint.textContent = res.warning;
         hint.style.color = "var(--red)";
       } else if (res.synced) {
-        hint.textContent = "Conectado con Meta. Los formularios dinámicos (como autorización de pago) se configuran solos.";
+        hint.textContent = t("flows.connectedMeta");
         hint.style.color = "";
       } else if (res.syncError) {
         hint.textContent = res.syncError;
         hint.style.color = "var(--red)";
       } else {
-        hint.textContent = "Comprobando conexión con Meta…";
+        hint.textContent = t("flows.checkingMeta");
         hint.style.color = "";
       }
     }
     if (retryBtn) retryBtn.classList.toggle("hidden", Boolean(res.synced && !res.warning));
   } else {
-    uriEl.textContent = "No configurado";
+    uriEl.textContent = t("flows.endpoint.notConfigured");
     if (hint) {
-      hint.textContent = "El servidor necesita PUBLIC_BASE_URL para formularios con datos en vivo.";
+      hint.textContent = t("flows.endpoint.needsPublicUrl");
       hint.style.color = "";
     }
     if (retryBtn) retryBtn.classList.add("hidden");
@@ -3563,7 +3587,7 @@ function renderFlowsList() {
   if (hint) hint.textContent = state.flows.length ? `(${state.flows.length})` : "";
   if (!box) return;
   if (!state.flows.length) {
-    box.innerHTML = `<p class="muted">Aún no tienes Flows. Pulsa «+ Agregar flujo» para crear uno desde una plantilla de Meta.</p>`;
+    box.innerHTML = `<p class="muted">${escapeHtml(t("flows.emptyFlowsList"))}</p>`;
     return;
   }
   box.innerHTML = state.flows.map((f) => {
@@ -3572,7 +3596,7 @@ function renderFlowsList() {
     return `<div class="flow-item${active}" data-id="${escapeHtml(f.id)}">
       <div class="flow-item-head">
         <strong>${escapeHtml(f.name || f.id)}</strong>
-        <span class="flow-status ${escapeHtml(st)}">${escapeHtml(FLOW_STATUS_LABELS[st] || st)}</span>
+        <span class="flow-status ${escapeHtml(st)}">${escapeHtml(flowStatusLabel(st))}</span>
       </div>
       <div class="muted" style="font-size:11px;margin-top:4px">ID: ${escapeHtml(f.id)} · ${escapeHtml((f.categories || []).join(", ") || "—")}</div>
     </div>`;
@@ -3658,13 +3682,6 @@ async function publishActiveFlow() {
   await loadFlows();
 }
 
-const FLOW_KIND_LABELS = { survey: "Encuesta", payment: "Pago", form: "Formulario", flow: "Flow" };
-
-function formatActivityDate(ts) {
-  if (!ts) return "—";
-  return new Date(ts).toLocaleString("es", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
-}
-
 function renderFlowActivityDetail(row) {
   const box = $("flowActivityDetail");
   if (!box || !row) return;
@@ -3673,9 +3690,9 @@ function renderFlowActivityDetail(row) {
   let body = `<h3>${escapeHtml(row.name)}</h3>`;
 
   if (row.kind === "survey" && row.surveyResults && row.surveyResults.length) {
-    body += `<p class="muted sm">Resultados agregados de la encuesta</p>
+    body += `<p class="muted sm">${escapeHtml(t("flows.activity.surveyResults"))}</p>
       <table class="flow-survey-table billing-table">
-        <thead><tr><th>Pregunta / campo</th><th>Respuesta</th><th class="num">Personas</th><th class="num">%</th></tr></thead>
+        <thead><tr><th>${escapeHtml(t("flows.activity.colQuestion"))}</th><th>${escapeHtml(t("flows.activity.colAnswer"))}</th><th class="num">${escapeHtml(t("flows.activity.colPeople"))}</th><th class="num">%</th></tr></thead>
         <tbody>`;
     row.surveyResults.forEach((field) => {
       const entries = Object.entries(field.counts).sort((a, b) => b[1] - a[1]);
@@ -3693,27 +3710,27 @@ function renderFlowActivityDetail(row) {
   } else if (row.kind === "payment" && row.paymentResults) {
     const p = row.paymentResults;
     body += `<div class="flows-stats-grid" style="margin-bottom:14px">
-      <div class="flow-stat-card"><span class="n">${p.authorized}</span><span class="l">Autorizados</span></div>
-      <div class="flow-stat-card"><span class="n">${p.denied}</span><span class="l">Rechazados</span></div>
-      <div class="flow-stat-card"><span class="n">${p.pending}</span><span class="l">Pendientes</span></div>
+      <div class="flow-stat-card"><span class="n">${p.authorized}</span><span class="l">${escapeHtml(t("flows.stats.authorized"))}</span></div>
+      <div class="flow-stat-card"><span class="n">${p.denied}</span><span class="l">${escapeHtml(t("flows.stats.denied"))}</span></div>
+      <div class="flow-stat-card"><span class="n">${p.pending}</span><span class="l">${escapeHtml(t("flows.activity.pending"))}</span></div>
     </div>`;
   }
 
   if (row.recentResponses && row.recentResponses.length) {
-    body += `<p class="muted sm" style="margin-top:8px">Respuestas individuales</p>
+    body += `<p class="muted sm" style="margin-top:8px">${escapeHtml(t("flows.activity.individualResponses"))}</p>
       <table class="flow-responses-mini billing-table">
-        <thead><tr><th>Teléfono</th><th>Fecha</th><th>Datos</th></tr></thead><tbody>`;
+        <thead><tr><th>${escapeHtml(t("flows.activity.colPhone"))}</th><th>${escapeHtml(t("flows.activity.colDate"))}</th><th>${escapeHtml(t("flows.activity.colData"))}</th></tr></thead><tbody>`;
     row.recentResponses.forEach((r) => {
       const ans = Object.entries(r.answers || {}).map(([k, v]) => `${k}: ${v}`).join(" · ") || "—";
       body += `<tr>
         <td>+${escapeHtml(r.phone)}</td>
-        <td>${escapeHtml(formatActivityDate(r.receivedAt))}</td>
+        <td>${escapeHtml(localeActivityDate(r.receivedAt))}</td>
         <td>${escapeHtml(ans)}</td>
       </tr>`;
     });
     body += `</tbody></table>`;
   } else if (!row.surveyResults || !row.surveyResults.length) {
-    body += `<p class="muted sm">Sin respuestas detalladas todavía.</p>`;
+    body += `<p class="muted sm">${escapeHtml(t("flows.activity.noDetailYet"))}</p>`;
   }
 
   box.innerHTML = body;
@@ -3740,21 +3757,21 @@ async function loadFlowActivity() {
   if (summary && res.summary) {
     summary.classList.remove("hidden");
     summary.innerHTML = [
-      [res.summary.total, "Flows con actividad"],
-      [res.summary.sent, "Enviados"],
-      [res.summary.viewed, "Vieron"],
-      [res.summary.completed, "Completaron"],
+      [res.summary.total, t("flows.stats.withActivity")],
+      [res.summary.sent, t("flows.stats.sent")],
+      [res.summary.viewed, t("flows.stats.viewed")],
+      [res.summary.completed, t("flows.stats.completed")],
     ].map(([n, l]) => `<div class="flow-stat-card"><span class="n">${n}</span><span class="l">${escapeHtml(l)}</span></div>`).join("");
   }
 
   if (!state.flowActivity.length) {
-    tbody.innerHTML = `<tr><td colspan="6" class="muted center">Sin actividad aún. Envía un Flow desde Probar o Mis Flows.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="6" class="muted center">${escapeHtml(t("flows.emptyActivity"))}</td></tr>`;
     if (detail) detail.classList.add("hidden");
     return;
   }
 
   tbody.innerHTML = state.flowActivity.map((row, i) => {
-    const kind = FLOW_KIND_LABELS[row.kind] || "Flow";
+    const kind = flowKindLabel(row.kind);
     return `<tr class="flow-activity-row${state.activeActivityRow === i ? " active" : ""}" data-i="${i}">
       <td>
         <strong>${escapeHtml(row.name)}</strong>
@@ -3763,8 +3780,8 @@ async function loadFlowActivity() {
       <td class="num">${row.sent}</td>
       <td class="num">${row.viewed}</td>
       <td class="num">${row.completed}${row.sent ? ` <span class="muted">(${row.completionRate}%)</span>` : ""}</td>
-      <td>${escapeHtml(formatActivityDate(row.lastActivityAt))}</td>
-      <td><span class="muted">Ver →</span></td>
+      <td>${escapeHtml(localeActivityDate(row.lastActivityAt))}</td>
+      <td><span class="muted">${escapeHtml(t("flows.viewDetails"))}</span></td>
     </tr>`;
   }).join("");
 

@@ -516,57 +516,57 @@
 
         <!-- Panel: Probar (solo desde detalle o plantilla de pago) -->
         <section class="flows-tab-panel hidden" id="flowsPanelProbar">
-          <button type="button" id="flowProbarBack" class="btn-ghost sm flow-create-back">← Volver a mis Flows</button>
+          <button type="button" id="flowProbarBack" class="btn-ghost sm flow-create-back" data-i18n="flows.backToMine">← Volver a mis Flows</button>
           <div class="flows-hero-card flows-hero-wide">
             <div class="flows-hero-copy">
-              <span class="flows-hero-badge">Verificación 3DS</span>
-              <h2>Confirma tu pago</h2>
-              <p class="muted">Así lo verá tu cliente: un mensaje de verificación en el chat y luego el formulario con los datos del pago y la tarjeta Punto Pago.</p>
+              <span class="flows-hero-badge" data-i18n="flows.badge3ds">Verificación 3DS</span>
+              <h2 data-i18n="flows.payConfirmTitle">Confirma tu pago</h2>
+              <p class="muted" data-i18n="flows.payConfirmHint">Así lo verá tu cliente: un mensaje de verificación en el chat y luego el formulario con los datos del pago y la tarjeta Punto Pago.</p>
             </div>
           </div>
 
           <div class="flows-dual-preview">
             <div class="flows-preview-col">
-              <p class="preview-step">① Mensaje en WhatsApp</p>
+              <p class="preview-step" data-i18n="flows.previewStep1">① Mensaje en WhatsApp</p>
               <div id="payAuthWaPreview" class="wa-preview-phone wa-preview-compact" aria-label="Vista previa mensaje"></div>
             </div>
             <div class="flows-preview-col">
-              <p class="preview-step">② Formulario (como en el teléfono)</p>
+              <p class="preview-step" data-i18n="flows.previewStep2">② Formulario (como en el teléfono)</p>
               <div class="flow-screen-tabs" id="payAuthScreenTabs">
-                <button type="button" class="flow-screen-tab active" data-screen="AUTH">Verificar</button>
-                <button type="button" class="flow-screen-tab" data-screen="RESULT">Resultado</button>
+                <button type="button" class="flow-screen-tab active" data-screen="AUTH" data-i18n="flows.screenVerify">Verificar</button>
+                <button type="button" class="flow-screen-tab" data-screen="RESULT" data-i18n="flows.screenResult">Resultado</button>
               </div>
               <div id="payAuthFlowPreview" class="flow-phone" aria-label="Vista previa del Flow"></div>
             </div>
           </div>
 
           <section class="flows-panel flows-payment-auth" id="flowsPaymentAuthPanel">
-            <h3 class="fb-subtitle">Datos de prueba</h3>
+            <h3 class="fb-subtitle" data-i18n="flows.testData">Datos de prueba</h3>
             <div class="flows-form-grid">
-              <label>Teléfono
+              <label><span data-i18n="flows.phone">Teléfono</span>
                 <input id="payAuthPhone" type="text" placeholder="50763163152" value="50763163152" />
               </label>
-              <label>Nombre del cliente
+              <label><span data-i18n="flows.customerName">Nombre del cliente</span>
                 <input id="payAuthCustomerName" type="text" placeholder="Juan Pablo" value="Juan Pablo" />
               </label>
-              <label>Comercio
+              <label><span data-i18n="flows.merchant">Comercio</span>
                 <input id="payAuthMerchant" type="text" placeholder="Supermercado XO" value="Supermercado XO" />
               </label>
-              <label>Monto (USD)
+              <label><span data-i18n="flows.amountUsd">Monto (USD)</span>
                 <input id="payAuthAmount" type="text" placeholder="45.90" value="45.90" />
               </label>
-              <label>Últimos 4 dígitos
+              <label><span data-i18n="flows.last4">Últimos 4 dígitos</span>
                 <input id="payAuthCard4" type="text" placeholder="4821" value="4821" maxlength="4" inputmode="numeric" pattern="\d{4}" />
               </label>
-              <label class="flows-upload-label">Imagen de tarjeta
+              <label class="flows-upload-label"><span data-i18n="flows.cardImage">Imagen de tarjeta</span>
                 <input id="payAuthCardImage" type="file" accept="image/jpeg,image/png,image/webp" />
-                <span class="muted sm">PNG o JPG · se muestra dentro del formulario</span>
+                <span class="muted sm" data-i18n="flows.cardImageHint">PNG o JPG · se muestra dentro del formulario</span>
               </label>
             </div>
             <div id="payAuthVarGuide" class="tpl-var-guide" aria-label="Leyenda de variables del mensaje"></div>
             <div class="flows-actions">
-              <button type="button" id="payAuthSendBtn" class="btn-primary sm">Enviar prueba a WhatsApp</button>
-              <button type="button" id="payAuthOpenTplBtn" class="btn-ghost sm">Ver plantilla del mensaje</button>
+              <button type="button" id="payAuthSendBtn" class="btn-primary sm" data-i18n="flows.sendTest">Enviar prueba a WhatsApp</button>
+              <button type="button" id="payAuthOpenTplBtn" class="btn-ghost sm" data-i18n="flows.viewTemplate">Ver plantilla del mensaje</button>
             </div>
             <div id="payAuthRecent" class="fb-payauth-recent muted sm"></div>
           </section>
@@ -578,12 +578,12 @@
             <section class="flows-panel flows-list-panel">
               <div class="flows-list-head">
                 <div>
-                  <h2 class="section-title">Tus Flows <span class="muted" id="flowsListHint"></span></h2>
-                  <p class="muted sm">Publicados y el borrador más reciente. Los intentos de prueba se eliminan solos.</p>
+                  <h2 class="section-title"><span data-i18n="flows.yourFlows">Tus Flows</span> <span class="muted" id="flowsListHint"></span></h2>
+                  <p class="muted sm" data-i18n="flows.flowsListHint">Publicados y el borrador más reciente. Los intentos de prueba se eliminan solos.</p>
                 </div>
-                <button type="button" id="flowAddBtn" class="btn-primary sm">+ Agregar flujo</button>
+                <button type="button" id="flowAddBtn" class="btn-primary sm" data-i18n="flows.addFlow">+ Agregar flujo</button>
               </div>
-              <div id="flowsList" class="flows-list muted">Cargando…</div>
+              <div id="flowsList" class="flows-list muted" data-i18n="flows.loading">Cargando…</div>
             </section>
 
             <div class="flows-detail-col">
@@ -594,17 +594,17 @@
                   <span id="flowsDetailStatus" class="flow-status">—</span>
                 </div>
                 <div class="flows-detail-actions">
-                  <button type="button" id="flowDetailProbarBtn" class="btn-ghost sm hidden">Probar en WhatsApp</button>
-                  <a id="flowPreviewLink" class="btn-ghost sm hidden" href="#" target="_blank" rel="noopener">Abrir en Meta</a>
+                  <button type="button" id="flowDetailProbarBtn" class="btn-ghost sm hidden" data-i18n="flows.tryWhatsapp">Probar en WhatsApp</button>
+                  <a id="flowPreviewLink" class="btn-ghost sm hidden" href="#" target="_blank" rel="noopener" data-i18n="flows.openMeta">Abrir en Meta</a>
                 </div>
               </div>
 
               <div id="flowsStatsCards" class="flows-stats-grid"></div>
 
               <nav class="flows-detail-tabs" id="flowsDetailTabs">
-                <button type="button" class="flows-detail-tab active" data-detail-tab="preview">Vista previa</button>
-                <button type="button" class="flows-detail-tab" data-detail-tab="sends">Envíos</button>
-                <button type="button" class="flows-detail-tab" data-detail-tab="responses">Respuestas</button>
+                <button type="button" class="flows-detail-tab active" data-detail-tab="preview" data-i18n="flows.tabPreview">Vista previa</button>
+                <button type="button" class="flows-detail-tab" data-detail-tab="sends" data-i18n="flows.tabSends">Envíos</button>
+                <button type="button" class="flows-detail-tab" data-detail-tab="responses" data-i18n="flows.tabResponses">Respuestas</button>
               </nav>
 
               <div id="flowsDetailPreview" class="flows-detail-pane"></div>
@@ -612,30 +612,30 @@
               <div id="flowsDetailResponses" class="flows-detail-pane hidden"></div>
 
               <details class="flows-send-collapsed">
-                <summary>Enviar a un contacto</summary>
+                <summary data-i18n="flows.sendToContact">Enviar a un contacto</summary>
                 <div class="flows-form-grid" style="margin-top:12px">
-                  <label>Teléfono
+                  <label><span data-i18n="flows.phone">Teléfono</span>
                     <input id="flowSendPhone" type="text" placeholder="50761234567" />
                   </label>
-                  <label>Texto del mensaje
+                  <label><span data-i18n="flows.messageText">Texto del mensaje</span>
                     <input id="flowSendBody" type="text" placeholder="Completa el formulario" />
                   </label>
-                  <label>Texto del botón
+                  <label><span data-i18n="flows.buttonText">Texto del botón</span>
                     <input id="flowSendCta" type="text" placeholder="Abrir" />
                   </label>
-                  <label>Pantalla inicial
+                  <label><span data-i18n="flows.initialScreen">Pantalla inicial</span>
                     <input id="flowSendScreen" type="text" placeholder="WELCOME_SCREEN" />
                   </label>
                 </div>
                 <div class="flows-actions">
-                  <button type="button" id="flowSendBtn" class="btn-primary sm">Enviar</button>
-                  <button type="button" id="flowPublishBtn" class="btn-ghost sm">Publicar</button>
+                  <button type="button" id="flowSendBtn" class="btn-primary sm" data-i18n="flows.send">Enviar</button>
+                  <button type="button" id="flowPublishBtn" class="btn-ghost sm" data-i18n="flows.publish">Publicar</button>
                 </div>
               </details>
             </section>
 
             <section class="flows-panel flows-empty-detail" id="flowsEmptyDetail">
-              <p class="muted center-msg">Selecciona un Flow para ver estadísticas, vista previa y envíos.</p>
+              <p class="muted center-msg" data-i18n="flows.emptySelect">Selecciona un Flow para ver estadísticas, vista previa y envíos.</p>
             </section>
             </div>
           </div>
@@ -643,71 +643,71 @@
 
         <!-- Panel: Crear (estudio visual tipo carrusel) -->
         <section class="flows-tab-panel hidden" id="flowsPanelCrear">
-          <button type="button" id="flowCreateCancel" class="btn-ghost sm flow-create-back">← Volver a mis Flows</button>
+          <button type="button" id="flowCreateCancel" class="btn-ghost sm flow-create-back" data-i18n="flows.backToMine">← Volver a mis Flows</button>
 
           <section class="flows-panel flow-studio" id="flowStudioPanel">
             <header class="flow-studio-top">
               <div>
-                <h2 class="section-title">Crea tu Flow</h2>
-                <p class="muted sm">Arma las pantallas como un carrusel. Nosotros lo traducimos al formato que Meta exige.</p>
+                <h2 class="section-title" data-i18n="flows.studio.title">Crea tu Flow</h2>
+                <p class="muted sm" data-i18n="flows.studio.intro">Arma las pantallas como un carrusel. Nosotros lo traducimos al formato que Meta exige.</p>
               </div>
               <div class="flow-studio-top-actions">
-                <button type="button" id="fsPickerToggle" class="btn-ghost sm">Plantillas Punto Pago</button>
-                <button type="button" id="fsCreateBtn" class="btn-primary sm">Crear borrador en Meta</button>
+                <button type="button" id="fsPickerToggle" class="btn-ghost sm" data-i18n="flows.studio.presetsBtn">Plantillas Punto Pago</button>
+                <button type="button" id="fsCreateBtn" class="btn-primary sm" data-i18n="flows.studio.createDraft">Crear borrador en Meta</button>
               </div>
             </header>
 
             <div id="flowCreatePicker" class="flow-create-picker hidden">
-              <p class="muted sm">Atajos listos para casos frecuentes (autorización de pago, encuestas, etc.)</p>
-              <div id="flowUseCaseGrid" class="flow-use-case-grid">Cargando…</div>
+              <p class="muted sm" data-i18n="flows.studio.presetsHint">Atajos listos para casos frecuentes (autorización de pago, encuestas, etc.)</p>
+              <div id="flowUseCaseGrid" class="flow-use-case-grid" data-i18n="flows.loading">Cargando…</div>
             </div>
 
             <div class="flow-studio-body">
               <aside class="flow-studio-sidebar">
-                <h3 class="fs-sidebar-title">General</h3>
-                <label>Nombre interno
-                  <input id="fsName" type="text" placeholder="encuesta_bienvenida" maxlength="80" />
+                <h3 class="fs-sidebar-title" data-i18n="flows.studio.general">General</h3>
+                <label><span data-i18n="flows.studio.internalName">Nombre interno</span>
+                  <input id="fsName" type="text" data-i18n-placeholder="flows.studio.namePh" placeholder="encuesta_bienvenida" maxlength="80" />
                 </label>
-                <label>Categoría Meta
+                <label><span data-i18n="flows.studio.metaCategory">Categoría Meta</span>
                   <select id="fsCategory"></select>
                 </label>
 
-                <h3 class="fs-sidebar-title">Mensaje en el chat</h3>
-                <p class="muted sm">Lo que verá el cliente antes de abrir el formulario (para la plantilla en Meta).</p>
-                <label>Texto del mensaje
-                  <textarea id="fsChatBody" rows="3" placeholder="Hola, completa este formulario para continuar."></textarea>
+                <h3 class="fs-sidebar-title" data-i18n="flows.studio.chatMessage">Mensaje en el chat</h3>
+                <p class="muted sm" data-i18n="flows.studio.chatMessageHint">Lo que verá el cliente antes de abrir el formulario (para la plantilla en Meta).</p>
+                <label><span data-i18n="flows.studio.messageText">Texto del mensaje</span>
+                  <textarea id="fsChatBody" rows="3" data-i18n-placeholder="flows.studio.defaultChatBody" placeholder="Hola, completa este formulario para continuar."></textarea>
                 </label>
-                <label>Texto del botón
+                <label><span data-i18n="flows.studio.buttonText">Texto del botón</span>
                   <input id="fsCta" type="text" value="Abrir formulario" />
                 </label>
 
-                <h3 class="fs-sidebar-title">Esta pantalla</h3>
+                <h3 class="fs-sidebar-title" data-i18n="flows.studio.thisScreen">Esta pantalla</h3>
                 <div class="fs-layout-grid" id="fsLayoutGrid"></div>
-                <label>Título
-                  <input id="fsHeading" type="text" placeholder="Título claro y breve" />
+                <label><span data-i18n="flows.studio.heading">Título</span>
+                  <input id="fsHeading" type="text" data-i18n-placeholder="flows.studio.headingPh" placeholder="Título claro y breve" />
                 </label>
-                <label>Texto
-                  <textarea id="fsBody" rows="4" placeholder="Explica en pocas líneas qué debe hacer la persona."></textarea>
+                <label><span data-i18n="flows.studio.body">Texto</span>
+                  <textarea id="fsBody" rows="4" data-i18n-placeholder="flows.studio.bodyPh" placeholder="Explica en pocas líneas qué debe hacer la persona."></textarea>
                 </label>
                 <div id="fsFieldsBox" class="fs-fields-box hidden">
-                  <span class="fs-sidebar-title">Campos del formulario</span>
+                  <span class="fs-sidebar-title" data-i18n="flows.studio.formFields">Campos del formulario</span>
                   <div id="fsFieldsList"></div>
-                  <button type="button" id="fsAddField" class="btn-ghost sm">+ Agregar campo</button>
+                  <button type="button" id="fsAddField" class="btn-ghost sm" data-i18n="flows.studio.addField">+ Agregar campo</button>
                 </div>
-                <label>Botón de la pantalla
+                <label><span data-i18n="flows.studio.screenButton">Botón de la pantalla</span>
                   <input id="fsButton" type="text" value="Continuar" />
                 </label>
                 <fieldset class="fs-action-fieldset">
-                  <legend class="muted sm">Al tocar el botón</legend>
-                  <label class="fs-radio"><input type="radio" name="fsAction" value="next" checked /> Ir a la siguiente pantalla</label>
-                  <label class="fs-radio"><input type="radio" name="fsAction" value="complete" /> Terminar (última pantalla)</label>
+                  <legend class="muted sm" data-i18n="flows.studio.onButtonTap">Al tocar el botón</legend>
+                  <label class="fs-radio"><input type="radio" name="fsAction" value="next" checked /> <span data-i18n="flows.studio.actionNext">Ir a la siguiente pantalla</span></label>
+                  <label class="fs-radio"><input type="radio" name="fsAction" value="complete" /> <span data-i18n="flows.studio.actionComplete">Terminar (última pantalla)</span></label>
                 </fieldset>
               </aside>
 
               <div class="flow-studio-canvas">
                 <div class="fs-strip-head">
-                  <button type="button" class="fs-view-btn active" data-fs-view="all">Todas las pantallas</button>
-                  <button type="button" class="fs-view-btn" data-fs-view="one">Editar una</button>
+                  <button type="button" class="fs-view-btn active" data-fs-view="all" data-i18n="flows.studio.viewAll">Todas las pantallas</button>
+                  <button type="button" class="fs-view-btn" data-fs-view="one" data-i18n="flows.studio.viewOne">Editar una</button>
                 </div>
                 <div id="fsScreenStrip" class="fs-screen-strip"></div>
                 <div id="fsPreviewRow" class="fs-preview-row"></div>
@@ -720,25 +720,25 @@
         <section class="flows-tab-panel hidden" id="flowsPanelActividad">
           <section class="flows-panel">
             <div class="flows-panel-head-row">
-              <h2 class="section-title">Actividad de Flows</h2>
-              <button type="button" id="flowRefreshResponses" class="btn-ghost sm">Actualizar</button>
+              <h2 class="section-title" data-i18n="flows.activityTitle">Actividad de Flows</h2>
+              <button type="button" id="flowRefreshResponses" class="btn-ghost sm" data-i18n="flows.refresh">Actualizar</button>
             </div>
-            <p class="muted sm">Resumen por Flow o encuesta: cuántas personas lo recibieron, lo abrieron y lo completaron.</p>
+            <p class="muted sm" data-i18n="flows.activityIntro">Resumen por Flow o encuesta: cuántas personas lo recibieron, lo abrieron y lo completaron.</p>
             <div id="flowActivitySummary" class="flows-stats-grid flows-activity-summary hidden"></div>
             <div class="billing-table-wrap flow-activity-table-wrap">
               <table class="billing-table flow-activity-table">
                 <thead>
                   <tr>
-                    <th>Flow / Encuesta</th>
-                    <th class="num">Enviados</th>
-                    <th class="num">Vieron</th>
-                    <th class="num">Completaron</th>
-                    <th>Última actividad</th>
+                    <th data-i18n="flows.colFlow">Flow / Encuesta</th>
+                    <th class="num" data-i18n="flows.colSent">Enviados</th>
+                    <th class="num" data-i18n="flows.colViewed">Vieron</th>
+                    <th class="num" data-i18n="flows.colCompleted">Completaron</th>
+                    <th data-i18n="flows.colLastActivity">Última actividad</th>
                     <th></th>
                   </tr>
                 </thead>
                 <tbody id="flowActivityRows">
-                  <tr><td colspan="6" class="muted center">Cargando…</td></tr>
+                  <tr><td colspan="6" class="muted center" data-i18n="flows.loading">Cargando…</td></tr>
                 </tbody>
               </table>
             </div>
