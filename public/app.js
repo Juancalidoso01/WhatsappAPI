@@ -2376,14 +2376,140 @@ function collectComponents(t) {
 }
 
 /* ---------- new chat (send template) ---------- */
-async function openNewChat(prefillName) {
+function getNcPresetContext(tplName) {
+  const preset = state.templatePresets.find((p) => p.name === tplName || p.templateFlowName === tplName);
+  if (!preset) return null;
+  const meta = presetMetaForKey(preset.key);
+  const isFlowTpl = tplName === preset.templateFlowName;
+  const flowApproved = Boolean(meta && meta.flow && meta.flow.approved && meta.flow.hasFlowButton);
+  return {
+    preset,
+    meta,
+    isFlowTpl,
+    flowApproved,
+    flowTemplateName: preset.templateFlowName,
+    textTemplateName: preset.name,
+  };
+}
+
+function getNcEffectiveTemplateName() {
+  const sel = ($("ncTemplate") && $("ncTemplate").value) || "";
+  const ctx = getNcPresetContext(sel);
+  if (ctx && !ctx.isFlowTpl && $("ncIncludeFlow") && $("ncIncludeFlow").checked && ctx.flowApproved) {
+    return ctx.flowTemplateName;
+  }
+  return sel;
+}
+
+function collectNcPresetOverrides() {
+  const box = $("ncFields");
+  const tpl = tplByName(($("ncTemplate") && $("ncTemplate").value) || "");
+  if (!box || !tpl) return {};
+  const overrides = {};
+  const n = bodyVarCount(tpl);
+  for (let i = 1; i <= n; i++) {
+    const el = box.querySelector(`[data-field="body${i}"]`);
+    if (el && el.value.trim()) overrides[`var${i}`] = el.value.trim();
+  }
+  const preset = state.templatePresets.find((p) => p.name === tpl.name || p.templateFlowName === tpl.name);
+  if (preset && preset.variables) {
+    preset.variables.forEach((v, i) => {
+      const val = overrides[`var${i + 1}`];
+      if (val && v.key) overrides[v.key] = val;
+    });
+  }
+  return overrides;
+}
+
+async function updateNcPreview() {
+  const selected = ($("ncTemplate") && $("ncTemplate").value) || "";
+  const ctx = getNcPresetContext(selected);
+  const effective = getNcEffectiveTemplateName();
+  const waBox = $("ncWaPreview");
+  const flowWrap = $("ncFlowPreviewWrap");
+  if (!ctx || !waBox) {
+    if (waBox) renderWaMessagePreview(waBox, { bodyText: "—" });
+    flowWrap?.classList.add("hidden");
+    return;
+  }
+  const q = new URLSearchParams(collectNcPresetOverrides()).toString();
+  const res = await api(`/api/templates/presets/${encodeURIComponent(ctx.preset.key)}${q ? `?${q}` : ""}`);
+  const preview = res && res.preview;
+  const showFlow = templateHasFlowButtonMeta(tplByName(effective))
+    || (ctx.flowApproved && $("ncIncludeFlow") && $("ncIncludeFlow").checked)
+    || ctx.isFlowTpl;
+  renderWaMessagePreview(waBox, {
+    headerText: (preview && preview.headerText) || "",
+    bodyText: (preview && preview.bodyText) || "—",
+    footerText: (preview && preview.footerText) || "",
+    flowCta: showFlow ? ((preview && preview.flowCta) || ctx.preset.flowCta) : "",
+  });
+  if (flowWrap && showFlow && state.flowSendProfile) {
+    flowWrap.classList.remove("hidden");
+    const screenId = state.flowSendProfile.defaultScreen || "INTRO";
+    renderFlowScreenPreview($("ncFlowPreview"), screenId, state.flowSendProfile);
+  } else if (flowWrap) {
+    flowWrap.classList.add("hidden");
+  }
+}
+
+function updateNcFlowSection() {
+  const tplName = ($("ncTemplate") && $("ncTemplate").value) || "";
+  const ctx = getNcPresetContext(tplName);
+  const section = $("ncFlowSection");
+  const cb = $("ncIncludeFlow");
+  const hint = $("ncFlowHint");
+  if (!section) return;
+  if (!ctx || !ctx.flowTemplateName) {
+    section.classList.add("hidden");
+    updateNcPreview();
+    return;
+  }
+  if (ctx.isFlowTpl) {
+    section.classList.add("hidden");
+  } else {
+    section.classList.remove("hidden");
+    if (cb) {
+      cb.disabled = !ctx.flowApproved;
+      if (!ctx.flowApproved) cb.checked = false;
+      else if (!cb.dataset.touched) cb.checked = true;
+    }
+    if (hint) {
+      hint.textContent = ctx.flowApproved
+        ? t("templates.ncFlowReady", { name: ctx.flowTemplateName })
+        : t("templates.ncFlowPending", { name: ctx.flowTemplateName });
+    }
+  }
+  updateNcPreview();
+}
+
+async function ensureNcFlowPreviewProfile(tplName) {
+  const ctx = getNcPresetContext(tplName);
+  if (!ctx || !ctx.preset.templateFlowName) return;
+  if (!state.flows.length) await loadFlows();
+  const sampleNames = {
+    punto_pago_tarjeta_credito_bienvenida: "punto_pago_tarjeta_credito",
+    punto_pago_autorizacion_pago: "punto_pago_3ds_verificacion",
+  };
+  const base = sampleNames[ctx.preset.key] || "";
+  const flow = state.flows.find((f) => base && String(f.name || "").startsWith(base));
+  if (flow && flow.id) await loadFlowSendProfile(flow.id);
+}
+
+async function openNewChat(prefillName, opts) {
   showModal("modalNewChat");
   const sel = $("ncTemplate");
   const hint = $("ncHint");
   $("ncFields").innerHTML = "";
   renderVariableGuide($("ncVarGuide"), []);
+  if ($("ncIncludeFlow")) {
+    $("ncIncludeFlow").checked = false;
+    delete $("ncIncludeFlow").dataset.touched;
+  }
+  $("ncFlowSection")?.classList.add("hidden");
   sel.innerHTML = `<option>${escapeHtml(t("common.loading"))}</option>`;
   if (!state.templates.length) await loadTemplates();
+  if (!state.templatePresets.length) await loadTemplatePresets();
   const approved = state.templates.filter((t) => (t.status || "").toLowerCase() === "approved");
   if (!approved.length) {
     sel.innerHTML = `<option value="">${escapeHtml(t("bulk.noApprovedTemplates"))}</option>`;
@@ -2395,12 +2521,18 @@ async function openNewChat(prefillName) {
     .map((t) => {
       const bill = t.categoryInfo ? t.categoryInfo.billingLabel : String(t.category || "").toLowerCase();
       const warn = t.categoryInfo && t.categoryInfo.impactsBilling ? " ⚠" : "";
-      return `<option value="${escapeHtml(t.name)}">${escapeHtml(t.name)} · ${escapeHtml(bill)}${warn}</option>`;
+      const hasFlow = templateHasFlowButtonMeta(t) ? " · Flow" : "";
+      return `<option value="${escapeHtml(t.name)}">${escapeHtml(t.name)} · ${escapeHtml(bill)}${hasFlow}${warn}</option>`;
     })
     .join("");
   if (prefillName && approved.some((t) => t.name === prefillName)) sel.value = prefillName;
+  if (opts && opts.phone && $("ncPhone")) $("ncPhone").value = opts.phone;
+  if (opts && opts.name && $("ncName")) $("ncName").value = opts.name;
+  else if (state.activePhone && $("ncPhone") && !($("ncPhone").value)) $("ncPhone").value = state.activePhone;
   updateNewChatCategoryHint();
   renderTemplateFields(tplByName(sel.value));
+  await ensureNcFlowPreviewProfile(sel.value);
+  updateNcFlowSection();
 }
 
 function updateNewChatCategoryHint() {
@@ -2422,9 +2554,9 @@ function updateNewChatCategoryHint() {
 async function sendNewChat() {
   const phone = $("ncPhone").value.replace(/[^0-9]/g, "");
   const name = $("ncName").value.trim();
-  const tplName = $("ncTemplate").value;
+  const tplName = getNcEffectiveTemplateName();
   if (!phone || !tplName) { toast(t("toast.phoneAndTemplateRequired"), "error"); return; }
-  const tpl = tplByName(tplName);
+  const tpl = tplByName(tplName) || tplByName($("ncTemplate").value);
   const components = tpl ? collectComponents(tpl) : [];
   const res = await post("/api/send-template", { phone, name, template: tplName, language: tpl ? tpl.language : "es", components });
   if (res.ok) {
@@ -4146,25 +4278,23 @@ function renderFlowsList() {
   );
 }
 
-function getFlowSendScreenId() {
-  const el = $("flowSendScreen");
+function getFlowViewScreenId() {
+  const el = $("flowViewScreen");
   return el ? String(el.value || "").trim() : "";
 }
 
-function setFlowSendScreen(screenId) {
-  const el = $("flowSendScreen");
+function setFlowViewScreen(screenId) {
+  const el = $("flowViewScreen");
   if (el) el.value = screenId;
-  updateFlowSendPreview();
+  updateFlowViewPreview();
 }
 
-function renderFlowSendPhonePreview(screenId) {
-  const box = $("flowSendFlowPreview");
-  if (!box) return;
-  const profile = state.flowSendProfile;
+function renderFlowScreenPreview(container, screenId, profile) {
+  if (!container) return;
   const screen = (profile && profile.screens || []).find((s) => s.id === screenId);
   const preview = screen && screen.preview;
   if (!preview) {
-    box.innerHTML = `<p class="muted sm">${escapeHtml(t("flows.sendPreviewFlowEmpty"))}</p>`;
+    container.innerHTML = `<p class="muted sm">${escapeHtml(t("flows.sendPreviewFlowEmpty"))}</p>`;
     return;
   }
 
@@ -4176,8 +4306,8 @@ function renderFlowSendPhonePreview(screenId) {
     ? `<img class="flow-phone-img" src="${escapeHtml(preview.imageUrl || "/assets/punto-pago-card.png")}" alt="" onerror="this.src='/assets/punto-pago-card.png'" />`
     : "";
 
-  box.className = "flow-phone flow-phone-pp";
-  box.innerHTML = `
+  container.className = "flow-phone flow-phone-pp";
+  container.innerHTML = `
     <div class="flow-phone-nav flow-phone-nav-pp">
       <span class="flow-phone-cancel">${escapeHtml(t("flows.preview.cancel"))}</span>
       <span class="flow-phone-title">${escapeHtml(preview.title || screenId)}</span>
@@ -4195,8 +4325,8 @@ function renderFlowSendPhonePreview(screenId) {
     <div class="flow-phone-managed">${escapeHtml(t("flows.preview.managedBy", { brand: brandDisplayName() }))}</div>`;
 }
 
-function renderFlowSendJourney(screens, activeId) {
-  const box = $("flowSendJourney");
+function renderFlowJourneyPicker(boxId, screens, activeId, onPick) {
+  const box = $(boxId);
   if (!box) return;
   if (!screens || !screens.length) {
     box.innerHTML = `<p class="muted sm">${escapeHtml(t("flows.sendUnknownFlow"))}</p>`;
@@ -4205,32 +4335,20 @@ function renderFlowSendJourney(screens, activeId) {
   const steps = screens.map((s) => {
     const active = s.id === activeId ? " active" : "";
     const terminal = s.terminal ? " terminal" : "";
-    const start = s.id === activeId
-      ? `<span class="flows-send-journey-start">★ ${escapeHtml(t("flows.sendJourneyStart"))}</span>`
-      : "";
-    return `<button type="button" class="flows-send-journey-step${active}${terminal}" data-screen-id="${escapeHtml(s.id)}" title="${escapeHtml(s.id)}">${escapeHtml(t("flows.sendJourneyStep", { n: s.index, title: s.title }))}${start}</button>`;
+    return `<button type="button" class="flows-send-journey-step${active}${terminal}" data-screen-id="${escapeHtml(s.id)}" title="${escapeHtml(s.id)}">${escapeHtml(t("flows.sendJourneyStep", { n: s.index, title: s.title }))}</button>`;
   }).join("");
-  box.innerHTML = `
-    <strong>${escapeHtml(t("flows.sendJourneyTitle"))}</strong>
-    <p class="muted sm" style="margin:6px 0 0">${escapeHtml(t("flows.sendJourneyTap"))}</p>
-    <div class="flows-send-journey-steps">${steps}</div>`;
+  box.innerHTML = `<div class="flows-send-journey-steps">${steps}</div>`;
   box.querySelectorAll("[data-screen-id]").forEach((btn) => {
-    btn.addEventListener("click", () => setFlowSendScreen(btn.dataset.screenId));
+    btn.addEventListener("click", () => onPick(btn.dataset.screenId));
   });
 }
 
-function updateFlowSendPreview() {
+function updateFlowViewPreview() {
   const profile = state.flowSendProfile;
   const defaults = (profile && profile.sendDefaults) || {};
-  const screenId = getFlowSendScreenId() || defaults.screen || (profile && profile.defaultScreen) || "";
-  renderWaMessagePreview($("flowSendPreview"), {
-    headerText: defaults.headerText || "",
-    bodyText: ($("flowSendBody") && $("flowSendBody").value.trim()) || defaults.bodyText || "—",
-    footerText: defaults.footerText || "",
-    flowCta: ($("flowSendCta") && $("flowSendCta").value.trim()) || defaults.cta || t("flows.send"),
-  });
-  renderFlowSendJourney(profile && profile.screens, screenId);
-  renderFlowSendPhonePreview(screenId);
+  const screenId = getFlowViewScreenId() || defaults.screen || (profile && profile.defaultScreen) || "";
+  renderFlowJourneyPicker("flowViewJourney", profile && profile.screens, screenId, setFlowViewScreen);
+  renderFlowScreenPreview($("flowViewFlowPreview"), screenId, profile);
 }
 
 function syncFlowPublishButton(status) {
@@ -4245,39 +4363,31 @@ function applyFlowSendProfile(profileRes) {
   const profile = (profileRes && profileRes.profile) || null;
   state.flowSendProfile = profile;
   const defaults = (profile && profile.sendDefaults) || {};
-  const intro = $("flowSendIntro");
-  if (intro) {
-    intro.textContent = profile && profile.sampleKey
-      ? t("flows.sendIntro")
-      : t("flows.sendUnknownFlow");
-  }
-  if ($("flowSendBody") && defaults.bodyText) $("flowSendBody").value = defaults.bodyText;
-  if ($("flowSendCta") && (defaults.cta || profile?.defaultCta)) {
-    $("flowSendCta").value = defaults.cta || profile.defaultCta;
-  }
-  setFlowSendScreen(defaults.screen || profile?.defaultScreen || "WELCOME_SCREEN");
+  const screenId = defaults.screen || profile?.defaultScreen || "WELCOME_SCREEN";
+  if ($("flowViewScreen")) $("flowViewScreen").value = screenId;
+  updateFlowViewPreview();
 }
 
 async function loadFlowSendProfile(flowId) {
   const res = await api(`/api/flows/${encodeURIComponent(flowId)}/send-profile`);
   if (!res.ok) {
     state.flowSendProfile = null;
-    updateFlowSendPreview();
+    updateFlowViewPreview();
     return;
   }
   applyFlowSendProfile(res);
 }
 
-function openFlowSendModal() {
+function openFlowViewModal() {
   if (!state.activeFlowId) {
     toast(t("toast.selectFlow"), "error");
     return;
   }
   const flowName = ($("flowsDetailName") && $("flowsDetailName").textContent) || "";
-  const title = $("flowSendModalTitle");
-  if (title) title.textContent = t("flows.sendModalTitle", { name: flowName });
-  updateFlowSendPreview();
-  showModal("modalFlowSend");
+  const title = $("flowViewModalTitle");
+  if (title) title.textContent = `${t("flows.viewApprovedTour")}: ${flowName}`;
+  updateFlowViewPreview();
+  showModal("modalFlowView");
 }
 
 async function selectFlow(id) {
@@ -4315,33 +4425,6 @@ async function createFlowSampleKey(sample) {
 
 async function createFlowSample() {
   await createFlowSampleKey(($("flowSampleSelect") || {}).value || "hello");
-}
-
-async function sendActiveFlow() {
-  const id = state.activeFlowId;
-  if (!id) { toast(t("toast.selectFlow"), "error"); return; }
-  const phone = $("flowSendPhone").value.trim();
-  if (!phone) { toast(t("toast.phoneRequired"), "error"); return; }
-  const profile = state.flowSendProfile;
-  const defaults = (profile && profile.sendDefaults) || {};
-  const isDynamic = (profile && profile.dynamic) || (state.activeFlowDetail && state.activeFlowDetail.endpoint_uri);
-  const res = await post(`/api/flows/${encodeURIComponent(id)}/send`, {
-    phone,
-    bodyText: $("flowSendBody").value.trim(),
-    cta: $("flowSendCta").value.trim(),
-    screen: getFlowSendScreenId(),
-    headerText: defaults.headerText || undefined,
-    footerText: defaults.footerText || undefined,
-    flowAction: isDynamic ? "data_exchange" : (profile && profile.flowAction) || undefined,
-  });
-  if (!res.ok) {
-    toast(res.hint || res.error || t("toast.sendFailedGeneric"), "error");
-    return;
-  }
-  closeModals();
-  toast(t("toast.flowSent", { mode: res.mode || "published" }), "ok");
-  if (state.activeFlowId) await loadFlowDetail(state.activeFlowId);
-  await loadFlowActivity();
 }
 
 async function publishActiveFlow() {
@@ -4679,10 +4762,20 @@ function bindEvents() {
   $("searchInput").addEventListener("input", (e) => { state.filter = e.target.value; renderConversations(); });
   $("composer").addEventListener("submit", (e) => { e.preventDefault(); sendText($("messageInput").value); });
   $("newChatBtn").addEventListener("click", () => openNewChat());
-  $("ncTemplate").addEventListener("change", (e) => {
+  $("ncTemplate").addEventListener("change", async (e) => {
     renderTemplateFields(tplByName(e.target.value));
     updateNewChatCategoryHint();
+    await ensureNcFlowPreviewProfile(e.target.value);
+    updateNcFlowSection();
   });
+  const ncIncludeFlow = $("ncIncludeFlow");
+  if (ncIncludeFlow) {
+    ncIncludeFlow.addEventListener("change", () => {
+      ncIncludeFlow.dataset.touched = "1";
+      updateNcFlowSection();
+    });
+  }
+  $("ncFields")?.addEventListener("input", () => updateNcPreview());
   $("ncSend").addEventListener("click", sendNewChat);
   $("attachBtn").addEventListener("click", () => showModal("modalMedia"));
   $("detailMediaBtn").addEventListener("click", () => showModal("modalMedia"));
@@ -4850,19 +4943,15 @@ function bindEvents() {
     const el = $(id);
     if (el) el.addEventListener("input", updateTpPreview);
   });
-  $("flowOpenSendBtn")?.addEventListener("click", openFlowSendModal);
-  $("flowSendBtn")?.addEventListener("click", sendActiveFlow);
-  ["flowSendBody", "flowSendCta"].forEach((id) => {
-    const el = $(id);
-    if (!el) return;
-    el.addEventListener("input", updateFlowSendPreview);
-    el.addEventListener("change", updateFlowSendPreview);
-  });
+  $("flowViewTourBtn")?.addEventListener("click", openFlowViewModal);
   $("flowPublishBtn")?.addEventListener("click", publishActiveFlow);
   $("flowRefreshResponses")?.addEventListener("click", loadFlowActivity);
   if ($("flowEndpointSetupBtn")) $("flowEndpointSetupBtn").addEventListener("click", setupFlowEndpoint);
   if ($("payAuthSendBtn")) $("payAuthSendBtn").addEventListener("click", sendPaymentAuthTest);
-  $("detailTemplateBtn").addEventListener("click", () => openNewChat());
+  $("detailTemplateBtn").addEventListener("click", () => {
+    const d = state.conversationDetail || {};
+    openNewChat(null, { phone: state.activePhone, name: d.name || d.profileName || "" });
+  });
   $("detailToggle").addEventListener("click", () => {
     const pane = $("detailPane");
     if (!pane) return;

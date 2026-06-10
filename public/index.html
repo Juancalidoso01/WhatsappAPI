@@ -618,7 +618,7 @@
                   <span id="flowsDetailStatus" class="flow-status">—</span>
                 </div>
                 <div class="flows-detail-actions">
-                  <button type="button" id="flowOpenSendBtn" class="btn-primary sm" data-i18n="flows.openSendAssistant">Enviar a contacto</button>
+                  <button type="button" id="flowViewTourBtn" class="btn-ghost sm" data-i18n="flows.viewApprovedTour">Ver tour aprobado</button>
                   <button type="button" id="flowDetailProbarBtn" class="btn-ghost sm hidden" data-i18n="flows.tryWhatsapp">Probar en WhatsApp</button>
                   <button type="button" id="flowPublishBtn" class="btn-ghost sm hidden" data-i18n="flows.publishDraft">Publicar borrador</button>
                   <a id="flowPreviewLink" class="btn-ghost sm hidden" href="#" target="_blank" rel="noopener" data-i18n="flows.openMeta">Abrir en Meta</a>
@@ -638,7 +638,7 @@
               <div id="flowsDetailResponses" class="flows-detail-pane hidden"></div>
 
               <div class="flows-detail-send-cta">
-                <p class="muted sm" data-i18n="flows.openSendAssistantHint">Abre el asistente con vista previa del mensaje y del tour en el teléfono.</p>
+                <p class="muted sm" data-i18n="flows.sendViaTemplatesHint">Para enviar a clientes usa <strong>Conversaciones → Enviar plantilla</strong> y elige la versión con Flow si está aprobada.</p>
               </div>
             </section>
 
@@ -859,21 +859,41 @@
 
     <!-- ============ MODALS ============ -->
   <div id="modalNewChat" class="modal hidden">
-    <div class="modal-card">
+    <div class="modal-card modal-card-wide modal-card-nc">
       <h3 data-i18n="modals.newChat.title">Nueva conversación</h3>
       <p class="muted" data-i18n="modals.newChat.hint">Para iniciar en frío, WhatsApp exige una plantilla aprobada.</p>
-      <label><span data-i18n="modals.newChat.phone">Número (con código de país)</span>
-        <input id="ncPhone" type="text" data-i18n-placeholder="modals.newChat.phonePlaceholder" placeholder="50712345678" />
-      </label>
-      <label><span data-i18n="modals.newChat.name">Nombre (opcional)</span>
-        <input id="ncName" type="text" data-i18n-placeholder="modals.newChat.namePlaceholder" placeholder="Nombre del cliente" />
-      </label>
-      <label><span data-i18n="modals.newChat.template">Plantilla</span>
-        <select id="ncTemplate"></select>
-      </label>
-      <div id="ncFields" class="tpl-fields"></div>
-      <div id="ncVarGuide" class="tpl-var-guide hidden" aria-label="Leyenda de variables"></div>
-      <div id="ncHint" class="hint"></div>
+      <div class="nc-layout">
+        <div class="nc-form-col">
+          <label><span data-i18n="modals.newChat.phone">Número (con código de país)</span>
+            <input id="ncPhone" type="text" data-i18n-placeholder="modals.newChat.phonePlaceholder" placeholder="50712345678" />
+          </label>
+          <label><span data-i18n="modals.newChat.name">Nombre (opcional)</span>
+            <input id="ncName" type="text" data-i18n-placeholder="modals.newChat.namePlaceholder" placeholder="Nombre del cliente" />
+          </label>
+          <label><span data-i18n="modals.newChat.template">Plantilla</span>
+            <select id="ncTemplate"></select>
+          </label>
+          <div id="ncFlowSection" class="nc-flow-section hidden">
+            <label class="nc-flow-toggle">
+              <input type="checkbox" id="ncIncludeFlow" />
+              <span data-i18n="templates.ncIncludeFlow">Incluir tour interactivo (Flow aprobado)</span>
+            </label>
+            <p class="muted sm" id="ncFlowHint"></p>
+          </div>
+          <div id="ncFields" class="tpl-fields"></div>
+          <div id="ncVarGuide" class="tpl-var-guide hidden" aria-label="Leyenda de variables"></div>
+          <div id="ncHint" class="hint"></div>
+        </div>
+        <aside class="nc-preview-col">
+          <h4 class="flows-send-section-title" data-i18n="templates.ncPreviewTitle">Vista previa aprobada</h4>
+          <p class="muted sm" data-i18n="templates.ncPreviewHint">Mensaje y tour tal como los aprobó Meta. Solo puedes cambiar variables (ej. nombre).</p>
+          <div id="ncWaPreview"></div>
+          <div id="ncFlowPreviewWrap" class="hidden">
+            <h4 class="flows-send-section-title flows-send-flow-title" data-i18n="flows.sendPreviewFlow">Pantalla del Flow</h4>
+            <div id="ncFlowPreview"></div>
+          </div>
+        </aside>
+      </div>
       <div class="modal-actions">
         <button class="btn-ghost" data-close data-i18n="common.cancel">Cancelar</button>
         <button id="ncSend" class="btn-primary" data-i18n="modals.newChat.send">Enviar</button>
@@ -958,55 +978,23 @@
     </div>
   </div>
 
-  <div id="modalFlowSend" class="modal hidden">
+  <div id="modalFlowView" class="modal hidden">
     <div class="modal-card modal-card-flow-send">
       <div class="flow-send-modal-head">
         <div>
-          <h3 id="flowSendModalTitle" data-i18n="flows.sendToContact">Enviar a un contacto</h3>
-          <p class="muted sm flows-send-intro" id="flowSendIntro" data-i18n="flows.sendIntro">Configura el mensaje de WhatsApp y la pantalla donde empieza el Flow.</p>
+          <h3 id="flowViewModalTitle" data-i18n="flows.viewApprovedTour">Ver tour aprobado</h3>
+          <p class="muted sm" id="flowViewIntro" data-i18n="flows.viewTourIntro">Vista de solo lectura del Flow publicado en Meta. El envío a clientes se hace desde Conversaciones → Enviar plantilla.</p>
         </div>
         <button type="button" class="icon-btn ghost flow-send-modal-close" data-close aria-label="Cerrar">
           <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M18.3 5.71a1 1 0 0 0-1.41 0L12 10.59 7.11 5.7A1 1 0 0 0 5.7 7.11L10.59 12l-4.89 4.89a1 1 0 1 0 1.41 1.42L12 13.41l4.89 4.89a1 1 0 0 0 1.42-1.41L13.41 12l4.89-4.89a1 1 0 0 0-.01-1.4z"/></svg>
         </button>
       </div>
-      <div class="flows-send-layout flow-send-modal-layout">
-        <div class="flows-send-form-col">
-          <section class="flows-send-section">
-            <h4 class="flows-send-section-title"><span data-i18n="flows.sendStepRecipient">① Destinatario</span> <span class="field-tag chat" data-i18n="flows.sendTagWhatsapp">WhatsApp</span></h4>
-            <p class="muted sm" data-i18n="flows.sendHintPhone">Número con código de país. Solo define a quién llega el mensaje.</p>
-            <label><span data-i18n="flows.phone">Teléfono</span>
-              <input id="flowSendPhone" type="text" placeholder="50761234567" autocomplete="tel" />
-            </label>
-          </section>
-          <section class="flows-send-section">
-            <h4 class="flows-send-section-title"><span data-i18n="flows.sendStepMessage">② Mensaje en el chat</span> <span class="field-tag chat" data-i18n="flows.sendTagWhatsapp">WhatsApp</span></h4>
-            <p class="muted sm" data-i18n="flows.sendHintMessage">Lo que ve el cliente antes de tocar el botón. No modifica el contenido interno del Flow.</p>
-            <label><span data-i18n="flows.messageText">Texto del mensaje</span>
-              <textarea id="flowSendBody" rows="3" placeholder=""></textarea>
-            </label>
-            <label><span data-i18n="flows.buttonText">Texto del botón</span>
-              <input id="flowSendCta" type="text" placeholder="Abrir" />
-            </label>
-          </section>
-          <section class="flows-send-section">
-            <h4 class="flows-send-section-title"><span data-i18n="flows.sendStepFlow">③ Inicio del Flow</span> <span class="field-tag flow" data-i18n="flows.sendTagFlow">Dentro del Flow</span></h4>
-            <p class="muted sm" data-i18n="flows.sendHintFlow">Toca un paso para ver cómo se verá en el teléfono. El envío siempre empieza en el paso marcado como inicio.</p>
-            <div id="flowSendJourney" class="flows-send-journey muted sm"></div>
-            <input type="hidden" id="flowSendScreen" value="INTRO" />
-          </section>
-        </div>
-        <aside class="flows-send-preview-col flow-send-modal-preview">
-          <h4 class="flows-send-section-title" data-i18n="flows.sendPreviewChat">① Mensaje en WhatsApp</h4>
-          <p class="muted sm" data-i18n="flows.sendPreviewHint">Lo que llega al chat antes de abrir el Flow.</p>
-          <div id="flowSendPreview"></div>
-          <h4 class="flows-send-section-title flows-send-flow-title" data-i18n="flows.sendPreviewFlow">② Pantalla del Flow en el teléfono</h4>
-          <p class="muted sm" data-i18n="flows.sendPreviewFlowHint">Vista del paso seleccionado. El contenido interno no se edita aquí.</p>
-          <div id="flowSendFlowPreview"></div>
-        </aside>
-      </div>
+      <p class="muted sm" data-i18n="flows.sendJourneyTap">Toca un paso para verlo en el teléfono →</p>
+      <div id="flowViewJourney" class="flows-send-journey muted sm"></div>
+      <input type="hidden" id="flowViewScreen" value="INTRO" />
+      <div id="flowViewFlowPreview" class="flow-view-phone-wrap"></div>
       <div class="modal-actions flow-send-modal-actions">
-        <button type="button" class="btn-ghost" data-close data-i18n="common.cancel">Cancelar</button>
-        <button type="button" id="flowSendBtn" class="btn-primary" data-i18n="flows.sendToWhatsapp">Enviar a WhatsApp</button>
+        <button type="button" class="btn-ghost" data-close data-i18n="common.close">Cerrar</button>
       </div>
     </div>
   </div>

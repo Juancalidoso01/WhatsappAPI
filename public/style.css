@@ -936,6 +936,16 @@ input, textarea, select { font-family: inherit; }
 .hint.error { color: var(--red); }
 .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 8px; }
 .modal-card-wide { max-width: 560px; }
+.modal-card-nc { max-width: min(920px, 96vw); }
+.nc-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(260px, 320px); gap: 20px; align-items: start; margin-bottom: 8px; }
+.nc-flow-section { margin: 10px 0 14px; padding: 12px 14px; border-radius: 12px; background: var(--surface-2); border: 1px solid var(--border); }
+.nc-flow-toggle { display: flex; align-items: flex-start; gap: 10px; font-size: 13px; font-weight: 600; margin: 0; }
+.nc-flow-toggle input { margin-top: 3px; }
+.nc-preview-col .wa-preview-phone, .nc-preview-col .flow-phone { max-width: 100%; margin: 0 auto 12px; }
+.flow-view-phone-wrap .flow-phone { max-width: 340px; margin: 16px auto 0; }
+@media (max-width: 760px) {
+  .nc-layout { grid-template-columns: 1fr; }
+}
 .muted.sm { font-size: 11px; }
 .field-count { display: block; font-size: 10px; margin-top: 4px; font-weight: 400; }
 .field-count.warn { color: #b45309; }
