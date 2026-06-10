@@ -4028,12 +4028,13 @@ function renderFlowUseCaseGrid() {
     if (u.status === "soon" || !u.templates || !u.templates.length) return;
     u.templates.forEach((tpl) => {
       cards.push(`
-        <article class="flow-template-card${tpl.key === "payment_auth" ? " featured" : ""}">
+        <article class="flow-template-card${tpl.key === "payment_auth" || tpl.key === "tarjeta_credito" ? " featured" : ""}">
           <h3>${escapeHtml(tpl.name || tpl.key)}</h3>
           <p class="muted sm">${escapeHtml(u.label)} · ${escapeHtml(tpl.description || "")}</p>
           <div class="flows-actions">
             <button type="button" class="btn-primary sm flow-create-sample" data-sample="${escapeHtml(tpl.key)}">${escapeHtml(t("flows.studio.createInMeta"))}</button>
             ${tpl.key === "payment_auth" ? `<button type="button" class="btn-ghost sm flow-go-probar">${escapeHtml(t("flows.studio.tryBtn"))}</button>` : ""}
+            ${tpl.key === "tarjeta_credito" ? `<button type="button" class="btn-ghost sm flow-open-tpl-draft" data-preset="punto_pago_tarjeta_credito_bienvenida">${escapeHtml(t("templates.draftsTitle"))}</button>` : ""}
           </div>
         </article>`);
     });
@@ -4046,6 +4047,12 @@ function renderFlowUseCaseGrid() {
   );
   box.querySelectorAll(".flow-go-probar").forEach((btn) =>
     btn.addEventListener("click", () => openFlowProbar())
+  );
+  box.querySelectorAll(".flow-open-tpl-draft").forEach((btn) =>
+    btn.addEventListener("click", () => {
+      switchScreen("templates");
+      openTplDraftModal(btn.dataset.preset);
+    })
   );
 }
 

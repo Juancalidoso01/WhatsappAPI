@@ -47,6 +47,15 @@ const USE_CASES = [
     status: "soon",
   },
   {
+    id: "productos",
+    label: "Productos Punto Pago",
+    icon: "megaphone",
+    description: "Tours interactivos por producto: conoce beneficios y pasos para solicitarlos desde la app.",
+    samples: ["tarjeta_credito"],
+    status: "available",
+    featured: true,
+  },
+  {
     id: "marketing",
     label: "Marketing y fidelización",
     icon: "megaphone",

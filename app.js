@@ -52,6 +52,7 @@ const BillingLedger = require('./services/billing-ledger');
 const PortalEvents = require('./services/portal-events');
 
 const PAYMENT_AUTH_FLOW_KEY = 'wa:flow:payment_auth_3ds_v3';
+const TARJETA_CREDITO_FLOW_KEY = 'wa:flow:tarjeta_credito_v1';
 const FLOW_KEY_SYNCED = 'wa:flow:public_key_synced';
 const app = express();
 
@@ -472,35 +473,38 @@ async function fetchFlowList({ cleanup = false } = {}) {
   return { data: visible, totalBefore: all.length, cleaned, deletedIds };
 }
 
-async function getOrCreatePaymentAuthFlow() {
-  const endpointUri = await ensureFlowEndpointReady();
+async function cacheValidFlow(flowId) {
+  if (!flowId) return false;
+  try {
+    const meta = await GraphApi.getFlow(flowId, 'id,name,status,validation_errors');
+    if (!meta || !meta.id) return false;
+    const errors = meta.validation_errors || [];
+    if (errors.length) return false;
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
 
-  async function cacheValid(flowId) {
-    if (!flowId) return false;
-    try {
-      const meta = await GraphApi.getFlow(flowId, 'id,name,status,validation_errors');
-      if (!meta || !meta.id) return false;
-      const errors = meta.validation_errors || [];
-      if (errors.length) return false;
-      return true;
-    } catch (_) {
-      return false;
-    }
+async function getOrCreateFlowFromSample(sampleKey, cacheKey) {
+  const tpl = flowSamples.getSample(sampleKey);
+  if (!tpl) throw new Error(`Sample ${sampleKey} no configurado.`);
+
+  let endpointUri = null;
+  if (tpl.dynamic) {
+    endpointUri = await ensureFlowEndpointReady();
   }
 
-  if (redis) {
-    const cached = await redis.get(PAYMENT_AUTH_FLOW_KEY);
-    if (cached && await cacheValid(cached)) {
-      return { flowId: String(cached), endpointUri };
+  if (cacheKey && redis) {
+    const cached = await redis.get(cacheKey);
+    if (cached && await cacheValidFlow(cached)) {
+      return { flowId: String(cached), endpointUri, sample: tpl };
     }
-    if (cached) await redis.del(PAYMENT_AUTH_FLOW_KEY);
+    if (cached) await redis.del(cacheKey);
   }
-
-  const tpl = flowSamples.getSample('payment_auth');
-  if (!tpl) throw new Error('Sample payment_auth no configurado.');
 
   const result = await GraphApi.createFlow(config.wabaId, {
-    name: `${tpl.name || 'punto_pago_3ds_verificacion'}_${Date.now()}`,
+    name: `${tpl.name || sampleKey}_${Date.now()}`,
     categories: tpl.categories,
     flowJson: tpl.flow_json,
     publish: false,
@@ -508,10 +512,14 @@ async function getOrCreatePaymentAuthFlow() {
   });
   const validationErrors = result.validation_errors || [];
   if (validationErrors.length) {
-    throw new Error(validationErrors[0].message || validationErrors[0].error || 'Flow de autorización inválido.');
+    throw new Error(validationErrors[0].message || validationErrors[0].error || 'Flow inválido.');
   }
-  if (redis && result.id) await redis.set(PAYMENT_AUTH_FLOW_KEY, String(result.id));
-  return { flowId: String(result.id), endpointUri, flow: result };
+  if (cacheKey && redis && result.id) await redis.set(cacheKey, String(result.id));
+  return { flowId: String(result.id), endpointUri, flow: result, sample: tpl };
+}
+
+async function getOrCreatePaymentAuthFlow() {
+  return getOrCreateFlowFromSample('payment_auth', PAYMENT_AUTH_FLOW_KEY);
 }
 
 app.post('/api/flows/endpoint', apiJson, async (req, res) => {
@@ -1324,7 +1332,12 @@ app.post('/api/templates/presets/:key/submit', apiJson, async (req, res) => {
   let flowId = null;
   if (includeFlow && preset.flowCta) {
     try {
-      ({ flowId } = await getOrCreatePaymentAuthFlow());
+      const sampleKey = preset.flowSampleKey || 'payment_auth';
+      const cacheKey = preset.flowCacheKey
+        || (sampleKey === 'tarjeta_credito' ? TARJETA_CREDITO_FLOW_KEY : PAYMENT_AUTH_FLOW_KEY);
+      const { flowId: fid, sample } = await getOrCreateFlowFromSample(sampleKey, cacheKey);
+      flowId = fid;
+      const screenId = preset.flowScreenId || (sample && sample.defaultScreen) || 'WELCOME_SCREEN';
       built.components.push({
         type: 'BUTTONS',
         buttons: [{
@@ -1332,13 +1345,13 @@ app.post('/api/templates/presets/:key/submit', apiJson, async (req, res) => {
           text: String(preset.flowCta).slice(0, 25),
           flow_id: String(flowId),
           flow_action: 'navigate',
-          navigate_screen: 'AUTH',
+          navigate_screen: screenId,
         }],
       });
     } catch (err) {
       return res.status(200).json({
         ok: false,
-        error: `No se pudo vincular el Flow 3DS: ${err.message || err}`,
+        error: `No se pudo vincular el Flow: ${err.message || err}`,
       });
     }
   }

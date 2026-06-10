@@ -253,6 +253,8 @@ const VARIABLE_CATALOG_GROUPS = [
 const TEMPLATE_GUIDES = {
   punto_pago_3ds_confirmar_pago: "punto_pago_autorizacion_pago",
   punto_pago_3ds_confirmar_pago_flow: "punto_pago_autorizacion_pago",
+  tarjeta_credito_info: "punto_pago_tarjeta_credito_bienvenida",
+  tarjeta_credito_info_flow: "punto_pago_tarjeta_credito_bienvenida",
   recordatorio_pago: "punto_pago_recordatorio_pago",
   recordatorio_mora: "punto_pago_recordatorio_mora",
   confirmacion_pago: "punto_pago_confirmacion_pago",

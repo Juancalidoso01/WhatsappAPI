@@ -279,6 +279,138 @@ const PAYMENT_AUTH_FLOW = {
   ],
 };
 
+/** Tour de producto: Tarjeta de Crédito (contenido basado en Centro de Ayuda Punto Pago). */
+const TARJETA_CREDITO_FLOW = {
+  version: "7.3",
+  routing_model: {
+    INTRO: ["BENEFICIOS"],
+    BENEFICIOS: ["COSTOS"],
+    COSTOS: ["SOLICITUD"],
+    SOLICITUD: ["LISTO"],
+    LISTO: [],
+  },
+  screens: [
+    {
+      id: "INTRO",
+      title: "Tarjeta de crédito",
+      layout: {
+        type: "SingleColumnLayout",
+        children: [
+          { type: "TextHeading", text: "Tarjeta de Crédito Punto Pago" },
+          {
+            type: "TextBody",
+            text: "Te mostramos en pocos pasos cómo funciona tu tarjeta y cómo solicitarla desde la app.",
+          },
+          {
+            type: "Footer",
+            label: "Empezar",
+            "on-click-action": { name: "navigate", next: { type: "screen", name: "BENEFICIOS" } },
+          },
+        ],
+      },
+    },
+    {
+      id: "BENEFICIOS",
+      title: "Beneficios",
+      layout: {
+        type: "SingleColumnLayout",
+        children: [
+          { type: "TextHeading", text: "¿Dónde la uso?" },
+          {
+            type: "TextBody",
+            text: "Paga en tiendas físicas y virtuales en Panamá y en el exterior con tu tarjeta Punto Pago.",
+          },
+          {
+            type: "TextBody",
+            text: "Límite disponible desde $10 hasta $500 según tu historial crediticio. El límite puede aumentar con buen uso y pagos a tiempo.",
+          },
+          {
+            type: "Footer",
+            label: "Siguiente",
+            "on-click-action": { name: "navigate", next: { type: "screen", name: "COSTOS" } },
+          },
+        ],
+      },
+    },
+    {
+      id: "COSTOS",
+      title: "Condiciones",
+      layout: {
+        type: "SingleColumnLayout",
+        children: [
+          { type: "TextHeading", text: "Condiciones claras" },
+          { type: "TextBody", text: "Sin anualidad." },
+          { type: "TextBody", text: "Interés mensual: 8,25%." },
+          {
+            type: "TextBody",
+            text: "Tu fecha de pago se configura a 30 días a partir de tu primera compra con la tarjeta de crédito.",
+          },
+          {
+            type: "Footer",
+            label: "Siguiente",
+            "on-click-action": { name: "navigate", next: { type: "screen", name: "SOLICITUD" } },
+          },
+        ],
+      },
+    },
+    {
+      id: "SOLICITUD",
+      title: "Cómo solicitarla",
+      layout: {
+        type: "SingleColumnLayout",
+        children: [
+          { type: "TextHeading", text: "Solicítala en la app" },
+          {
+            type: "TextBody",
+            text: "1. Abre la app y toca la imagen de la tarjeta negra (arriba a la derecha en la pantalla principal).",
+          },
+          {
+            type: "TextBody",
+            text: "2. Revisa y confirma el límite aprobado. 3. Indica la dirección de entrega. 4. Recibe tu tarjeta en casa.",
+          },
+          {
+            type: "TextBody",
+            text: "Si no ves la tarjeta negra, completa tu validación de identidad e inténtalo más adelante.",
+          },
+          {
+            type: "Footer",
+            label: "Siguiente",
+            "on-click-action": { name: "navigate", next: { type: "screen", name: "LISTO" } },
+          },
+        ],
+      },
+    },
+    {
+      id: "LISTO",
+      title: "Listo",
+      terminal: true,
+      success: true,
+      layout: {
+        type: "SingleColumnLayout",
+        children: [
+          { type: "TextHeading", text: "¡Ya conoces lo esencial!" },
+          {
+            type: "TextBody",
+            text: "Más detalles en el Centro de Ayuda Punto Pago. Si tienes dudas, escribe AYUDA por este chat.",
+          },
+          {
+            type: "TextBody",
+            text: "Centro de ayuda: faq-sooty-theta.vercel.app/articulo/tarjeta-de-credito/tarjeta-de-credito",
+          },
+          {
+            type: "Footer",
+            label: "Cerrar",
+            "on-click-action": {
+              name: "complete",
+              payload: { producto: "tarjeta_credito", origen: "welcome_flow" },
+            },
+          },
+        ],
+      },
+    },
+  ],
+};
+
 const SAMPLES = {
   hello: {
     name: "punto_pago_hello",
@@ -319,6 +451,17 @@ const SAMPLES = {
     flowAction: "data_exchange",
     dynamic: true,
     flow_json: PAYMENT_AUTH_FLOW,
+  },
+  tarjeta_credito: {
+    name: "punto_pago_tarjeta_credito",
+    categories: ["SIGN_UP"],
+    publish: false,
+    description: "Tour de producto: beneficios, condiciones y cómo solicitar la Tarjeta de Crédito en la app.",
+    defaultScreen: "INTRO",
+    defaultCta: "Conocer tarjeta",
+    flowAction: "navigate",
+    dynamic: false,
+    flow_json: TARJETA_CREDITO_FLOW,
   },
 };
 

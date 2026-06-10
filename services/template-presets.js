@@ -208,6 +208,44 @@ const PRESETS = {
       },
     ],
   },
+  punto_pago_tarjeta_credito_bienvenida: {
+    key: "punto_pago_tarjeta_credito_bienvenida",
+    label: "Tarjeta de crédito — tour de producto",
+    description: "Piloto por producto: presenta beneficios, condiciones y cómo solicitar la Tarjeta de Crédito desde la app (botón abre Flow).",
+    name: "tarjeta_credito_info",
+    templateFlowName: "tarjeta_credito_info_flow",
+    category: "MARKETING",
+    language: "es",
+    flowSampleKey: "tarjeta_credito",
+    flowScreenId: "INTRO",
+    flowCacheKey: "wa:flow:tarjeta_credito_v1",
+    headerText: "Tu Tarjeta de Crédito",
+    bodyText:
+      "Hola {{1}},\n\n"
+      + "Conoce tu Tarjeta de Crédito Punto Pago: dónde usarla, condiciones y cómo solicitarla desde la app.\n\n"
+      + "Toca el botón para ver el tour interactivo.",
+    footerText: "Punto Pago · Productos",
+    variables: [
+      {
+        key: "nombre_cliente",
+        placeholder: "{{1}}",
+        label: "Nombre del cliente",
+        type: "text",
+        example: "Ana Torres",
+        mapsTo: "Saludo personalizado en el mensaje de bienvenida al producto",
+      },
+    ],
+    flowCta: "Conocer tarjeta",
+    flowMessage: {
+      headerText: "Tu Tarjeta de Crédito",
+      bodyText:
+        "Hola {{nombre_cliente}},\n\n"
+        + "Conoce tu Tarjeta de Crédito Punto Pago: dónde usarla, condiciones y cómo solicitarla desde la app.\n\n"
+        + "Toca el botón para ver el tour interactivo.",
+      footerText: "Punto Pago · Productos",
+      cta: "Conocer tarjeta",
+    },
+  },
   punto_pago_bienvenida: {
     key: "punto_pago_bienvenida",
     label: "Bienvenida al cliente",
