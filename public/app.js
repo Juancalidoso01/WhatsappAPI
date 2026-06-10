@@ -248,32 +248,74 @@ function ensureNotifyAudio() {
   return notifyAudioCtx;
 }
 
-function playNotifySound() {
+function playChatNotifySound() {
   if (!state.soundEnabled) return;
   const ctx = ensureNotifyAudio();
   if (!ctx) return;
   try {
+    if (ctx.state === "suspended") ctx.resume().catch(() => {});
+    const t0 = ctx.currentTime;
+    [
+      { f: 587.33, start: 0, dur: 0.11 },
+      { f: 739.99, start: 0.09, dur: 0.13 },
+      { f: 880, start: 0.2, dur: 0.18 },
+    ].forEach(({ f, start, dur }) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "triangle";
+      osc.frequency.setValueAtTime(f, t0 + start);
+      gain.gain.setValueAtTime(0.0001, t0 + start);
+      gain.gain.exponentialRampToValueAtTime(0.34, t0 + start + 0.012);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t0 + start + dur);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(t0 + start);
+      osc.stop(t0 + start + dur + 0.03);
+    });
+  } catch (_) { /* ignore */ }
+}
+
+function playTemplateNotifySound() {
+  if (!state.soundEnabled) return;
+  const ctx = ensureNotifyAudio();
+  if (!ctx) return;
+  try {
+    if (ctx.state === "suspended") ctx.resume().catch(() => {});
     const t0 = ctx.currentTime;
     const gain = ctx.createGain();
     gain.connect(ctx.destination);
     gain.gain.setValueAtTime(0.0001, t0);
-    gain.gain.exponentialRampToValueAtTime(0.18, t0 + 0.02);
-    gain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.45);
-    [[880, 0], [660, 0.14]].forEach(([freq, offset]) => {
+    gain.gain.exponentialRampToValueAtTime(0.22, t0 + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.4);
+    [[784, 0], [622, 0.12]].forEach(([freq, offset]) => {
       const osc = ctx.createOscillator();
       osc.type = "sine";
       osc.frequency.setValueAtTime(freq, t0 + offset);
       osc.connect(gain);
       osc.start(t0 + offset);
-      osc.stop(t0 + offset + 0.22);
+      osc.stop(t0 + offset + 0.2);
     });
   } catch (_) { /* ignore */ }
 }
 
-function alertInBackground(title, body, onClick) {
-  if (!document.hidden) return;
-  playNotifySound();
-  tryBrowserNotify(title, body, onClick);
+function alertChatInbound(title, body, onClick, phone) {
+  const viewingChat = phone
+    && state.activePhone === String(phone)
+    && state.currentScreen === "chats";
+  if (!viewingChat) playChatNotifySound();
+  showNotifyCard({ title, body, onClick });
+  if (document.hidden) tryBrowserNotify(title, body, onClick);
+}
+
+function alertInBackground(title, body, onClick, kind = "template") {
+  if (kind === "chat") {
+    alertChatInbound(title, body, onClick);
+    return;
+  }
+  if (document.hidden) {
+    playTemplateNotifySound();
+    tryBrowserNotify(title, body, onClick);
+  }
 }
 
 function tryBrowserNotify(title, body, onClick) {
@@ -364,8 +406,7 @@ function showInboundAlert(c) {
     switchScreen("chats");
     openConversation(c.phone, c.name);
   };
-  showNotifyCard({ title, body, onClick: open });
-  alertInBackground(title, body, open);
+  alertChatInbound(title, body, open, c.phone);
 }
 
 function handleLiveNotification(ev) {
@@ -394,8 +435,7 @@ function handleLiveNotification(ev) {
       switchScreen("chats");
       openConversation(phone, name);
     };
-    showNotifyCard({ title, body, onClick: open });
-    alertInBackground(title, body, open);
+    alertChatInbound(title, body, open, phone);
     updateUnreadBadges();
     return;
   }
@@ -403,7 +443,8 @@ function handleLiveNotification(ev) {
     const open = () => switchScreen("templates");
     const kind = status === "APPROVED" || status === "REINSTATED" ? "ok" : status === "REJECTED" ? "error" : "";
     showNotifyCard({ title, body, onClick: open, kind });
-    alertInBackground(title, body, open);
+    alertInBackground(title, body, open, "template");
+    if (!document.hidden) playTemplateNotifySound();
   }
 }
 
@@ -556,7 +597,7 @@ function toggleNotifySound() {
   updateSoundBtn();
   if (state.soundEnabled) {
     ensureNotifyAudio();
-    playNotifySound();
+    playChatNotifySound();
   }
 }
 
