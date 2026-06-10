@@ -1121,11 +1121,19 @@ input, textarea, select { font-family: inherit; }
 .flows-send-journey { margin: 10px 0 12px; padding: 10px 12px; border-radius: 12px; background: var(--surface-2); line-height: 1.5; }
 .flows-send-journey-steps { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
 .flows-send-journey-step {
-  font-size: 11px; padding: 5px 9px; border-radius: 999px; background: #fff; border: 1px solid var(--border); color: var(--muted);
+  font: inherit; font-size: 11px; padding: 5px 9px; border-radius: 999px; background: #fff; border: 1px solid var(--border);
+  color: var(--muted); cursor: pointer; transition: background .12s, border-color .12s, color .12s;
 }
+.flows-send-journey-step:hover { background: var(--surface-2); color: var(--text); }
 .flows-send-journey-step.active { background: var(--brand-50); border-color: var(--brand); color: var(--brand-700); font-weight: 700; }
 .flows-send-journey-step.terminal { border-style: dashed; }
-.flows-send-preview-col .wa-preview-phone { max-width: 100%; }
+.flows-send-journey-start { display: inline-block; margin-left: 4px; font-size: 9px; font-weight: 800; color: var(--brand); }
+.flows-send-flow-title { margin-top: 18px; }
+.flows-send-preview-col .wa-preview-phone,
+.flows-send-preview-col .flow-phone { max-width: 100%; margin: 0 auto 12px; }
+.flows-send-preview-col .flow-phone-body p { margin: 0 0 8px; font-size: 13px; line-height: 1.45; }
+.flows-send-preview-col .flow-phone-body h3 { margin: 0 0 8px; font-size: 15px; }
+.flows-send-preview-col .flow-phone-link { color: var(--brand-600); font-size: 12px; text-decoration: underline; }
 @media (max-width: 900px) {
   .flows-send-layout { grid-template-columns: 1fr; }
 }

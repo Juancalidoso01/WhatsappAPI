@@ -619,6 +619,7 @@
                 </div>
                 <div class="flows-detail-actions">
                   <button type="button" id="flowDetailProbarBtn" class="btn-ghost sm hidden" data-i18n="flows.tryWhatsapp">Probar en WhatsApp</button>
+                  <button type="button" id="flowPublishBtn" class="btn-ghost sm hidden" data-i18n="flows.publishDraft">Publicar borrador</button>
                   <a id="flowPreviewLink" class="btn-ghost sm hidden" href="#" target="_blank" rel="noopener" data-i18n="flows.openMeta">Abrir en Meta</a>
                 </div>
               </div>
@@ -659,21 +660,21 @@
                     </section>
                     <section class="flows-send-section">
                       <h4 class="flows-send-section-title"><span data-i18n="flows.sendStepFlow">③ Inicio del Flow</span> <span class="field-tag flow" data-i18n="flows.sendTagFlow">Dentro del Flow</span></h4>
-                      <p class="muted sm" data-i18n="flows.sendHintFlow">Elige en qué pantalla empieza el recorrido. Las demás pantallas siguen el flujo definido en Meta.</p>
+                      <p class="muted sm" data-i18n="flows.sendHintFlow">Toca un paso para ver cómo se verá en el teléfono. El envío siempre empieza en el paso marcado como inicio.</p>
                       <div id="flowSendJourney" class="flows-send-journey muted sm"></div>
-                      <label><span data-i18n="flows.initialScreen">Pantalla inicial</span>
-                        <select id="flowSendScreen"></select>
-                      </label>
+                      <input type="hidden" id="flowSendScreen" value="INTRO" />
                     </section>
                     <div class="flows-actions">
-                      <button type="button" id="flowSendBtn" class="btn-primary sm" data-i18n="flows.send">Enviar</button>
-                      <button type="button" id="flowPublishBtn" class="btn-ghost sm" data-i18n="flows.publish">Publicar</button>
+                      <button type="button" id="flowSendBtn" class="btn-primary sm" data-i18n="flows.sendToWhatsapp">Enviar a WhatsApp</button>
                     </div>
                   </div>
                   <aside class="flows-send-preview-col">
-                    <h4 class="flows-send-section-title" data-i18n="flows.sendPreviewTitle">Vista previa del envío</h4>
-                    <p class="muted sm" data-i18n="flows.sendPreviewHint">Así se verá el mensaje en WhatsApp. Al tocar el botón se abre el Flow en la pantalla elegida.</p>
+                    <h4 class="flows-send-section-title" data-i18n="flows.sendPreviewChat">① Mensaje en WhatsApp</h4>
+                    <p class="muted sm" data-i18n="flows.sendPreviewHint">Lo que llega al chat antes de abrir el Flow.</p>
                     <div id="flowSendPreview"></div>
+                    <h4 class="flows-send-section-title flows-send-flow-title" data-i18n="flows.sendPreviewFlow">② Pantalla del Flow en el teléfono</h4>
+                    <p class="muted sm" data-i18n="flows.sendPreviewFlowHint">Vista del paso seleccionado. El contenido interno no se edita aquí.</p>
+                    <div id="flowSendFlowPreview"></div>
                   </aside>
                 </div>
               </details>

@@ -541,13 +541,45 @@ const SAMPLES = {
   },
 };
 
+function extractScreenPreview(flowJson, screenId) {
+  const screen = (flowJson && flowJson.screens ? flowJson.screens : []).find((s) => s.id === screenId);
+  if (!screen) return null;
+  const children = (screen.layout && screen.layout.children) || [];
+  const headings = children.filter((c) => c.type === "TextHeading").map((c) => c.text);
+  const bodies = children.filter((c) => c.type === "TextBody").map((c) => c.text);
+  const captions = children.filter((c) => c.type === "TextCaption").map((c) => c.text);
+  const links = children.filter((c) => c.type === "EmbeddedLink").map((c) => c.text);
+  const footer = children.find((c) => c.type === "Footer");
+  const hasImage = children.some((c) => c.type === "Image");
+  const imageUrl = hasImage
+    ? (config.cardImageUrl || (config.publicBaseUrl ? `${config.publicBaseUrl}/assets/punto-pago-card.png` : "/assets/punto-pago-card.png"))
+    : null;
+
+  return {
+    id: screen.id,
+    title: screen.title || screen.id,
+    headings,
+    bodies,
+    captions,
+    links,
+    footerLabel: footer && footer.label ? footer.label : "",
+    hasImage,
+    imageUrl,
+    terminal: Boolean(screen.terminal),
+  };
+}
+
 function extractFlowScreens(flowJson) {
-  return (flowJson && flowJson.screens ? flowJson.screens : []).map((s, index) => ({
-    id: s.id,
-    title: s.title || s.id,
-    index: index + 1,
-    terminal: Boolean(s.terminal),
-  }));
+  return (flowJson && flowJson.screens ? flowJson.screens : []).map((s, index) => {
+    const preview = extractScreenPreview(flowJson, s.id);
+    return {
+      id: s.id,
+      title: s.title || s.id,
+      index: index + 1,
+      terminal: Boolean(s.terminal),
+      preview,
+    };
+  });
 }
 
 function resolveSendProfileByFlowName(flowName) {
@@ -607,5 +639,6 @@ module.exports = {
   getSample,
   listSamples,
   extractFlowScreens,
+  extractScreenPreview,
   resolveSendProfileByFlowName,
 };
