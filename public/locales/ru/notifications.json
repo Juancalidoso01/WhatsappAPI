@@ -1,0 +1,22 @@
+{
+  "title": "Уведомления",
+  "empty": "Нет недавних уведомлений.",
+  "markAllRead": "Отметить всё прочитанным",
+  "enableBrowser": "Уведомления на рабочем столе",
+  "browserEnabled": "Уведомления включены",
+  "browserDenied": "Разрешение отклонено в браузере",
+  "newMessage": "Новое сообщение",
+  "openChat": "Открыть чат",
+  "viewTemplates": "Шаблоны",
+  "template": {
+    "approved": "Шаблон одобрен",
+    "rejected": "Шаблон отклонён",
+    "paused": "Шаблон приостановлен",
+    "disabled": "Шаблон отключён",
+    "flagged": "Шаблон на проверке качества",
+    "reinstated": "Шаблон снова доступен"
+  },
+  "templateBody": "{name} ({language})",
+  "templateBodyReason": "{name} ({language}) — {reason}",
+  "unreadChats": "{count} непрочитанных"
+}

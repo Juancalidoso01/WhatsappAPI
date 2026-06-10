@@ -1,0 +1,22 @@
+{
+  "title": "Notifications",
+  "empty": "No recent notifications.",
+  "markAllRead": "Mark all as read",
+  "enableBrowser": "Desktop alerts",
+  "browserEnabled": "Alerts enabled",
+  "browserDenied": "Permission denied in browser",
+  "newMessage": "New message",
+  "openChat": "Open chat",
+  "viewTemplates": "View templates",
+  "template": {
+    "approved": "Template approved",
+    "rejected": "Template rejected",
+    "paused": "Template paused",
+    "disabled": "Template disabled",
+    "flagged": "Template flagged for quality review",
+    "reinstated": "Template available again"
+  },
+  "templateBody": "{name} ({language})",
+  "templateBodyReason": "{name} ({language}) — {reason}",
+  "unreadChats": "{count} unread"
+}

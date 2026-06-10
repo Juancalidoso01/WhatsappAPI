@@ -49,6 +49,7 @@ const flowActivity = require('./services/flow-activity');
 const { curateFlowList } = require('./services/flow-list-curate');
 const redis = require('./services/upstash');
 const BillingLedger = require('./services/billing-ledger');
+const PortalEvents = require('./services/portal-events');
 
 const PAYMENT_AUTH_FLOW_KEY = 'wa:flow:payment_auth_3ds_v3';
 const FLOW_KEY_SYNCED = 'wa:flow:public_key_synced';
@@ -187,6 +188,21 @@ app.post('/webhook', webhookJson, (req, res) => {
             newCategory: value.new_category,
             previousCategory: value.previous_category,
           })).catch(err => console.error('template_category_update error:', err));
+          return;
+        }
+
+        if (change.field === 'message_template_status_update') {
+          Promise.resolve(PortalEvents.pushTemplateStatus({
+            name: value.message_template_name,
+            language: value.message_template_language,
+            status: value.event,
+            reason: value.reason || (value.rejection_info && value.rejection_info.reason) || null,
+          })).catch(err => console.error('template_status_update error:', err));
+          Promise.resolve(PortalEvents.syncTemplateStatuses([{
+            name: value.message_template_name,
+            language: value.message_template_language,
+            status: value.event,
+          }])).catch(() => {});
           return;
         }
 
@@ -1240,6 +1256,10 @@ app.post('/api/templates/sync-meta', async (req, res) => {
       categoriesSynced += 1;
     }
 
+    await PortalEvents.syncTemplateStatuses(raw).catch((err) =>
+      console.warn('portal template sync:', err.message || err)
+    );
+
     const data = await enrichTemplatesList(raw, metaMap);
     const metaStatus = templatePresets.resolvePresetsMetaStatus(raw);
     res.json({
@@ -1638,6 +1658,38 @@ app.get('/api/media/:mediaId', async (req, res) => {
   } catch (err) {
     console.error('media proxy error:', err.message);
     res.status(404).json({ error: String(err.message || err) });
+  }
+});
+
+// Centro de notificaciones del portal (polling desde el UI)
+app.get('/api/portal/notifications', async (req, res) => {
+  try {
+    const since = Number(req.query.since) || 0;
+    const limit = Math.min(Number(req.query.limit) || 40, 80);
+    const rows = since > 0
+      ? await PortalEvents.listSince(since, limit)
+      : await PortalEvents.listRecent(limit);
+    const events = await PortalEvents.enrichWithRead(rows);
+    const unread = events.filter((e) => !e.read).length;
+    res.json({ ok: true, events, unread, serverAt: Date.now() });
+  } catch (err) {
+    console.error('portal notifications error:', err.message);
+    res.status(500).json({ ok: false, error: String(err.message || err) });
+  }
+});
+
+app.post('/api/portal/notifications/read', apiJson, async (req, res) => {
+  try {
+    const body = req.body || {};
+    if (body.all) {
+      const result = await PortalEvents.markAllRead();
+      return res.json({ ok: true, ...result });
+    }
+    const ids = Array.isArray(body.ids) ? body.ids : [];
+    const result = await PortalEvents.markRead(ids);
+    res.json({ ok: true, ...result });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: String(err.message || err) });
   }
 });
 
@@ -2171,6 +2223,14 @@ app.post('/api/simulate-incoming', apiJson, async (req, res) => {
     type: 'text',
   });
 
+  PortalEvents.pushChatMessage({
+    phone,
+    name: name || `Demo ${phone}`,
+    text,
+    type: 'text',
+    messageId: message && message.id,
+  }).catch(() => {});
+
   res.json({ ok: true, message });
 });
 
@@ -2273,18 +2333,29 @@ async function mirrorIncomingMessage(rawMessage, contactNames, senderPhoneNumber
   await Store.updateConversationMeta(phone, meta);
 
   const audio = rawMessage.type === 'audio' ? rawMessage.audio : null;
-  return Store.addMessage({
+  const text = extractMessageText(rawMessage);
+  const message = await Store.addMessage({
     phone: rawMessage.from,
     name: contactNames[rawMessage.from],
     phoneNumberId: senderPhoneNumberId,
     direction: 'in',
-    text: extractMessageText(rawMessage),
+    text,
     type: rawMessage.type,
     id: rawMessage.id,
     mediaId: extractMediaId(rawMessage),
     voice: audio ? Boolean(audio.voice) : null,
     status: 'received',
   });
+
+  PortalEvents.pushChatMessage({
+    phone: rawMessage.from,
+    name: contactNames[rawMessage.from],
+    text,
+    type: rawMessage.type,
+    messageId: rawMessage.id,
+  }).catch(() => {});
+
+  return message;
 }
 
 function resolveMediaType(mimeType, requested) {

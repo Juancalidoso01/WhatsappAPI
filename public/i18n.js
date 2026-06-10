@@ -15,7 +15,7 @@
     flows: ["flows", "modals"],
     billing: ["billing"],
   };
-  const BASE_MODULES = ["common", "nav", "toast"];
+  const BASE_MODULES = ["common", "nav", "toast", "notifications"];
 
   const cache = Object.create(null);
   const loadPromises = Object.create(null);

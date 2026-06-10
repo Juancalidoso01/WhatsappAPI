@@ -79,6 +79,11 @@ const state = {
   variableCatalog: [],
   currentScreen: "chats",
   screenCache: {},
+  notifications: [],
+  notifPanelOpen: false,
+  notifBootstrapped: false,
+  knownEventIds: null,
+  readThrough: {},
 };
 
 /* ---------- tiny helpers ---------- */
@@ -116,15 +121,277 @@ function timeAgo(ts) {
 }
 let toastTimer;
 function toast(msg, kind = "") {
-  const t = $("toast");
-  t.textContent = msg;
-  t.className = "toast " + kind;
+  const el = $("toast");
+  el.textContent = msg;
+  el.className = "toast " + kind;
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => t.classList.add("hidden"), 3200);
+  toastTimer = setTimeout(() => el.classList.add("hidden"), 3200);
+}
+
+const READ_THROUGH_KEY = "pp_read_through";
+
+function loadReadThrough() {
+  try {
+    return JSON.parse(localStorage.getItem(READ_THROUGH_KEY) || "{}");
+  } catch (_) {
+    return {};
+  }
+}
+
+function saveReadThrough() {
+  try {
+    localStorage.setItem(READ_THROUGH_KEY, JSON.stringify(state.readThrough));
+  } catch (_) { /* ignore */ }
+}
+
+function ensureKnownEventIds() {
+  if (!state.knownEventIds) state.knownEventIds = new Set();
+}
+
+function conversationUnread(c) {
+  const last = c && c.lastMessage;
+  if (!last || last.direction !== "in") return false;
+  const seen = state.readThrough[c.phone] || 0;
+  return last.timestamp > seen;
+}
+
+function totalUnreadChats() {
+  return state.conversations.filter(conversationUnread).length;
+}
+
+function markConversationRead(phone) {
+  const c = state.conversations.find((x) => x.phone === phone);
+  const ts = (c && c.lastMessage && c.lastMessage.timestamp) || Date.now();
+  state.readThrough[phone] = Math.max(state.readThrough[phone] || 0, ts);
+  saveReadThrough();
+  updateUnreadBadges();
+}
+
+function notifLabel(ev) {
+  if (!ev) return { title: "", body: "", icon: "•", tpl: false };
+  if (ev.type === "chat") {
+    const meta = ev.meta || {};
+    return {
+      title: meta.name || meta.phone || t("notifications.newMessage"),
+      body: meta.preview || "",
+      icon: initials(meta.name || meta.phone),
+      tpl: false,
+    };
+  }
+  if (ev.type === "template") {
+    const meta = ev.meta || {};
+    const st = String(meta.status || "").toLowerCase();
+    const titleKey = `notifications.template.${st}`;
+    const title = t(titleKey);
+    const body = meta.reason
+      ? t("notifications.templateBodyReason", {
+        name: meta.name,
+        language: meta.language,
+        reason: meta.reason,
+      })
+      : t("notifications.templateBody", { name: meta.name, language: meta.language });
+    return {
+      title: title !== titleKey ? title : meta.status,
+      body,
+      icon: "📋",
+      tpl: true,
+      status: meta.status,
+    };
+  }
+  return { title: "", body: "", icon: "•", tpl: false };
+}
+
+let notifyCardTimer;
+function showNotifyCard({ title, body, onClick, kind = "" }) {
+  let el = $("notifyCard");
+  if (!el) {
+    el = document.createElement("div");
+    el.id = "notifyCard";
+    el.className = "notify-card hidden";
+    document.body.appendChild(el);
+  }
+  el.innerHTML = `<strong>${escapeHtml(title)}</strong><p>${escapeHtml(body)}</p>`;
+  el.className = `notify-card${kind ? ` ${kind}` : ""}`;
+  el.classList.remove("hidden");
+  clearTimeout(notifyCardTimer);
+  const close = () => el.classList.add("hidden");
+  el.onclick = () => { close(); onClick?.(); };
+  notifyCardTimer = setTimeout(close, 6500);
+}
+
+function tryBrowserNotify(title, body, onClick) {
+  if (!document.hidden || typeof Notification === "undefined") return;
+  if (Notification.permission !== "granted") return;
+  try {
+    const n = new Notification(title, { body, icon: "/logo.png" });
+    n.onclick = () => {
+      window.focus();
+      onClick?.();
+      n.close();
+    };
+  } catch (_) { /* ignore */ }
+}
+
+function updateNotifBadges(count) {
+  document.querySelectorAll("[data-notif-badge]").forEach((el) => {
+    if (count > 0) {
+      el.textContent = count > 99 ? "99+" : String(count);
+      el.classList.remove("hidden");
+    } else {
+      el.classList.add("hidden");
+    }
+  });
+}
+
+function updateUnreadBadges() {
+  const chats = totalUnreadChats();
+  const navBadge = $("navChatsBadge");
+  if (navBadge) {
+    if (chats > 0) {
+      navBadge.textContent = chats > 99 ? "99+" : String(chats);
+      navBadge.classList.remove("hidden");
+    } else {
+      navBadge.classList.add("hidden");
+    }
+  }
+}
+
+function handleLiveNotification(ev) {
+  const { title, body, status } = notifLabel(ev);
+  if (ev.type === "chat") {
+    const phone = ev.meta && ev.meta.phone;
+    const name = ev.meta && ev.meta.name;
+    const isActive = state.activePhone === phone && state.currentScreen === "chats";
+    if (isActive) return;
+    const open = () => {
+      switchScreen("chats");
+      openConversation(phone, name);
+    };
+    showNotifyCard({ title, body, onClick: open });
+    tryBrowserNotify(title, body, open);
+    updateUnreadBadges();
+    renderConversations();
+    return;
+  }
+  if (ev.type === "template") {
+    const open = () => switchScreen("templates");
+    const kind = status === "APPROVED" || status === "REINSTATED" ? "ok" : status === "REJECTED" ? "error" : "";
+    showNotifyCard({ title, body, onClick: open, kind });
+    tryBrowserNotify(title, body, open);
+  }
+}
+
+async function loadNotifications() {
+  const res = await api("/api/portal/notifications");
+  if (!res || !res.ok) return;
+  const events = res.events || [];
+  ensureKnownEventIds();
+  if (!state.notifBootstrapped) {
+    events.forEach((e) => state.knownEventIds.add(e.id));
+    state.notifBootstrapped = true;
+  } else {
+    events
+      .filter((e) => !state.knownEventIds.has(e.id))
+      .sort((a, b) => a.at - b.at)
+      .forEach((e) => {
+        state.knownEventIds.add(e.id);
+        handleLiveNotification(e);
+      });
+  }
+  state.notifications = events;
+  updateNotifBadges(res.unread || 0);
+  if (state.notifPanelOpen) renderNotifPanel();
+}
+
+function renderNotifPanel() {
+  const box = $("notifList");
+  if (!box) return;
+  const items = state.notifications || [];
+  if (!items.length) {
+    box.innerHTML = `<p class="muted" style="padding:12px">${escapeHtml(t("notifications.empty"))}</p>`;
+    return;
+  }
+  box.innerHTML = items.map((ev) => {
+    const { title, body, icon, tpl } = notifLabel(ev);
+    const unread = !ev.read;
+    return `<button type="button" class="app-notif-item${unread ? " unread" : ""}" data-notif-id="${escapeHtml(ev.id)}" data-notif-type="${escapeHtml(ev.type)}">
+      <span class="app-notif-avatar${tpl ? " tpl" : ""}">${tpl ? icon : escapeHtml(icon)}</span>
+      <span class="app-notif-body">
+        <p class="app-notif-title">${escapeHtml(title)}</p>
+        <p class="app-notif-text">${escapeHtml(body)}</p>
+        <span class="app-notif-time">${escapeHtml(timeAgo(ev.at))}</span>
+      </span>
+    </button>`;
+  }).join("");
+  box.querySelectorAll(".app-notif-item").forEach((btn) => {
+    btn.addEventListener("click", () => handleNotifItemClick(btn.dataset.notifId, btn.dataset.notifType));
+  });
+}
+
+async function handleNotifItemClick(id, type) {
+  const ev = state.notifications.find((e) => e.id === id);
+  if (!ev) return;
+  await post("/api/portal/notifications/read", { ids: [id] });
+  ev.read = true;
+  updateNotifBadges(state.notifications.filter((e) => !e.read).length);
+  renderNotifPanel();
+  toggleNotifPanel(false);
+  if (type === "chat" && ev.meta) {
+    switchScreen("chats");
+    openConversation(ev.meta.phone, ev.meta.name);
+    return;
+  }
+  if (type === "template") switchScreen("templates");
+}
+
+function toggleNotifPanel(open) {
+  const panel = $("notifPanel");
+  const btn = $("notifBtn");
+  const btnMobile = $("notifBtnMobile");
+  if (!panel) return;
+  const next = open != null ? open : panel.classList.contains("hidden");
+  state.notifPanelOpen = next;
+  panel.classList.toggle("hidden", !next);
+  if (btn) btn.setAttribute("aria-expanded", next ? "true" : "false");
+  if (btnMobile) btnMobile.setAttribute("aria-expanded", next ? "true" : "false");
+  if (next) {
+    renderNotifPanel();
+    loadNotifications();
+  }
+}
+
+async function markAllNotificationsRead() {
+  await post("/api/portal/notifications/read", { all: true });
+  state.notifications.forEach((e) => { e.read = true; });
+  updateNotifBadges(0);
+  renderNotifPanel();
+}
+
+async function requestBrowserNotifications() {
+  if (typeof Notification === "undefined") return;
+  const btn = $("notifBrowserBtn");
+  if (Notification.permission === "granted") {
+    if (btn) btn.textContent = t("notifications.browserEnabled");
+    return;
+  }
+  if (Notification.permission === "denied") {
+    if (btn) btn.textContent = t("notifications.browserDenied");
+    return;
+  }
+  const perm = await Notification.requestPermission();
+  if (btn) {
+    btn.textContent = perm === "granted"
+      ? t("notifications.browserEnabled")
+      : perm === "denied"
+        ? t("notifications.browserDenied")
+        : t("notifications.enableBrowser");
+  }
 }
 
 /* ---------- init ---------- */
 async function init() {
+  state.readThrough = loadReadThrough();
+  ensureKnownEventIds();
   try {
     state.config = await api("/api/config");
   } catch (_) {}
@@ -134,8 +401,9 @@ async function init() {
   initLeadFormOptions();
   bindEvents();
   loadWorkspace().catch(() => {});
-  await loadConversations();
+  await Promise.all([loadConversations(), loadNotifications()]);
   startPolling();
+  requestBrowserNotifications();
   document.addEventListener("visibilitychange", () => {
     if (document.hidden) stopPolling();
     else { loadConversations(); if (state.activePhone) loadMessages(state.activePhone); startPolling(); }
@@ -236,6 +504,7 @@ async function loadConversations() {
     if (Array.isArray(data)) {
       state.conversations = data;
       renderConversations();
+      updateUnreadBadges();
     }
   } catch (_) {}
 }
@@ -254,7 +523,8 @@ function renderConversations() {
     .map((c) => {
       const last = c.lastMessage || {};
       const prefix = last.direction === "out" ? t("common.you") + ": " : "";
-      return `<li class="conv ${c.phone === state.activePhone ? "active" : ""}" data-phone="${escapeHtml(c.phone)}" data-name="${escapeHtml(c.name)}">
+      const unread = conversationUnread(c);
+      return `<li class="conv${unread ? " unread" : ""}${c.phone === state.activePhone ? " active" : ""}" data-phone="${escapeHtml(c.phone)}" data-name="${escapeHtml(c.name)}">
         <div class="avatar">${escapeHtml(initials(c.name))}</div>
         <div class="conv-body">
           <div class="conv-top">
@@ -263,6 +533,7 @@ function renderConversations() {
           </div>
           <div class="conv-last">${escapeHtml(prefix + previewText(last))}</div>
         </div>
+        ${unread ? '<span class="conv-unread-dot" aria-hidden="true"></span>' : ""}
       </li>`;
     })
     .join("");
@@ -296,6 +567,8 @@ async function openConversation(phone, name, highlightMessageId = null) {
   document.querySelector("#screenChats").classList.add("show-chat");
   renderConversations();
   await Promise.all([loadMessages(phone), loadConversationDetail(phone)]);
+  markConversationRead(phone);
+  renderConversations();
   if (state.highlightMessageId) {
     requestAnimationFrame(() => {
       const box = $("messages");
@@ -316,6 +589,10 @@ async function loadMessages(phone) {
       state.messages = data;
       renderMessages();
       updateWindow();
+      if (phone === state.activePhone && state.currentScreen === "chats") {
+        markConversationRead(phone);
+        renderConversations();
+      }
     }
   } catch (_) {}
 }
@@ -3930,13 +4207,14 @@ function switchScreen(name) {
   }
   if (name !== "bulk") stopBulkPolling();
   toggleWorkspaceFlyout(false);
+  toggleNotifPanel(false);
 }
 
 /* ---------- polling ---------- */
 function startPolling() {
   stopPolling();
   state.pollTimer = setInterval(async () => {
-    await loadConversations();
+    await Promise.all([loadConversations(), loadNotifications()]);
     if (state.activePhone) {
       await Promise.all([
         loadMessages(state.activePhone),
@@ -3949,6 +4227,31 @@ function stopPolling() { if (state.pollTimer) clearInterval(state.pollTimer); st
 
 /* ---------- events ---------- */
 function bindEvents() {
+  const notifBtn = $("notifBtn");
+  if (notifBtn) {
+    notifBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      toggleNotifPanel();
+    });
+  }
+  const notifBtnMobile = $("notifBtnMobile");
+  if (notifBtnMobile) {
+    notifBtnMobile.addEventListener("click", (e) => {
+      e.stopPropagation();
+      toggleNotifPanel();
+    });
+  }
+  const notifMarkAllBtn = $("notifMarkAllBtn");
+  if (notifMarkAllBtn) notifMarkAllBtn.addEventListener("click", () => markAllNotificationsRead());
+  const notifBrowserBtn = $("notifBrowserBtn");
+  if (notifBrowserBtn) notifBrowserBtn.addEventListener("click", () => requestBrowserNotifications());
+  document.addEventListener("click", (e) => {
+    const panel = $("notifPanel");
+    if (!panel || panel.classList.contains("hidden")) return;
+    if (panel.contains(e.target) || e.target.closest("#notifBtn, #notifBtnMobile")) return;
+    toggleNotifPanel(false);
+  });
+
   document.querySelectorAll(".nav-item[data-screen]").forEach((b) =>
     b.addEventListener("click", () => switchScreen(b.dataset.screen))
   );

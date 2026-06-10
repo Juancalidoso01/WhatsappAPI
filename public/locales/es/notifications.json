@@ -1,0 +1,22 @@
+{
+  "title": "Notificaciones",
+  "empty": "Sin notificaciones recientes.",
+  "markAllRead": "Marcar todo leído",
+  "enableBrowser": "Alertas en el escritorio",
+  "browserEnabled": "Alertas activas",
+  "browserDenied": "Permiso denegado en el navegador",
+  "newMessage": "Nuevo mensaje",
+  "openChat": "Abrir chat",
+  "viewTemplates": "Ver plantillas",
+  "template": {
+    "approved": "Plantilla aprobada",
+    "rejected": "Plantilla rechazada",
+    "paused": "Plantilla pausada",
+    "disabled": "Plantilla deshabilitada",
+    "flagged": "Plantilla en revisión por calidad",
+    "reinstated": "Plantilla disponible de nuevo"
+  },
+  "templateBody": "{name} ({language})",
+  "templateBodyReason": "{name} ({language}) — {reason}",
+  "unreadChats": "{count} sin leer"
+}
