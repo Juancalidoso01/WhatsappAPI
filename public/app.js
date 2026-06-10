@@ -2488,45 +2488,21 @@ function updateNcFlowSection() {
   const tplName = ($("ncTemplate") && $("ncTemplate").value) || "";
   const ctx = getNcPresetContext(tplName);
   const section = $("ncFlowSection");
-  const approvedBox = $("ncFlowApproved");
-  const pendingBox = $("ncFlowPendingBox");
   const cb = $("ncIncludeFlow");
   const readyHint = $("ncFlowReadyHint");
-  const pendingHint = $("ncFlowHint");
   if (!section) return;
-  section.classList.remove("is-ready", "is-pending");
-  if (!ctx || !ctx.flowTemplateName) {
+  section.classList.remove("is-ready");
+  const showFlowMix = ctx && ctx.flowTemplateName && !ctx.isFlowTpl && ctx.flowApproved;
+  if (!showFlowMix) {
     section.classList.add("hidden");
+    if (cb) cb.checked = false;
     updateNcPreview();
     return;
   }
-  if (ctx.isFlowTpl) {
-    section.classList.add("hidden");
-  } else if (ctx.flowApproved) {
-    section.classList.remove("hidden");
-    section.classList.add("is-ready");
-    approvedBox?.classList.remove("hidden");
-    pendingBox?.classList.add("hidden");
-    if (cb) {
-      cb.disabled = false;
-      if (!cb.dataset.touched) cb.checked = true;
-    }
-    if (readyHint) readyHint.textContent = t("templates.ncFlowReady", { name: ctx.flowTemplateName });
-  } else {
-    section.classList.remove("hidden");
-    section.classList.add("is-pending");
-    approvedBox?.classList.add("hidden");
-    pendingBox?.classList.remove("hidden");
-    if (cb) cb.checked = false;
-    if (pendingHint) pendingHint.textContent = t("templates.ncFlowPending", { name: ctx.flowTemplateName });
-    const reqBtn = $("ncRequestFlowTplBtn");
-    if (reqBtn) {
-      reqBtn.onclick = () => {
-        const c = getNcPresetContext(($("ncTemplate") && $("ncTemplate").value) || "");
-        if (c && c.preset && c.preset.key) openTplDraftModal(c.preset.key);
-      };
-    }
-  }
+  section.classList.remove("hidden");
+  section.classList.add("is-ready");
+  if (cb && !cb.dataset.touched) cb.checked = true;
+  if (readyHint) readyHint.textContent = t("templates.ncFlowReady");
   updateNcPreview();
 }
 
@@ -4477,22 +4453,18 @@ async function renderFlowLaunchPanel(perfRes) {
     $("flowLaunchViewBtn")?.addEventListener("click", openFlowViewModal);
     return;
   }
-  const chips = [
-    flowLaunchChip(t("flows.launch.chipFlow"), ctx.flowPublished ? "ok" : "off"),
-    flowLaunchChip(t("flows.launch.chipTextTpl"), ctx.textApproved ? "ok" : "pending"),
-  ];
-  if (ctx.hasFlowVariant) {
-    chips.push(flowLaunchChip(t("flows.launch.chipFlowTpl"), ctx.flowApproved ? "ok" : "pending"));
-  }
+  const chips = [];
+  if (ctx.flowPublished) chips.push(flowLaunchChip(t("flows.launch.chipFlow"), "ok"));
+  if (ctx.textApproved) chips.push(flowLaunchChip(t("flows.launch.chipTextTpl"), "ok"));
+  if (ctx.flowApproved) chips.push(flowLaunchChip(t("flows.launch.chipFlowTpl"), "ok"));
   panel.classList.remove("hidden");
   panel.innerHTML = `
     <h4>${escapeHtml(t("flows.launch.panelTitle"))}</h4>
-    <div class="flow-launch-chips">${chips.join("")}</div>
+    ${chips.length ? `<div class="flow-launch-chips">${chips.join("")}</div>` : ""}
     <p class="muted sm">${escapeHtml(t("flows.launch.panelIntro"))}</p>
     <div class="flow-launch-actions">
       <button type="button" class="btn-primary" id="flowLaunchOpenBtn" ${ctx.canSend ? "" : "disabled"}>${escapeHtml(t("flows.launch.sendPrimary"))}</button>
       <button type="button" class="btn-ghost sm" id="flowLaunchViewBtn">${escapeHtml(t("flows.launch.viewTour"))}</button>
-      ${ctx.hasFlowVariant && !ctx.flowApproved ? `<button type="button" class="btn-ghost sm" id="flowLaunchRequestTplBtn">${escapeHtml(t("flows.launch.requestFlowTpl"))}</button>` : ""}
     </div>`;
   $("flowLaunchOpenBtn")?.addEventListener("click", openFlowLaunchModal);
   $("flowLaunchViewBtn")?.addEventListener("click", openFlowViewModal);
@@ -4565,7 +4537,6 @@ function renderFlowLaunchVarFields(preset) {
 function flowLaunchStatusMessage(ctx) {
   if (!ctx.canSend) return { cls: "partial", text: t("flows.launch.blocked") };
   if (ctx.flowApproved) return { cls: "ready", text: t("flows.launch.readyFull", { tpl: ctx.effectiveTemplateName }) };
-  if (ctx.hasFlowVariant) return { cls: "partial", text: t("flows.launch.readyText", { tpl: ctx.effectiveTemplateName }) };
   return { cls: "ready", text: t("flows.launch.readyTextOnly", { tpl: ctx.effectiveTemplateName }) };
 }
 

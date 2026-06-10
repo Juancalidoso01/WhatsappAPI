@@ -872,18 +872,11 @@
             <select id="ncTemplate"></select>
           </label>
           <div id="ncFlowSection" class="nc-flow-section hidden">
-            <div id="ncFlowApproved" class="hidden">
-              <label class="nc-flow-toggle">
-                <input type="checkbox" id="ncIncludeFlow" />
-                <span data-i18n="templates.ncIncludeFlow">Incluir tour interactivo (Flow aprobado)</span>
-              </label>
-              <p class="muted sm" id="ncFlowReadyHint"></p>
-            </div>
-            <div id="ncFlowPendingBox" class="nc-flow-pending hidden">
-              <p class="nc-flow-pending-title" data-i18n="templates.ncFlowPendingTitle">Tour pendiente de aprobación</p>
-              <p class="muted sm" id="ncFlowHint"></p>
-              <button type="button" id="ncRequestFlowTplBtn" class="btn-ghost sm" data-i18n="templates.ncRequestFlowTpl">Solicitar plantilla con tour</button>
-            </div>
+            <label class="nc-flow-toggle">
+              <input type="checkbox" id="ncIncludeFlow" />
+              <span data-i18n="templates.ncIncludeFlow">Incluir tour interactivo</span>
+            </label>
+            <p class="muted sm" id="ncFlowReadyHint"></p>
           </div>
           <div id="ncFields" class="tpl-fields nc-fields"></div>
           <details id="ncVarGuideWrap" class="nc-var-guide-wrap hidden">

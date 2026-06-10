@@ -312,6 +312,12 @@ function listPresets() {
     category: p.category,
     language: p.language,
     variableCount: (p.variables || []).length,
+    variables: (p.variables || []).map((v) => ({
+      key: v.key,
+      label: v.label,
+      example: v.example,
+      placeholder: v.placeholder,
+    })),
     flowCta: p.flowCta,
     isFlowPreset: Boolean(p.templateFlowName || p.flowCta),
   }));

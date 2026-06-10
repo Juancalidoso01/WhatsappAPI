@@ -947,11 +947,9 @@ input, textarea, select { font-family: inherit; }
 .nc-fields .tpl-none { font-size: 13px; color: var(--muted); margin: 8px 0; }
 .nc-flow-section { margin: 10px 0 14px; padding: 12px 14px; border-radius: 12px; background: var(--surface-2); border: 1px solid var(--border); }
 .nc-flow-section.is-ready { background: #ecfdf5; border-color: #a7f3d0; }
-.nc-flow-section.is-pending { background: #fffbeb; border-color: #fde68a; }
 .nc-flow-toggle { display: flex; align-items: flex-start; gap: 10px; font-size: 13px; font-weight: 600; margin: 0; cursor: pointer; }
 .nc-flow-toggle input { margin-top: 3px; flex-shrink: 0; cursor: pointer; }
-.nc-flow-pending-title { font-size: 13px; font-weight: 700; margin: 0 0 6px; color: #92400e; }
-.nc-flow-pending .muted { margin: 0 0 10px; line-height: 1.45; }
+.nc-flow-section .muted { margin: 8px 0 0; line-height: 1.45; }
 .nc-var-guide-wrap { margin: 8px 0 12px; font-size: 13px; }
 .nc-var-guide-wrap summary { cursor: pointer; color: var(--muted); font-weight: 600; margin-bottom: 8px; }
 .nc-var-guide-wrap .tpl-var-guide { margin-top: 8px; }
