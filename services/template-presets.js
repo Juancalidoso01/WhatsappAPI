@@ -319,6 +319,7 @@ function listPresets() {
       placeholder: v.placeholder,
     })),
     flowCta: p.flowCta,
+    flowSampleKey: p.flowSampleKey || null,
     isFlowPreset: Boolean(p.templateFlowName || p.flowCta),
   }));
 }

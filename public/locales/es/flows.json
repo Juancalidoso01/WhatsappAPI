@@ -64,7 +64,7 @@
     "chipTextTpl": "Plantilla texto",
     "chipFlowTpl": "Plantilla + tour",
     "readyFull": "Listo: se enviará la plantilla con tour («{tpl}»).",
-    "readyText": "Se enviará solo el mensaje de texto («{tpl}»). El tour aún no está en la plantilla aprobada.",
+    "readyInteractive": "Listo: se enviará el mensaje con el tour publicado (botón interactivo).",
     "readyTextOnly": "Se enviará la plantilla de texto («{tpl}»).",
     "blocked": "Falta aprobar el Flow o la plantilla de texto en Meta.",
     "requestFlowTpl": "Solicitar plantilla con tour",

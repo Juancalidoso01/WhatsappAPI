@@ -64,7 +64,7 @@
     "chipTextTpl": "Text template",
     "chipFlowTpl": "Template + tour",
     "readyFull": "Ready: will send template with tour («{tpl}»).",
-    "readyText": "Will send text-only message («{tpl}»). Tour is not in the approved template yet.",
+    "readyInteractive": "Ready: will send message with published tour (interactive button).",
     "readyTextOnly": "Will send text template («{tpl}»).",
     "blocked": "Flow or text template must be approved in Meta first.",
     "requestFlowTpl": "Request template with tour",

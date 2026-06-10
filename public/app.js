@@ -2407,17 +2407,49 @@ function collectComponents(t) {
 }
 
 /* ---------- new chat (send template) ---------- */
+const PRESET_FLOW_PREFIX = {
+  punto_pago_tarjeta_credito_bienvenida: "punto_pago_tarjeta_credito",
+  punto_pago_autorizacion_pago: "punto_pago_3ds_verificacion",
+};
+
+function findPublishedFlowForPreset(preset) {
+  if (!preset) return null;
+  const prefix = PRESET_FLOW_PREFIX[preset.key] || preset.flowSampleKey || "";
+  if (!prefix) return null;
+  return (state.flows || []).find((f) => {
+    const n = String(f.name || "");
+    return (n === prefix || n.startsWith(`${prefix}_`))
+      && String(f.status || "").toUpperCase() === "PUBLISHED";
+  }) || null;
+}
+
+function isFlowTemplateApproved(preset) {
+  if (!preset || !preset.templateFlowName) return false;
+  const tpl = tplByName(preset.templateFlowName);
+  if (tpl && String(tpl.status || "").toLowerCase() === "approved" && templateHasFlowButtonMeta(tpl)) {
+    return true;
+  }
+  const meta = presetMetaForKey(preset.key);
+  return Boolean(meta && meta.flow && meta.flow.approved && meta.flow.hasFlowButton);
+}
+
 function getNcPresetContext(tplName) {
   const preset = state.templatePresets.find((p) => p.name === tplName || p.templateFlowName === tplName);
   if (!preset) return null;
   const meta = presetMetaForKey(preset.key);
   const isFlowTpl = tplName === preset.templateFlowName;
-  const flowApproved = Boolean(meta && meta.flow && meta.flow.approved && meta.flow.hasFlowButton);
+  const flowApproved = isFlowTemplateApproved(preset);
+  const publishedFlow = findPublishedFlowForPreset(preset);
+  const flowPublished = Boolean(publishedFlow);
+  const canIncludeTour = Boolean(preset.templateFlowName && !isFlowTpl && (flowApproved || flowPublished));
   return {
     preset,
     meta,
     isFlowTpl,
     flowApproved,
+    flowPublished,
+    canIncludeTour,
+    publishedFlowId: publishedFlow?.id || null,
     flowTemplateName: preset.templateFlowName,
     textTemplateName: preset.name,
   };
@@ -2466,8 +2498,9 @@ async function updateNcPreview() {
   const q = new URLSearchParams(collectNcPresetOverrides()).toString();
   const res = await api(`/api/templates/presets/${encodeURIComponent(ctx.preset.key)}${q ? `?${q}` : ""}`);
   const preview = res && res.preview;
+  const includeFlow = $("ncIncludeFlow") && $("ncIncludeFlow").checked;
   const showFlow = templateHasFlowButtonMeta(tplByName(effective))
-    || (ctx.flowApproved && $("ncIncludeFlow") && $("ncIncludeFlow").checked)
+    || (ctx.canIncludeTour && includeFlow)
     || ctx.isFlowTpl;
   renderWaMessagePreview(waBox, {
     headerText: (preview && preview.headerText) || "",
@@ -2492,7 +2525,7 @@ function updateNcFlowSection() {
   const readyHint = $("ncFlowReadyHint");
   if (!section) return;
   section.classList.remove("is-ready");
-  const showFlowMix = ctx && ctx.flowTemplateName && !ctx.isFlowTpl && ctx.flowApproved;
+  const showFlowMix = ctx && ctx.canIncludeTour;
   if (!showFlowMix) {
     section.classList.add("hidden");
     if (cb) cb.checked = false;
@@ -2502,7 +2535,11 @@ function updateNcFlowSection() {
   section.classList.remove("hidden");
   section.classList.add("is-ready");
   if (cb && !cb.dataset.touched) cb.checked = true;
-  if (readyHint) readyHint.textContent = t("templates.ncFlowReady");
+  if (readyHint) {
+    readyHint.textContent = ctx.flowApproved
+      ? t("templates.ncFlowReadyTemplate")
+      : t("templates.ncFlowReadyInteractive");
+  }
   updateNcPreview();
 }
 
@@ -2510,12 +2547,11 @@ async function ensureNcFlowPreviewProfile(tplName) {
   const ctx = getNcPresetContext(tplName);
   if (!ctx || !ctx.preset.templateFlowName) return;
   if (!state.flows.length) await loadFlows();
-  const sampleNames = {
-    punto_pago_tarjeta_credito_bienvenida: "punto_pago_tarjeta_credito",
-    punto_pago_autorizacion_pago: "punto_pago_3ds_verificacion",
-  };
-  const base = sampleNames[ctx.preset.key] || "";
-  const flow = state.flows.find((f) => base && String(f.name || "").startsWith(base));
+  const flow = findPublishedFlowForPreset(ctx.preset)
+    || state.flows.find((f) => {
+      const prefix = PRESET_FLOW_PREFIX[ctx.preset.key] || ctx.preset.flowSampleKey || "";
+      return prefix && String(f.name || "").startsWith(prefix);
+    });
   if (flow && flow.id) await loadFlowSendProfile(flow.id);
 }
 
@@ -2535,6 +2571,7 @@ async function openNewChat(prefillName, opts) {
   sel.innerHTML = `<option>${escapeHtml(t("common.loading"))}</option>`;
   if (!state.templates.length) await loadTemplates();
   if (!state.templatePresets.length) await loadTemplatePresets();
+  if (!state.flows.length) await loadFlows();
   const approved = state.templates.filter((t) => (t.status || "").toLowerCase() === "approved");
   if (!approved.length) {
     sel.innerHTML = `<option value="">${escapeHtml(t("bulk.noApprovedTemplates"))}</option>`;
@@ -2579,12 +2616,35 @@ function updateNewChatCategoryHint() {
 
 async function sendNewChat() {
   const phone = $("ncPhone").value.replace(/[^0-9]/g, "");
-  const name = $("ncName").value.trim();
-  const tplName = getNcEffectiveTemplateName();
-  if (!phone || !tplName) { toast(t("toast.phoneAndTemplateRequired"), "error"); return; }
-  const tpl = tplByName(tplName) || tplByName($("ncTemplate").value);
-  const components = tpl ? collectComponents(tpl) : [];
-  const res = await post("/api/send-template", { phone, name, template: tplName, language: tpl ? tpl.language : "es", components });
+  const selTpl = ($("ncTemplate") && $("ncTemplate").value) || "";
+  const ctx = getNcPresetContext(selTpl);
+  const includeFlow = $("ncIncludeFlow") && $("ncIncludeFlow").checked && ctx && ctx.canIncludeTour;
+  const overrides = collectNcPresetOverrides();
+  const name = overrides.nombre_cliente || overrides.var1 || $("ncName").value.trim();
+  if (!phone) { toast(t("toast.phoneAndTemplateRequired"), "error"); return; }
+
+  let res;
+  if (includeFlow && ctx.flowPublished && !ctx.flowApproved && ctx.publishedFlowId) {
+    const q = new URLSearchParams(overrides).toString();
+    const presetRes = await api(`/api/templates/presets/${encodeURIComponent(ctx.preset.key)}${q ? `?${q}` : ""}`);
+    const preview = (presetRes && presetRes.preview) || {};
+    const screen = (state.flowSendProfile && state.flowSendProfile.defaultScreen) || "INTRO";
+    res = await post(`/api/flows/${encodeURIComponent(ctx.publishedFlowId)}/send`, {
+      phone,
+      headerText: preview.headerText || "",
+      bodyText: preview.bodyText || "",
+      footerText: preview.footerText || "",
+      cta: ctx.preset.flowCta || "Conocer tarjeta",
+      screen,
+    });
+  } else {
+    const tplName = getNcEffectiveTemplateName();
+    if (!tplName) { toast(t("toast.phoneAndTemplateRequired"), "error"); return; }
+    const tpl = tplByName(tplName) || tplByName(selTpl);
+    const components = tpl ? collectComponents(tpl) : [];
+    res = await post("/api/send-template", { phone, name, template: tplName, language: tpl ? tpl.language : "es", components });
+  }
+
   if (res.ok) {
     closeModals();
     toast(t("toast.templateSent"), "ok");
@@ -4407,8 +4467,9 @@ function buildFlowLaunchContext(perfRes) {
   const flowStatus = String(flow.status || (perfRes && perfRes.flow && perfRes.flow.status) || "").toUpperCase();
   const flowPublished = flowStatus === "PUBLISHED";
   const textApproved = Boolean(meta && meta.text && meta.text.approved);
-  const flowApproved = Boolean(meta && meta.flow && meta.flow.approved && meta.flow.hasFlowButton);
+  const flowApproved = preset ? isFlowTemplateApproved(preset) : false;
   const useFlowTemplate = flowApproved;
+  const useInteractiveFlow = flowPublished && !flowApproved;
   const effectiveTemplateName = preset
     ? (useFlowTemplate ? preset.templateFlowName : preset.name)
     : null;
@@ -4421,9 +4482,11 @@ function buildFlowLaunchContext(perfRes) {
     textApproved,
     flowApproved,
     useFlowTemplate,
+    useInteractiveFlow,
     effectiveTemplateName,
     canSend,
     hasFlowVariant: Boolean(preset && preset.templateFlowName),
+    publishedFlowId: state.activeFlowId || null,
   };
 }
 
@@ -4457,6 +4520,7 @@ async function renderFlowLaunchPanel(perfRes) {
   if (ctx.flowPublished) chips.push(flowLaunchChip(t("flows.launch.chipFlow"), "ok"));
   if (ctx.textApproved) chips.push(flowLaunchChip(t("flows.launch.chipTextTpl"), "ok"));
   if (ctx.flowApproved) chips.push(flowLaunchChip(t("flows.launch.chipFlowTpl"), "ok"));
+  else if (ctx.flowPublished) chips.push(flowLaunchChip(t("flows.launch.chipFlowTpl"), "ok"));
   panel.classList.remove("hidden");
   panel.innerHTML = `
     <h4>${escapeHtml(t("flows.launch.panelTitle"))}</h4>
@@ -4468,7 +4532,6 @@ async function renderFlowLaunchPanel(perfRes) {
     </div>`;
   $("flowLaunchOpenBtn")?.addEventListener("click", openFlowLaunchModal);
   $("flowLaunchViewBtn")?.addEventListener("click", openFlowViewModal);
-  $("flowLaunchRequestTplBtn")?.addEventListener("click", () => openTplDraftModal(ctx.presetKey));
 }
 
 function collectFlowLaunchOverrides() {
@@ -4537,6 +4600,7 @@ function renderFlowLaunchVarFields(preset) {
 function flowLaunchStatusMessage(ctx) {
   if (!ctx.canSend) return { cls: "partial", text: t("flows.launch.blocked") };
   if (ctx.flowApproved) return { cls: "ready", text: t("flows.launch.readyFull", { tpl: ctx.effectiveTemplateName }) };
+  if (ctx.useInteractiveFlow) return { cls: "ready", text: t("flows.launch.readyInteractive") };
   return { cls: "ready", text: t("flows.launch.readyTextOnly", { tpl: ctx.effectiveTemplateName }) };
 }
 
@@ -4548,7 +4612,8 @@ async function updateFlowLaunchPreview() {
   const q = new URLSearchParams(collectFlowLaunchOverrides()).toString();
   const res = await api(`/api/templates/presets/${encodeURIComponent(ctx.preset.key)}${q ? `?${q}` : ""}`);
   const preview = res && res.preview;
-  const showFlow = ctx.useFlowTemplate || templateHasFlowButtonMeta(tplByName(ctx.effectiveTemplateName));
+  const showFlow = ctx.useFlowTemplate || ctx.useInteractiveFlow
+    || templateHasFlowButtonMeta(tplByName(ctx.effectiveTemplateName));
   renderWaMessagePreview(waBox, {
     headerText: (preview && preview.headerText) || "",
     bodyText: (preview && preview.bodyText) || "—",
@@ -4590,19 +4655,36 @@ async function openFlowLaunchModal() {
 async function sendFlowLaunch() {
   const ctx = state.flowLaunchContext || buildFlowLaunchContext(state.activeFlowPerformance);
   const phone = ($("flPhone") && $("flPhone").value || "").replace(/[^0-9]/g, "");
-  const tplName = ctx.effectiveTemplateName;
-  if (!phone || !tplName) { toast(t("toast.phoneAndTemplateRequired"), "error"); return; }
-  const tpl = tplByName(tplName);
+  if (!phone) { toast(t("toast.phoneAndTemplateRequired"), "error"); return; }
   const overrides = collectFlowLaunchOverrides();
   const name = overrides.nombre_cliente || overrides.var1 || "";
-  const components = tpl ? collectFlComponents(tpl) : [];
-  const res = await post("/api/send-template", {
-    phone,
-    name,
-    template: tplName,
-    language: tpl ? tpl.language : "es",
-    components,
-  });
+  let res;
+  if (ctx.useInteractiveFlow && ctx.publishedFlowId) {
+    const q = new URLSearchParams(overrides).toString();
+    const presetRes = await api(`/api/templates/presets/${encodeURIComponent(ctx.preset.key)}${q ? `?${q}` : ""}`);
+    const preview = (presetRes && presetRes.preview) || {};
+    const screen = (state.flowSendProfile && state.flowSendProfile.defaultScreen) || "INTRO";
+    res = await post(`/api/flows/${encodeURIComponent(ctx.publishedFlowId)}/send`, {
+      phone,
+      headerText: preview.headerText || "",
+      bodyText: preview.bodyText || "",
+      footerText: preview.footerText || "",
+      cta: ctx.preset.flowCta || "Conocer tarjeta",
+      screen,
+    });
+  } else {
+    const tplName = ctx.effectiveTemplateName;
+    if (!tplName) { toast(t("toast.phoneAndTemplateRequired"), "error"); return; }
+    const tpl = tplByName(tplName);
+    const components = tpl ? collectFlComponents(tpl) : [];
+    res = await post("/api/send-template", {
+      phone,
+      name,
+      template: tplName,
+      language: tpl ? tpl.language : "es",
+      components,
+    });
+  }
   if (res.ok) {
     closeModals();
     toast(t("flows.launch.sent"), "ok");
