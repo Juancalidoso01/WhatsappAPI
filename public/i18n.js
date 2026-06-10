@@ -58,13 +58,24 @@
     return loadPromises[ck];
   }
 
+  function lookupInBucket(key, bucket, mod) {
+    if (!bucket) return null;
+    if (bucket[key] != null) return bucket[key];
+    const modPrefix = `${mod}.`;
+    if (key.startsWith(modPrefix)) {
+      const sub = key.slice(modPrefix.length);
+      if (bucket[sub] != null) return bucket[sub];
+    }
+    return null;
+  }
+
   function lookup(key, lang) {
     const langs = lang ? [lang] : [locale, "es"];
     const mods = [...loadedModules];
     for (const l of langs) {
       for (const mod of mods) {
-        const ck = cacheKey(l, mod);
-        if (cache[ck] && cache[ck][key] != null) return cache[ck][key];
+        const hit = lookupInBucket(key, cache[cacheKey(l, mod)], mod);
+        if (hit != null) return hit;
       }
     }
     return null;
@@ -88,26 +99,35 @@
       if (el.querySelector("[data-i18n], [data-i18n-placeholder], input, select, textarea, button, table, ul, ol")) {
         return;
       }
-      el.textContent = t(k);
+      const resolved = lookup(k);
+      if (resolved != null) el.textContent = resolved;
     });
     scope.querySelectorAll("[data-i18n-placeholder]").forEach((el) => {
       const k = el.getAttribute("data-i18n-placeholder");
-      if (k) el.placeholder = t(k);
+      if (!k) return;
+      const resolved = lookup(k);
+      if (resolved != null) el.placeholder = resolved;
     });
     scope.querySelectorAll("[data-i18n-title]").forEach((el) => {
       const k = el.getAttribute("data-i18n-title");
-      if (k) el.title = t(k);
+      if (!k) return;
+      const resolved = lookup(k);
+      if (resolved != null) el.title = resolved;
     });
     scope.querySelectorAll("[data-i18n-aria]").forEach((el) => {
       const k = el.getAttribute("data-i18n-aria");
-      if (k) el.setAttribute("aria-label", t(k));
+      if (!k) return;
+      const resolved = lookup(k);
+      if (resolved != null) el.setAttribute("aria-label", resolved);
     });
     scope.querySelectorAll("select[data-i18n-options]").forEach((sel) => {
       const prefix = sel.getAttribute("data-i18n-options");
       if (!prefix) return;
       [...sel.options].forEach((opt) => {
         const k = opt.getAttribute("data-i18n-opt");
-        if (k) opt.textContent = t(`${prefix}.${k}`);
+        if (!k) return;
+        const resolved = lookup(`${prefix}.${k}`);
+        if (resolved != null) opt.textContent = resolved;
       });
     });
   }
