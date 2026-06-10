@@ -2168,10 +2168,10 @@ async function loadBilling() {
     return;
   }
 
-  const t = res.totals || { byCategory: {} };
-  const byCat = t.byCategory || {};
-  $("bcCost").textContent = fmtCost(t.cost);
-  $("bcVolume").textContent = fmtNum(t.volume);
+  const billTotals = res.totals || { byCategory: {} };
+  const byCat = billTotals.byCategory || {};
+  $("bcCost").textContent = fmtCost(billTotals.cost);
+  $("bcVolume").textContent = fmtNum(billTotals.volume);
   $("bcMkt").textContent = fmtCost(byCat.MARKETING || 0);
   $("bcUtil").textContent = fmtCost(byCat.UTILITY || 0);
   $("bcAuth").textContent = fmtCost((byCat.AUTHENTICATION || 0) + (byCat.AUTHENTICATION_INTERNATIONAL || 0));
@@ -3923,9 +3923,9 @@ function switchScreen(name) {
   if (name === "billing") {
     if (!cache.billing) {
       cache.billing = true;
-      loadBilling();
       renderPrices();
     }
+    loadBilling();
   }
   if (name !== "bulk") stopBulkPolling();
   toggleWorkspaceFlyout(false);
