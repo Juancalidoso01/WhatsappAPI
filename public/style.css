@@ -137,6 +137,9 @@ input, textarea, select { font-family: inherit; }
   padding: 8px 12px 10px; border-top: 1px solid var(--border);
   display: flex; justify-content: center;
 }
+.app-notif-foot-actions {
+  flex-wrap: wrap; gap: 6px;
+}
 .app-nav.collapsed .app-notif-panel { left: 8px; right: auto; width: min(320px, calc(100vw - 24px)); }
 .app-nav.collapsed .app-nav-actions { flex-direction: column; }
 .conv.unread .conv-name { font-weight: 700; }

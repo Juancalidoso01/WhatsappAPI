@@ -1,6 +1,8 @@
 "use strict";
 
 const POLL_MS = 6000;
+const POLL_HIDDEN_MS = 8000;
+const SOUND_ENABLED_KEY = "pp-notify-sound";
 const DAY_MS = 24 * 60 * 60 * 1000;
 const t = (key, vars) => (window.I18n ? I18n.t(key, vars) : key);
 const localeCode = () => (window.I18n ? I18n.getLocale() : "es");
@@ -85,6 +87,7 @@ const state = {
   convSnapshotReady: false,
   knownEventIds: null,
   readThrough: {},
+  soundEnabled: true,
 };
 
 /* ---------- tiny helpers ---------- */
@@ -220,6 +223,59 @@ function showNotifyCard({ title, body, onClick, kind = "" }) {
   notifyCardTimer = setTimeout(close, 6500);
 }
 
+let notifyAudioCtx = null;
+
+function loadSoundPref() {
+  try {
+    const raw = localStorage.getItem(SOUND_ENABLED_KEY);
+    return raw !== "0";
+  } catch (_) {
+    return true;
+  }
+}
+
+function saveSoundPref() {
+  try {
+    localStorage.setItem(SOUND_ENABLED_KEY, state.soundEnabled ? "1" : "0");
+  } catch (_) { /* ignore */ }
+}
+
+function ensureNotifyAudio() {
+  const Ctx = window.AudioContext || window.webkitAudioContext;
+  if (!Ctx) return null;
+  if (!notifyAudioCtx) notifyAudioCtx = new Ctx();
+  if (notifyAudioCtx.state === "suspended") notifyAudioCtx.resume().catch(() => {});
+  return notifyAudioCtx;
+}
+
+function playNotifySound() {
+  if (!state.soundEnabled) return;
+  const ctx = ensureNotifyAudio();
+  if (!ctx) return;
+  try {
+    const t0 = ctx.currentTime;
+    const gain = ctx.createGain();
+    gain.connect(ctx.destination);
+    gain.gain.setValueAtTime(0.0001, t0);
+    gain.gain.exponentialRampToValueAtTime(0.18, t0 + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.45);
+    [[880, 0], [660, 0.14]].forEach(([freq, offset]) => {
+      const osc = ctx.createOscillator();
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(freq, t0 + offset);
+      osc.connect(gain);
+      osc.start(t0 + offset);
+      osc.stop(t0 + offset + 0.22);
+    });
+  } catch (_) { /* ignore */ }
+}
+
+function alertInBackground(title, body, onClick) {
+  if (!document.hidden) return;
+  playNotifySound();
+  tryBrowserNotify(title, body, onClick);
+}
+
 function tryBrowserNotify(title, body, onClick) {
   if (!document.hidden || typeof Notification === "undefined") return;
   if (Notification.permission !== "granted") return;
@@ -231,6 +287,15 @@ function tryBrowserNotify(title, body, onClick) {
       n.close();
     };
   } catch (_) { /* ignore */ }
+}
+
+function updateSoundBtn() {
+  const btn = $("notifSoundBtn");
+  if (!btn) return;
+  btn.textContent = state.soundEnabled
+    ? t("notifications.soundOn")
+    : t("notifications.soundOff");
+  btn.setAttribute("aria-pressed", state.soundEnabled ? "true" : "false");
 }
 
 function updateNotifBadges(count) {
@@ -300,7 +365,7 @@ function showInboundAlert(c) {
     openConversation(c.phone, c.name);
   };
   showNotifyCard({ title, body, onClick: open });
-  tryBrowserNotify(title, body, open);
+  alertInBackground(title, body, open);
 }
 
 function handleLiveNotification(ev) {
@@ -329,7 +394,7 @@ function handleLiveNotification(ev) {
       openConversation(phone, name);
     };
     showNotifyCard({ title, body, onClick: open });
-    tryBrowserNotify(title, body, open);
+    alertInBackground(title, body, open);
     updateUnreadBadges();
     return;
   }
@@ -337,7 +402,7 @@ function handleLiveNotification(ev) {
     const open = () => switchScreen("templates");
     const kind = status === "APPROVED" || status === "REINSTATED" ? "ok" : status === "REJECTED" ? "error" : "";
     showNotifyCard({ title, body, onClick: open, kind });
-    tryBrowserNotify(title, body, open);
+    alertInBackground(title, body, open);
   }
 }
 
@@ -429,6 +494,16 @@ async function markAllNotificationsRead() {
   renderNotifPanel();
 }
 
+function toggleNotifySound() {
+  state.soundEnabled = !state.soundEnabled;
+  saveSoundPref();
+  updateSoundBtn();
+  if (state.soundEnabled) {
+    ensureNotifyAudio();
+    playNotifySound();
+  }
+}
+
 async function requestBrowserNotifications() {
   if (typeof Notification === "undefined") return;
   const btn = $("notifBrowserBtn");
@@ -453,6 +528,7 @@ async function requestBrowserNotifications() {
 /* ---------- init ---------- */
 async function init() {
   state.readThrough = loadReadThrough();
+  state.soundEnabled = loadSoundPref();
   ensureKnownEventIds();
   try {
     state.config = await api("/api/config");
@@ -467,13 +543,13 @@ async function init() {
   await loadNotifications();
   startPolling();
   requestBrowserNotifications();
+  updateSoundBtn();
   document.addEventListener("visibilitychange", () => {
-    if (document.hidden) stopPolling();
-    else {
+    if (!document.hidden) {
       loadConversations().then(() => loadNotifications());
       if (state.activePhone) loadMessages(state.activePhone);
-      startPolling();
     }
+    startPolling();
   });
 }
 
@@ -4291,9 +4367,13 @@ function switchScreen(name) {
 }
 
 /* ---------- polling ---------- */
+function pollIntervalMs() {
+  return document.hidden ? POLL_HIDDEN_MS : POLL_MS;
+}
+
 function startPolling() {
   stopPolling();
-  state.pollTimer = setInterval(async () => {
+  const tick = async () => {
     try {
       await loadConversations();
       await loadNotifications();
@@ -4304,9 +4384,14 @@ function startPolling() {
         ]);
       }
     } catch (_) { /* keep polling alive */ }
-  }, POLL_MS);
+    state.pollTimer = setTimeout(tick, pollIntervalMs());
+  };
+  state.pollTimer = setTimeout(tick, pollIntervalMs());
 }
-function stopPolling() { if (state.pollTimer) clearInterval(state.pollTimer); state.pollTimer = null; }
+function stopPolling() {
+  if (state.pollTimer) clearTimeout(state.pollTimer);
+  state.pollTimer = null;
+}
 
 /* ---------- events ---------- */
 function bindEvents() {
@@ -4328,6 +4413,9 @@ function bindEvents() {
   if (notifMarkAllBtn) notifMarkAllBtn.addEventListener("click", () => markAllNotificationsRead());
   const notifBrowserBtn = $("notifBrowserBtn");
   if (notifBrowserBtn) notifBrowserBtn.addEventListener("click", () => requestBrowserNotifications());
+  const notifSoundBtn = $("notifSoundBtn");
+  if (notifSoundBtn) notifSoundBtn.addEventListener("click", () => toggleNotifySound());
+  document.addEventListener("pointerdown", () => ensureNotifyAudio(), { passive: true });
   document.addEventListener("click", (e) => {
     const panel = $("notifPanel");
     if (!panel || panel.classList.contains("hidden")) return;

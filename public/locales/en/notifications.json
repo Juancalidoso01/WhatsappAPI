@@ -2,6 +2,8 @@
   "title": "Notifications",
   "empty": "No recent notifications.",
   "markAllRead": "Mark all as read",
+  "soundOn": "Sound on",
+  "soundOff": "Sound off",
   "enableBrowser": "Desktop alerts",
   "browserEnabled": "Alerts enabled",
   "browserDenied": "Permission denied in browser",
