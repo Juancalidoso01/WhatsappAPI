@@ -222,7 +222,7 @@
   },
   "studio": {
     "title": "Create your Flow",
-    "intro": "Edit directly on each screen preview. We translate it into the format Meta requires.",
+    "intro": "Edit in the preview; we adapt it to Meta's format.",
     "presetsBtn": "Punto Pago templates",
     "createDraft": "Create Meta draft",
     "saveDraft": "Save changes to Meta",
