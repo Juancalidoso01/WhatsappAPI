@@ -4088,6 +4088,8 @@ const fsState = {
   activeIndex: 0,
   screens: [],
 };
+let fsFormatCtx = null;
+let fsFormatBarBound = false;
 
 const FS_LAYOUTS = ["message", "form", "confirm"];
 
@@ -4148,6 +4150,7 @@ function fsBlockLabel(type) {
 }
 
 async function initFlowStudio() {
+  initFsFormatBar();
   if (window.I18n) await I18n.ensureScreen("flows");
   if (!fsState.schema) {
     const res = await api("/api/flows/builder/schema");
@@ -4188,8 +4191,9 @@ function syncFsPreviewScreen(index, wrap) {
     } else {
       const textEl = blockEl.querySelector(".fs-ed-text");
       if (textEl) block.text = textEl.textContent.trim();
-      const emph = blockEl.querySelector(".fs-b-emphasis");
-      if (emph) block.emphasis = emph.value || "normal";
+      if (block.type === "body" || block.type === "caption") {
+        block.emphasis = block.emphasis || "normal";
+      }
     }
   });
   if (scr.layout === "form") {
@@ -4221,6 +4225,159 @@ function syncFsFromAllPreviews() {
   row.querySelectorAll(".fs-phone-wrap").forEach((wrap) => {
     syncFsPreviewScreen(Number(wrap.dataset.fsI), wrap);
   });
+}
+
+function fsEmphasisClass(emphasis) {
+  if (!emphasis || emphasis === "normal") return "";
+  return ` fs-em-${emphasis.replace(/_/g, "-")}`;
+}
+
+function hideFsFormatBar() {
+  $("fsFormatBar")?.classList.add("hidden");
+  fsFormatCtx = null;
+}
+
+function updateFsFormatBarState() {
+  const bar = $("fsFormatBar");
+  if (!bar || !fsFormatCtx) return;
+  const scr = fsState.screens[fsFormatCtx.screenIndex];
+  const block = scr?.blocks?.[fsFormatCtx.blockIndex];
+  const canEmphasis = block && (block.type === "body" || block.type === "caption");
+  bar.querySelectorAll("[data-fmt]").forEach((btn) => {
+    const fmt = btn.dataset.fmt;
+    const emph = block?.emphasis || "normal";
+    const on = fmt === "bold" ? emph.includes("bold") : emph.includes("italic");
+    btn.classList.toggle("active", canEmphasis && on);
+    btn.disabled = !canEmphasis;
+    btn.classList.toggle("disabled", !canEmphasis);
+  });
+  bar.querySelectorAll("[data-fmt-type]").forEach((btn) => {
+    btn.classList.toggle("active", block?.type === btn.dataset.fmtType);
+  });
+}
+
+function positionFsFormatBar(rect) {
+  const bar = $("fsFormatBar");
+  if (!bar || !rect || (rect.width === 0 && rect.height === 0)) return;
+  bar.classList.remove("hidden");
+  const w = bar.offsetWidth || 220;
+  const h = bar.offsetHeight || 36;
+  let left = rect.left + rect.width / 2 - w / 2;
+  let top = rect.top - h - 10;
+  left = Math.max(12, Math.min(left, window.innerWidth - w - 12));
+  top = Math.max(12, top);
+  bar.style.left = `${left}px`;
+  bar.style.top = `${top}px`;
+}
+
+function onFsTextSelection() {
+  const panel = $("flowsPanelCrear");
+  if (!panel || panel.classList.contains("hidden")) {
+    hideFsFormatBar();
+    return;
+  }
+  const sel = window.getSelection();
+  if (!sel || sel.rangeCount === 0 || sel.isCollapsed) {
+    hideFsFormatBar();
+    return;
+  }
+  const anchor = sel.anchorNode;
+  const focus = sel.focusNode;
+  const el = (anchor?.nodeType === 3 ? anchor.parentElement : anchor);
+  const focusEl = (focus?.nodeType === 3 ? focus.parentElement : focus);
+  const editable = el?.closest?.(".fs-ed-text");
+  if (!editable || editable !== focusEl?.closest?.(".fs-ed-text")) {
+    hideFsFormatBar();
+    return;
+  }
+  const blockEl = editable.closest(".fs-ed-block");
+  const wrap = editable.closest(".fs-phone-wrap");
+  if (!blockEl || !wrap || blockEl.dataset.blockType === "image") {
+    hideFsFormatBar();
+    return;
+  }
+  fsFormatCtx = {
+    screenIndex: Number(wrap.dataset.fsI),
+    blockIndex: Number(blockEl.dataset.bi),
+    editable,
+  };
+  const range = sel.getRangeAt(0);
+  positionFsFormatBar(range.getBoundingClientRect());
+  updateFsFormatBarState();
+}
+
+function toggleFsBlockEmphasis(kind) {
+  if (!fsFormatCtx) return;
+  syncFsFromAllPreviews();
+  const scr = fsState.screens[fsFormatCtx.screenIndex];
+  const block = scr?.blocks?.[fsFormatCtx.blockIndex];
+  if (!block || (block.type !== "body" && block.type !== "caption")) return;
+  let emph = block.emphasis || "normal";
+  const hasBold = emph.includes("bold");
+  const hasItalic = emph.includes("italic");
+  if (kind === "bold") {
+    emph = hasBold
+      ? (hasItalic ? "italic" : "normal")
+      : (hasItalic ? "bold_italic" : "bold");
+  } else {
+    emph = hasItalic
+      ? (hasBold ? "bold" : "normal")
+      : (hasBold ? "bold_italic" : "italic");
+  }
+  block.emphasis = emph;
+  const el = fsFormatCtx.editable;
+  if (el) {
+    el.classList.remove("fs-em-bold", "fs-em-italic", "fs-em-bold-italic");
+    const cls = fsEmphasisClass(emph).trim();
+    if (cls) el.classList.add(cls);
+  }
+  updateFsFormatBarState();
+}
+
+function setFsBlockType(type) {
+  if (!fsFormatCtx) return;
+  syncFsFromAllPreviews();
+  const i = fsFormatCtx.screenIndex;
+  const bi = fsFormatCtx.blockIndex;
+  const scr = fsState.screens[i];
+  const block = scr?.blocks?.[bi];
+  if (!block || block.type === type || block.type === "image") return;
+  block.type = type;
+  if (type === "body" || type === "caption") {
+    block.emphasis = block.emphasis || "normal";
+  } else {
+    delete block.emphasis;
+  }
+  fsState.activeIndex = i;
+  hideFsFormatBar();
+  renderFlowStudio();
+}
+
+function initFsFormatBar() {
+  if (fsFormatBarBound) return;
+  const bar = $("fsFormatBar");
+  if (!bar) return;
+  fsFormatBarBound = true;
+  bar.querySelectorAll(".fs-fmt-btn").forEach((btn) => {
+    btn.addEventListener("mousedown", (e) => e.preventDefault());
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      if (btn.dataset.fmt === "bold" || btn.dataset.fmt === "italic") {
+        toggleFsBlockEmphasis(btn.dataset.fmt);
+        return;
+      }
+      if (btn.dataset.fmtType) setFsBlockType(btn.dataset.fmtType);
+    });
+  });
+  document.addEventListener("selectionchange", () => {
+    window.requestAnimationFrame(onFsTextSelection);
+  });
+  document.addEventListener("mousedown", (e) => {
+    if (e.target.closest("#fsFormatBar")) return;
+    if (!e.target.closest(".fs-ed-text")) hideFsFormatBar();
+  });
+  window.addEventListener("scroll", hideFsFormatBar, true);
+  $("fsPreviewRow")?.addEventListener("scroll", hideFsFormatBar);
 }
 
 function fsFieldTypeOptions(selected) {
@@ -4270,28 +4427,21 @@ function fsEditableBlockHtml(b, bi, scrLen) {
   }
   const ph = escapeHtml(t("flows.studio.blockTextPh"));
   const textContent = escapeHtml(b.text || "");
+  const emphCls = (b.type === "body" || b.type === "caption") ? fsEmphasisClass(b.emphasis) : "";
   let textHtml;
   if (b.type === "heading") {
-    textHtml = `<h3 class="fs-ed-text" contenteditable="true" data-placeholder="${ph}">${textContent}</h3>`;
+    textHtml = `<h3 class="fs-ed-text${emphCls}" contenteditable="true" data-placeholder="${ph}">${textContent}</h3>`;
   } else if (b.type === "subheading") {
-    textHtml = `<p class="fs-preview-sub fs-ed-text" contenteditable="true" data-placeholder="${ph}">${textContent}</p>`;
+    textHtml = `<p class="fs-preview-sub fs-ed-text${emphCls}" contenteditable="true" data-placeholder="${ph}">${textContent}</p>`;
   } else if (b.type === "caption") {
-    textHtml = `<p class="fs-preview-caption fs-ed-text" contenteditable="true" data-placeholder="${ph}">${textContent}</p>`;
+    textHtml = `<p class="fs-preview-caption fs-ed-text${emphCls}" contenteditable="true" data-placeholder="${ph}">${textContent}</p>`;
   } else {
-    textHtml = `<p class="fs-ed-text" contenteditable="true" data-placeholder="${ph}">${textContent}</p>`;
+    textHtml = `<p class="fs-ed-text${emphCls}" contenteditable="true" data-placeholder="${ph}">${textContent}</p>`;
   }
-  const emphasisRow = (b.type === "body" || b.type === "caption") ? `
-    <select class="fs-b-emphasis sm">
-      <option value="normal"${(!b.emphasis || b.emphasis === "normal") ? " selected" : ""}>${escapeHtml(t("flows.studio.emphasisNormal"))}</option>
-      <option value="bold"${b.emphasis === "bold" ? " selected" : ""}>${escapeHtml(t("flows.studio.emphasisBold"))}</option>
-      <option value="italic"${b.emphasis === "italic" ? " selected" : ""}>${escapeHtml(t("flows.studio.emphasisItalic"))}</option>
-      <option value="bold_italic"${b.emphasis === "bold_italic" ? " selected" : ""}>${escapeHtml(t("flows.studio.emphasisBoldItalic"))}</option>
-    </select>` : "";
   return `
     <div class="fs-ed-block" data-bi="${bi}" data-block-type="${escapeHtml(b.type)}">
       ${bar}
       ${textHtml}
-      ${emphasisRow}
     </div>`;
 }
 
@@ -4339,7 +4489,7 @@ function renderFsPhoneEditor(scr, index) {
   const actionComplete = `<option value="complete"${scr.buttonAction === "complete" || isLast ? " selected" : ""}>${escapeHtml(t("flows.studio.actionComplete"))}</option>`;
 
   return `
-    <div class="fs-phone-wrap editing" data-fs-i="${index}" id="fsPhone${index}">
+    <div class="fs-phone-wrap${fsState.activeIndex === index ? " editing" : ""}" data-fs-i="${index}" id="fsPhone${index}">
       <div class="fs-preview-meta">
         <span class="fs-preview-badge">${escapeHtml(t("flows.studio.previewBadge"))}</span>
         <span class="fs-preview-step muted sm">${escapeHtml(stepOf)}</span>
@@ -4524,6 +4674,8 @@ function fsThumbLabel(scr) {
 }
 
 function renderFlowStudio() {
+  hideFsFormatBar();
+  initFsFormatBar();
   const strip = $("fsScreenStrip");
   const row = $("fsPreviewRow");
   if (!strip || !row) return;

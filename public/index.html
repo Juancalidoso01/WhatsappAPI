@@ -708,9 +708,20 @@
                 </details>
               </div>
 
-              <p class="muted sm fs-strip-hint" data-i18n="flows.studio.editOnPreview">Edita directamente en cada pantalla. Usa «Eliminar pantalla» si solo necesitas una.</p>
+              <p class="muted sm fs-strip-hint" data-i18n="flows.studio.editOnPreview">Edita en cada pantalla. Selecciona texto para cambiar formato.</p>
               <div id="fsScreenStrip" class="fs-screen-strip"></div>
-              <div id="fsPreviewRow" class="fs-preview-row"></div>
+              <div class="fs-carousel-wrap">
+                <div id="fsPreviewRow" class="fs-preview-row"></div>
+              </div>
+              <div id="fsFormatBar" class="fs-format-bar hidden" role="toolbar" data-i18n-aria="flows.studio.formatBarAria" aria-label="Formato de texto">
+                <button type="button" class="fs-fmt-btn" data-fmt="bold" title="Negrita"><b>B</b></button>
+                <button type="button" class="fs-fmt-btn" data-fmt="italic" title="Cursiva"><i>I</i></button>
+                <span class="fs-fmt-sep" aria-hidden="true"></span>
+                <button type="button" class="fs-fmt-btn" data-fmt-type="heading">H1</button>
+                <button type="button" class="fs-fmt-btn" data-fmt-type="subheading">H2</button>
+                <button type="button" class="fs-fmt-btn" data-fmt-type="body">P</button>
+                <button type="button" class="fs-fmt-btn" data-fmt-type="caption" data-i18n-title="flows.studio.fmtCaption" title="Texto pequeño">Aa</button>
+              </div>
             </div>
           </section>
         </section>

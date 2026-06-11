@@ -263,7 +263,9 @@
     "previewDecorNote": "Simulación visual. «Cancelar» arriba es decorativo (como en WhatsApp).",
     "stripHint": "Toca una miniatura para editarla. El × en la miniatura elimina esa pantalla (no el «Cancelar» del preview).",
     "deleteScreen": "Eliminar pantalla",
-    "editOnPreview": "Edita directamente en cada pantalla. Usa «Eliminar pantalla» si solo necesitas una.",
+    "editOnPreview": "Edita en cada pantalla del carrusel. Selecciona texto para abrir el menú de formato.",
+    "formatBarAria": "Formato de texto",
+    "fmtCaption": "Texto pequeño",
     "removeScreenBtn": "Eliminar pantalla",
     "screenRemoved": "Pantalla eliminada"
   },

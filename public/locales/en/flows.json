@@ -263,7 +263,9 @@
     "previewDecorNote": "Visual simulation. «Cancel» at the top is decorative (like WhatsApp).",
     "stripHint": "Tap a thumbnail to edit it. The × on the thumbnail removes that screen (not the preview «Cancel»).",
     "deleteScreen": "Remove screen",
-    "editOnPreview": "Edit directly on each screen. Use «Remove screen» if you only need one.",
+    "editOnPreview": "Edit each screen in the carousel. Select text to open the format menu.",
+    "formatBarAria": "Text formatting",
+    "fmtCaption": "Small text",
     "removeScreenBtn": "Remove screen",
     "screenRemoved": "Screen removed"
   },
