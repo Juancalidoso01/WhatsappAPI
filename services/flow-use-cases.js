@@ -18,8 +18,9 @@ const USE_CASES = [
     label: "Reservas y citas",
     icon: "calendar",
     description: "Agendar, reprogramar o cancelar citas; elegir sucursal, fecha y hora; confirmar asistencia.",
-    samples: [],
-    status: "soon",
+    samples: ["booking"],
+    status: "available",
+    featured: true,
   },
   {
     id: "atencion",

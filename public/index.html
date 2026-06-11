@@ -544,8 +544,27 @@
                 <button type="button" class="flow-screen-tab" data-screen="RESULT" data-i18n="flows.screenResult">Resultado</button>
               </div>
               <div id="payAuthFlowPreview" class="flow-phone" aria-label="Vista previa del Flow"></div>
+              <div id="bookingFlowPreview" class="flow-phone hidden" aria-label="Vista previa reserva"></div>
             </div>
           </div>
+
+          <section class="flows-panel flows-booking-test hidden" id="flowsBookingPanel">
+            <h3 class="fb-subtitle" data-i18n="flows.testData">Datos de prueba</h3>
+            <div class="flows-form-grid">
+              <label><span data-i18n="flows.phone">Teléfono</span>
+                <input id="bookingPhone" type="text" placeholder="50763163152" value="50763163152" />
+              </label>
+              <label><span data-i18n="flows.customerName">Nombre del cliente</span>
+                <input id="bookingCustomerName" type="text" placeholder="Ana Torres" value="Ana Torres" />
+              </label>
+            </div>
+            <p class="muted sm" data-i18n="flows.bookingTestHint">Al elegir fecha en WhatsApp, el endpoint devuelve horarios disponibles en tiempo real.</p>
+            <div class="flows-actions">
+              <button type="button" id="bookingSendBtn" class="btn-primary sm" data-i18n="flows.sendTest">Enviar prueba a WhatsApp</button>
+              <button type="button" id="bookingOpenTplBtn" class="btn-ghost sm" data-i18n="flows.viewTemplate">Ver plantilla del mensaje</button>
+            </div>
+            <div id="bookingRecent" class="fb-payauth-recent muted sm"></div>
+          </section>
 
           <section class="flows-panel flows-payment-auth" id="flowsPaymentAuthPanel">
             <h3 class="fb-subtitle" data-i18n="flows.testData">Datos de prueba</h3>

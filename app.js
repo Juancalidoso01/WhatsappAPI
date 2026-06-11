@@ -44,6 +44,7 @@ const templatePresets = require('./services/template-presets');
 const variableSchema = require('./services/variable-schema');
 const flowPerformance = require('./services/flow-performance');
 const CardImageStore = require('./services/card-image-store');
+const BookingStore = require('./services/booking-store');
 const FlowStudioAssets = require('./services/flow-studio-assets');
 const flowUseCases = require('./services/flow-use-cases');
 const flowActivity = require('./services/flow-activity');
@@ -53,6 +54,7 @@ const BillingLedger = require('./services/billing-ledger');
 const PortalEvents = require('./services/portal-events');
 
 const PAYMENT_AUTH_FLOW_KEY = 'wa:flow:payment_auth_3ds_v3';
+const BOOKING_FLOW_KEY = 'wa:flow:booking_v1';
 const TARJETA_CREDITO_FLOW_KEY = 'wa:flow:tarjeta_credito_v1';
 const FLOW_KEY_SYNCED = 'wa:flow:public_key_synced';
 const app = express();
@@ -553,6 +555,10 @@ async function getOrCreatePaymentAuthFlow() {
   return getOrCreateFlowFromSample('payment_auth', PAYMENT_AUTH_FLOW_KEY);
 }
 
+async function getOrCreateBookingFlow() {
+  return getOrCreateFlowFromSample('booking', BOOKING_FLOW_KEY);
+}
+
 app.post('/api/flows/endpoint', apiJson, async (req, res) => {
   try {
     const { privateKey } = await FlowKeys.getKeyPair();
@@ -942,6 +948,105 @@ app.post('/api/flows/payment-auth/test', apiJson, async (req, res) => {
     });
   } catch (err) {
     console.error('payment-auth test error:', err.message);
+    res.status(200).json({ ok: false, error: String(err.message || err) });
+  }
+});
+
+app.get('/api/flows/booking/recent', async (req, res) => {
+  try {
+    res.json({ ok: true, data: await BookingStore.listRecent({ limit: 20 }) });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: String(err.message || err), data: [] });
+  }
+});
+
+app.post('/api/flows/booking/test', apiJson, async (req, res) => {
+  const { phone, customerName, bodyText, headerText, footerText, cta } = req.body || {};
+  if (!phone) return res.status(400).json({ ok: false, error: 'Se requiere "phone".' });
+  if (!config.phoneNumberId || !config.accessToken || !config.wabaId) {
+    return res.status(400).json({ ok: false, error: 'Faltan credenciales de WhatsApp.' });
+  }
+
+  try {
+    await ensureFlowEndpointReady();
+    const booking = await BookingStore.create({
+      phone,
+      customerName: customerName || 'Cliente',
+    });
+
+    const flowCopy = templatePresets.buildFlowMessage('punto_pago_reserva_cita', {
+      customerName: customerName || 'Cliente',
+    }) || {};
+
+    const { flowId } = await getOrCreateBookingFlow();
+    const normPhone = String(phone).replace(/\D/g, '');
+
+    let flowStatus = 'DRAFT';
+    try {
+      const flowMeta = await GraphApi.getFlow(flowId, 'id,status');
+      flowStatus = String(flowMeta.status || 'DRAFT').toUpperCase();
+    } catch (_) {}
+
+    const response = await GraphApi.sendFlowMessage(
+      config.phoneNumberId,
+      normPhone,
+      {
+        flowId,
+        flowToken: booking.flowToken,
+        cta: cta || flowCopy.cta || 'Agendar cita',
+        bodyText: bodyText || flowCopy.bodyText || 'Reserva tu cita en Punto Pago: elige sucursal, fecha y horario.',
+        headerText: headerText || flowCopy.headerText,
+        footerText: footerText || flowCopy.footerText,
+        flowAction: 'data_exchange',
+        mode: flowStatus === 'DRAFT' ? 'draft' : undefined,
+      }
+    );
+
+    await FlowStore.recordSend({
+      phone: booking.phone,
+      flowId,
+      flowToken: booking.flowToken,
+      flowName: 'punto_pago_reserva_cita',
+      mode: flowStatus === 'DRAFT' ? 'interactive_draft' : 'interactive_published',
+    });
+
+    const wamid = waMessageId(response);
+    const previewText = flowCopy.bodyText || '[Flow reserva] Punto Pago';
+    if (wamid) {
+      await Store.addMessage({
+        phone: normPhone,
+        name: customerName || undefined,
+        phoneNumberId: config.phoneNumberId,
+        direction: 'out',
+        text: previewText.slice(0, 500),
+        type: 'interactive',
+        status: 'sent',
+        id: wamid,
+      });
+      await Store.updateConversationMeta(normPhone, { conversationOrigin: 'business_initiated' });
+    }
+
+    await trackBillableSend({
+      phone: normPhone,
+      messageId: wamid,
+      kind: 'flow_interactive',
+      flowMode: flowStatus === 'DRAFT' ? 'interactive_draft' : 'interactive_published',
+      flowName: 'punto_pago_reserva_cita',
+      flowId,
+      preview: previewText,
+      source: 'booking',
+      recipientName: customerName,
+    });
+
+    res.json({
+      ok: true,
+      booking,
+      flowId,
+      sendMode: flowStatus === 'DRAFT' ? 'interactive_draft' : 'interactive_published',
+      messageId: wamid,
+    });
+  } catch (err) {
+    console.error('booking test error:', err.message);
     res.status(200).json({ ok: false, error: String(err.message || err) });
   }
 });

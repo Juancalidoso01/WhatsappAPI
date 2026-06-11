@@ -37,7 +37,7 @@
   "reviewMessageCreateMeta": "Revisa el mensaje y créalo en Meta para vincularlo al Flow.",
   "phoneRequired": "Ingresa un teléfono.",
   "sendFailedGeneric": "No se pudo enviar.",
-  "payAuthSent": "Verificación de pago enviada. Revisa WhatsApp.",
+  "bookingSent": "Flow de reserva enviado. Revisa WhatsApp.",
   "keyRegisterFailed": "No se pudo registrar la clave.",
   "keyRegistered": "Clave registrada.",
   "draftsCleaned": "{count} borrador(es) de prueba eliminado(s) en Meta.",

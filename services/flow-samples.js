@@ -305,6 +305,154 @@ const PAYMENT_AUTH_FLOW = {
   ],
 };
 
+/** Reservas con CalendarPicker + horarios dinámicos vía endpoint (data_exchange). */
+const BOOKING_FLOW = {
+  version: "7.3",
+  data_api_version: "4.0",
+  routing_model: {
+    BOOK: ["SUCCESS"],
+    SUCCESS: [],
+  },
+  screens: [
+    {
+      id: "BOOK",
+      title: "Agendar cita",
+      data: {
+        sucursales: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              id: { type: "string" },
+              title: { type: "string" },
+            },
+          },
+          __example__: [{ id: "centro", title: "Punto Pago — Centro" }],
+        },
+        available_slots: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              id: { type: "string" },
+              title: { type: "string" },
+            },
+          },
+          __example__: [{ id: "1000", title: "10:00" }],
+        },
+        is_slot_visible: { type: "boolean", __example__: false },
+        min_date: { type: "string", __example__: "2026-06-09" },
+        max_date: { type: "string", __example__: "2026-07-09" },
+        selected_date: { type: "string", __example__: "" },
+      },
+      layout: {
+        type: "SingleColumnLayout",
+        children: [
+          { type: "TextHeading", text: "Agenda tu cita" },
+          {
+            type: "TextBody",
+            text: "Elige sucursal, fecha y horario. Los horarios disponibles se cargan al seleccionar una fecha.",
+          },
+          {
+            type: "Form",
+            name: "form",
+            children: [
+              {
+                type: "Dropdown",
+                name: "sucursal",
+                label: "Sucursal",
+                required: true,
+                "data-source": "${data.sucursales}",
+              },
+              {
+                type: "CalendarPicker",
+                name: "fecha",
+                label: "Fecha",
+                required: true,
+                mode: "single",
+                "min-date": "${data.min_date}",
+                "max-date": "${data.max_date}",
+                "include-days": ["Mon", "Tue", "Wed", "Thu", "Fri"],
+                "on-select-action": {
+                  name: "data_exchange",
+                  payload: {
+                    component_action: "update_date",
+                    fecha: "${form.fecha}",
+                    sucursal: "${form.sucursal}",
+                  },
+                },
+              },
+              {
+                type: "Dropdown",
+                name: "horario",
+                label: "Horario disponible",
+                required: true,
+                visible: "${data.is_slot_visible}",
+                "data-source": "${data.available_slots}",
+              },
+              {
+                type: "TextInput",
+                name: "nombre",
+                label: "Tu nombre",
+                required: true,
+                "input-type": "text",
+              },
+            ],
+          },
+          {
+            type: "Footer",
+            label: "Confirmar cita",
+            "on-click-action": {
+              name: "data_exchange",
+              payload: { component_action: "confirm" },
+            },
+          },
+        ],
+      },
+    },
+    {
+      id: "SUCCESS",
+      title: "Cita confirmada",
+      terminal: true,
+      success: true,
+      data: {
+        resumen: {
+          type: "string",
+          __example__: "Tu cita en Punto Pago — Centro el lunes 9 de junio de 2026 a las 10:00 quedó registrada.",
+        },
+        sucursal_label: { type: "string", __example__: "Punto Pago — Centro" },
+        fecha_label: { type: "string", __example__: "lunes, 9 de junio de 2026" },
+        horario_label: { type: "string", __example__: "10:00" },
+        nombre: { type: "string", __example__: "Ana Torres" },
+      },
+      layout: {
+        type: "SingleColumnLayout",
+        children: [
+          { type: "TextHeading", text: "¡Cita confirmada!" },
+          { type: "TextBody", text: "${data.resumen}" },
+          { type: "TextBody", text: "Sucursal: ${data.sucursal_label}" },
+          { type: "TextBody", text: "Fecha: ${data.fecha_label}" },
+          { type: "TextBody", text: "Hora: ${data.horario_label}" },
+          { type: "TextBody", text: "Nombre: ${data.nombre}" },
+          {
+            type: "Footer",
+            label: "Cerrar",
+            "on-click-action": {
+              name: "complete",
+              payload: {
+                sucursal: "${data.sucursal_label}",
+                fecha: "${data.fecha_label}",
+                horario: "${data.horario_label}",
+                nombre: "${data.nombre}",
+              },
+            },
+          },
+        ],
+      },
+    },
+  ],
+};
+
 /** Tour de producto: Tarjeta de Crédito (contenido basado en Centro de Ayuda Punto Pago). */
 const TARJETA_CREDITO_FLOW = {
   version: "7.3",
@@ -521,6 +669,24 @@ const SAMPLES = {
     },
     flow_json: PAYMENT_AUTH_FLOW,
   },
+  booking: {
+    name: "punto_pago_reserva_cita",
+    categories: ["APPOINTMENT_BOOKING"],
+    publish: false,
+    description: "Reserva de cita: elige sucursal, fecha en calendario y horario dinámico desde el endpoint.",
+    defaultScreen: "BOOK",
+    defaultCta: "Agendar cita",
+    flowAction: "data_exchange",
+    dynamic: true,
+    sendDefaults: {
+      headerText: "Agenda tu cita",
+      bodyText: "Hola, elige sucursal, fecha y horario para tu cita en Punto Pago. Los horarios se actualizan al seleccionar la fecha.",
+      footerText: "Punto Pago · Citas",
+      cta: "Agendar cita",
+      screen: "BOOK",
+    },
+    flow_json: BOOKING_FLOW,
+  },
   tarjeta_credito: {
     name: "punto_pago_tarjeta_credito",
     categories: ["SIGN_UP"],
@@ -602,6 +768,7 @@ function resolveSendProfileByFlowName(flowName) {
   const PRESET_BY_SAMPLE = {
     tarjeta_credito: "punto_pago_tarjeta_credito_bienvenida",
     payment_auth: "punto_pago_autorizacion_pago",
+    booking: "punto_pago_reserva_cita",
   };
 
   return {

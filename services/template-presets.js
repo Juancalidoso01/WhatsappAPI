@@ -246,6 +246,44 @@ const PRESETS = {
       cta: "Conocer tarjeta",
     },
   },
+  punto_pago_reserva_cita: {
+    key: "punto_pago_reserva_cita",
+    label: "Reserva de cita — sucursal y horario",
+    description: "El cliente elige sucursal, fecha en calendario y horario dinámico (Flow con endpoint).",
+    name: "reserva_cita_punto_pago",
+    templateFlowName: "reserva_cita_punto_pago_flow",
+    category: "UTILITY",
+    language: "es",
+    flowSampleKey: "booking",
+    flowScreenId: "BOOK",
+    flowCacheKey: "wa:flow:booking_v1",
+    headerText: "Agenda tu cita",
+    bodyText:
+      "Hola {{1}},\n\n"
+      + "Reserva tu cita en Punto Pago. Elige sucursal, fecha y horario disponible desde el formulario.\n\n"
+      + "Toca el botón para empezar.",
+    footerText: "Punto Pago · Citas",
+    variables: [
+      {
+        key: "nombre_cliente",
+        placeholder: "{{1}}",
+        label: "Nombre del cliente",
+        type: "text",
+        example: "Ana Torres",
+        mapsTo: "Saludo personalizado en el mensaje de invitación a agendar",
+      },
+    ],
+    flowCta: "Agendar cita",
+    flowMessage: {
+      headerText: "Agenda tu cita",
+      bodyText:
+        "Hola {{nombre_cliente}},\n\n"
+        + "Reserva tu cita en Punto Pago. Elige sucursal, fecha y horario disponible desde el formulario.\n\n"
+        + "Toca el botón para empezar.",
+      footerText: "Punto Pago · Citas",
+      cta: "Agendar cita",
+    },
+  },
   punto_pago_bienvenida: {
     key: "punto_pago_bienvenida",
     label: "Bienvenida al cliente",

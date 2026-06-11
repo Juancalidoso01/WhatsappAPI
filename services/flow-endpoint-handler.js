@@ -4,10 +4,24 @@ const config = require("./config");
 const FlowStore = require("./flow-store");
 const PaymentAuthStore = require("./payment-auth-store");
 const CardImageStore = require("./card-image-store");
+const BookingStore = require("./booking-store");
+const bookingFlow = require("./flow-booking");
 const { PRODUCTS, productTitle } = require("./flow-quote");
 
 function isPaymentAuthToken(flowToken) {
   return flowToken && String(flowToken).startsWith("payauth_");
+}
+
+function isBookingToken(flowToken) {
+  return flowToken && String(flowToken).startsWith("booking_");
+}
+
+function isBookingRequest(decryptedBody) {
+  const { screen, data } = decryptedBody || {};
+  if (screen === "BOOK") return true;
+  const payload = (data && data.form) || data || {};
+  const action = payload.component_action || payload.componentAction;
+  return action === "update_date" || action === "confirm";
 }
 
 function formatWhen(ts) {
@@ -116,6 +130,111 @@ async function resolveCardImageUrl() {
   return CardImageStore.resolveCardImageUrl();
 }
 
+async function handleBookingFlow(decryptedBody) {
+  const { action, data, version, flow_token: flowToken } = decryptedBody;
+
+  if (action === "ping") {
+    await FlowStore.recordEndpointEvent({ type: "ping", channel: "booking" });
+    return { version, data: { status: "active" } };
+  }
+
+  if (data && data.error) {
+    await FlowStore.recordEndpointEvent({ type: "error", channel: "booking", error: data.error });
+    return { version, data: { acknowledged: true } };
+  }
+
+  if (action === "INIT") {
+    let session = await BookingStore.get(flowToken);
+    if (!session) {
+      session = await BookingStore.create({ flowToken });
+    }
+    await FlowStore.recordEndpointEvent({ type: "init", channel: "booking", flowToken });
+    return {
+      version,
+      screen: "BOOK",
+      data: bookingFlow.initScreenData(),
+    };
+  }
+
+  if (action === "data_exchange") {
+    const payload = (data && data.form) || data || {};
+    const componentAction = payload.component_action || payload.componentAction;
+
+    if (componentAction === "update_date") {
+      const fecha = payload.fecha || "";
+      const sucursal = payload.sucursal || "centro";
+      const slots = bookingFlow.slotsScreenData(fecha, sucursal);
+
+      await FlowStore.recordEndpointEvent({
+        type: "data_exchange",
+        channel: "booking",
+        flowToken,
+        action: "update_date",
+        fecha,
+        sucursal,
+        slots: slots.available_slots.length,
+      });
+
+      return {
+        version,
+        screen: "BOOK",
+        data: slots,
+      };
+    }
+
+    if (componentAction === "confirm") {
+      const fecha = payload.fecha || "";
+      const sucursal = payload.sucursal || "";
+      const horario = payload.horario || "";
+      const nombre = payload.nombre || "";
+      const horarioLabel = bookingFlow.slotTitle(horario);
+      const sucursalLabel = bookingFlow.branchTitle(sucursal);
+      const fechaLabel = bookingFlow.formatDateLabel(fecha);
+
+      await BookingStore.confirm(flowToken, {
+        branchId: sucursal,
+        date: fecha,
+        slotId: horario,
+        slotLabel: horarioLabel,
+        customerName: nombre,
+      });
+
+      await FlowStore.recordEndpointEvent({
+        type: "data_exchange",
+        channel: "booking",
+        flowToken,
+        action: "confirm",
+        fecha,
+        sucursal,
+        horario,
+        nombre,
+      });
+
+      const resumen = nombre
+        ? `${nombre}, tu cita en ${sucursalLabel} el ${fechaLabel} a las ${horarioLabel} quedó registrada.`
+        : `Tu cita en ${sucursalLabel} el ${fechaLabel} a las ${horarioLabel} quedó registrada.`;
+
+      return {
+        version,
+        screen: "SUCCESS",
+        data: {
+          resumen,
+          sucursal_label: sucursalLabel,
+          fecha_label: fechaLabel,
+          horario_label: horarioLabel,
+          nombre: nombre || "—",
+        },
+      };
+    }
+  }
+
+  return {
+    version,
+    screen: "BOOK",
+    data: bookingFlow.initScreenData(),
+  };
+}
+
 async function handleQuoteFlow(decryptedBody) {
   const { action, screen, data, version, flow_token: flowToken } = decryptedBody;
 
@@ -177,12 +296,16 @@ async function handleFlowRequest(decryptedBody) {
   if (isPaymentAuthToken(flowToken)) {
     return handlePaymentAuth(decryptedBody);
   }
+  if (isBookingToken(flowToken) || isBookingRequest(decryptedBody)) {
+    return handleBookingFlow(decryptedBody);
+  }
   return handleQuoteFlow(decryptedBody);
 }
 
 module.exports = {
   handleFlowRequest,
   isPaymentAuthToken,
+  isBookingToken,
   cardImageUrl,
   resolveCardImageUrl,
   buildPaymentAuthScreenData,

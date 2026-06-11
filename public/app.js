@@ -2056,13 +2056,81 @@ function closeFlowCreate() {
   setFlowsTab("mis");
 }
 
-function openFlowProbar() {
+function openFlowProbar(mode) {
+  state.probarMode = mode === "booking" ? "booking" : "payment";
   ["flowsPanelMis", "flowsPanelActividad", "flowsPanelCrear"].forEach((id) => {
     $(id)?.classList.add("hidden");
   });
   $("flowsPanelProbar")?.classList.remove("hidden");
-  updatePayAuthPreview();
-  updatePayAuthFlowPreview();
+
+  const isBooking = state.probarMode === "booking";
+  const badge = document.querySelector("#flowsPanelProbar .flows-hero-badge");
+  const heroTitle = document.querySelector("#flowsPanelProbar .flows-hero-copy h2");
+  const heroHint = document.querySelector("#flowsPanelProbar .flows-hero-copy p.muted");
+  if (badge) badge.textContent = isBooking ? t("flows.badgeBooking") : t("flows.badge3ds");
+  if (heroTitle) heroTitle.textContent = isBooking ? t("flows.bookingTitle") : t("flows.payConfirmTitle");
+  if (heroHint) heroHint.textContent = isBooking ? t("flows.bookingHint") : t("flows.payConfirmHint");
+
+  $("flowsPaymentAuthPanel")?.classList.toggle("hidden", isBooking);
+  $("flowsBookingPanel")?.classList.toggle("hidden", !isBooking);
+  $("payAuthScreenTabs")?.classList.toggle("hidden", isBooking);
+  $("payAuthFlowPreview")?.classList.toggle("hidden", isBooking);
+  $("bookingFlowPreview")?.classList.toggle("hidden", !isBooking);
+
+  if (isBooking) {
+    updateBookingPreview();
+    loadBookingRecent();
+  } else {
+    updatePayAuthPreview();
+    updatePayAuthFlowPreview();
+  }
+}
+
+function updateBookingPreview() {
+  renderWaMessagePreview($("payAuthWaPreview"), {
+    header: t("flows.bookingWaHeader"),
+    body: t("flows.bookingWaBody", { name: ($("bookingCustomerName") || $("payAuthCustomerName") || {}).value || "Ana Torres" }),
+    footer: t("flows.bookingWaFooter"),
+    cta: t("flows.bookingCta"),
+  });
+  const box = $("bookingFlowPreview");
+  if (!box) return;
+  box.innerHTML = `
+    <div class="flow-phone-nav"><span>✕</span><span>${escapeHtml(t("flows.bookingScreenTitle"))}</span><span>⋯</span></div>
+    <div class="flow-phone-body">
+      <h3>${escapeHtml(t("flows.bookingScreenHeading"))}</h3>
+      <p>${escapeHtml(t("flows.bookingScreenBody"))}</p>
+      <p style="margin:8px 0;padding:10px;border:1px solid #e9edef;border-radius:8px;font-size:12px;color:#667781">${escapeHtml(t("flows.bookingFieldBranch"))}</p>
+      <p style="margin:8px 0;padding:10px;border:1px solid #e9edef;border-radius:8px;font-size:12px;color:#667781">📅 ${escapeHtml(t("flows.bookingFieldDate"))}</p>
+      <p class="muted sm">${escapeHtml(t("flows.bookingFieldSlotsHint"))}</p>
+    </div>
+    <div class="flow-phone-footer"><button type="button">${escapeHtml(t("flows.bookingCta"))}</button></div>`;
+}
+
+async function sendBookingTest() {
+  const phone = ($("bookingPhone") || $("payAuthPhone") || {}).value.trim();
+  if (!phone) { toast(t("toast.phoneRequired"), "error"); return; }
+  const res = await post("/api/flows/booking/test", {
+    phone,
+    customerName: ($("bookingCustomerName") || $("payAuthCustomerName") || {}).value.trim(),
+  });
+  if (!res.ok) { toast(res.error || t("toast.sendFailedGeneric"), "error"); return; }
+  toast(t("toast.bookingSent"), "ok");
+  loadBookingRecent();
+}
+
+async function loadBookingRecent() {
+  const box = $("bookingRecent");
+  if (!box) return;
+  const res = await api("/api/flows/booking/recent");
+  const rows = (res && res.data) || [];
+  if (!rows.length) {
+    box.textContent = t("flows.noTestBookings");
+    return;
+  }
+  box.innerHTML = rows.slice(0, 5).map((r) =>
+    `<div>${escapeHtml(r.customerName || "—")} · ${escapeHtml(r.date || t("flows.activity.pending"))} ${escapeHtml(r.slotLabel || "")} · ${escapeHtml(r.status || "")}</div>`
+  ).join("");
 }
 
 function closeFlowProbar() {
@@ -4723,13 +4791,15 @@ function renderFlowUseCaseGrid() {
     if (u.status === "soon" || !u.templates || !u.templates.length) return;
     u.templates.forEach((tpl) => {
       cards.push(`
-        <article class="flow-template-card${tpl.key === "payment_auth" || tpl.key === "tarjeta_credito" ? " featured" : ""}">
+        <article class="flow-template-card${tpl.key === "payment_auth" || tpl.key === "tarjeta_credito" || tpl.key === "booking" ? " featured" : ""}">
           <h3>${escapeHtml(tpl.name || tpl.key)}</h3>
           <p class="muted sm">${escapeHtml(u.label)} · ${escapeHtml(tpl.description || "")}</p>
           <div class="flows-actions">
             <button type="button" class="btn-primary sm flow-create-sample" data-sample="${escapeHtml(tpl.key)}">${escapeHtml(t("flows.studio.createInMeta"))}</button>
             ${tpl.key === "payment_auth" ? `<button type="button" class="btn-ghost sm flow-go-probar">${escapeHtml(t("flows.studio.tryBtn"))}</button>` : ""}
+            ${tpl.key === "booking" ? `<button type="button" class="btn-ghost sm flow-go-booking">${escapeHtml(t("flows.studio.tryBtn"))}</button>` : ""}
             ${tpl.key === "tarjeta_credito" ? `<button type="button" class="btn-ghost sm flow-open-tpl-draft" data-preset="punto_pago_tarjeta_credito_bienvenida">${escapeHtml(t("templates.draftsTitle"))}</button>` : ""}
+            ${tpl.key === "booking" ? `<button type="button" class="btn-ghost sm flow-open-tpl-draft" data-preset="punto_pago_reserva_cita">${escapeHtml(t("templates.draftsTitle"))}</button>` : ""}
           </div>
         </article>`);
     });
@@ -4741,7 +4811,10 @@ function renderFlowUseCaseGrid() {
     btn.addEventListener("click", () => createFlowSampleKey(btn.dataset.sample))
   );
   box.querySelectorAll(".flow-go-probar").forEach((btn) =>
-    btn.addEventListener("click", () => openFlowProbar())
+    btn.addEventListener("click", () => openFlowProbar("payment"))
+  );
+  box.querySelectorAll(".flow-go-booking").forEach((btn) =>
+    btn.addEventListener("click", () => openFlowProbar("booking"))
   );
   box.querySelectorAll(".flow-open-tpl-draft").forEach((btn) =>
     btn.addEventListener("click", () => {
@@ -5556,7 +5629,17 @@ function bindEvents() {
   const flowProbarBack = $("flowProbarBack");
   if (flowProbarBack) flowProbarBack.addEventListener("click", closeFlowProbar);
   const flowDetailProbarBtn = $("flowDetailProbarBtn");
-  if (flowDetailProbarBtn) flowDetailProbarBtn.addEventListener("click", openFlowProbar);
+  if (flowDetailProbarBtn) flowDetailProbarBtn.addEventListener("click", () => openFlowProbar("payment"));
+  const bookingSendBtn = $("bookingSendBtn");
+  if (bookingSendBtn) bookingSendBtn.addEventListener("click", sendBookingTest);
+  const bookingOpenTplBtn = $("bookingOpenTplBtn");
+  if (bookingOpenTplBtn) {
+    bookingOpenTplBtn.addEventListener("click", () => openTplDraftModal("punto_pago_reserva_cita"));
+  }
+  ["bookingPhone", "bookingCustomerName"].forEach((id) => {
+    const el = $(id);
+    if (el) el.addEventListener("input", updateBookingPreview);
+  });
   ["tpHeader", "tpBody", "tpFooter"].forEach((id) => {
     const el = $(id);
     if (el) el.addEventListener("input", updateTpPreview);

@@ -37,6 +37,7 @@
   "reviewMessageCreateMeta": "Review the message and create it on Meta to link it to the Flow.",
   "phoneRequired": "Enter a phone number.",
   "sendFailedGeneric": "Could not send.",
+  "bookingSent": "Booking Flow sent. Check WhatsApp.",
   "payAuthSent": "Payment verification sent. Check WhatsApp.",
   "keyRegisterFailed": "Could not register key.",
   "keyRegistered": "Key registered.",
