@@ -2079,6 +2079,7 @@ function openFlowProbar(mode) {
 
   if (isBooking) {
     updateBookingPreview();
+    loadBookingScheduleDefaults();
     loadBookingRecent();
   } else {
     updatePayAuthPreview();
@@ -2131,6 +2132,47 @@ async function loadBookingRecent() {
   box.innerHTML = rows.slice(0, 5).map((r) =>
     `<div>${escapeHtml(r.customerName || "—")} · ${escapeHtml(r.date || t("flows.activity.pending"))} ${escapeHtml(r.slotLabel || "")} · ${escapeHtml(r.status || "")}</div>`
   ).join("");
+}
+
+async function loadBookingScheduleDefaults() {
+  const res = await api("/api/bookings/schedule");
+  if (!res.ok || !res.schedule) return;
+  const sel = $("bookingAvailBranch");
+  if (sel && res.schedule.branches?.length) {
+    sel.innerHTML = res.schedule.branches.map((b) =>
+      `<option value="${escapeHtml(b.id)}">${escapeHtml(b.title)}</option>`
+    ).join("");
+  }
+  const dateInput = $("bookingAvailDate");
+  if (dateInput && res.schedule.dateRange?.min) {
+    dateInput.min = res.schedule.dateRange.min;
+    dateInput.max = res.schedule.dateRange.max;
+    if (!dateInput.value) dateInput.value = res.schedule.dateRange.min;
+  }
+}
+
+async function checkBookingAvailability() {
+  const branch = ($("bookingAvailBranch") || {}).value || "centro";
+  const date = ($("bookingAvailDate") || {}).value;
+  const box = $("bookingAvailResult");
+  if (!date) {
+    toast(t("flows.bookingFieldDate"), "error");
+    return;
+  }
+  if (box) box.textContent = t("flows.loading");
+  const res = await api(`/api/bookings/availability?branch=${encodeURIComponent(branch)}&date=${encodeURIComponent(date)}`);
+  if (!box) return;
+  if (!res.ok) {
+    box.textContent = res.error || t("toast.sendFailedGeneric");
+    return;
+  }
+  if (!res.slots?.length) {
+    box.innerHTML = `<p>${escapeHtml(t("flows.bookingAvailEmpty"))}</p>
+      <p>${escapeHtml(t("flows.bookingAvailSource"))}: ${escapeHtml(res.source || "—")} · ${escapeHtml(t("flows.bookingAvailTaken"))}: ${res.takenCount || 0}${res.externalConfigured ? " · CRM ✓" : ""}</p>`;
+    return;
+  }
+  box.innerHTML = `<p>${escapeHtml(t("flows.bookingAvailSource"))}: <strong>${escapeHtml(res.source)}</strong> · ${escapeHtml(t("flows.bookingAvailTaken"))}: ${res.takenCount || 0}${res.externalConfigured ? " · CRM ✓" : ""}</p>
+    <div>${res.slots.map((s) => `<span class="booking-avail-slot">${escapeHtml(s.title)}</span>`).join("")}</div>`;
 }
 
 function closeFlowProbar() {
@@ -5640,6 +5682,8 @@ function bindEvents() {
     const el = $(id);
     if (el) el.addEventListener("input", updateBookingPreview);
   });
+  const bookingAvailBtn = $("bookingAvailBtn");
+  if (bookingAvailBtn) bookingAvailBtn.addEventListener("click", checkBookingAvailability);
   ["tpHeader", "tpBody", "tpFooter"].forEach((id) => {
     const el = $(id);
     if (el) el.addEventListener("input", updateTpPreview);

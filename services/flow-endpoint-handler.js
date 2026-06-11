@@ -163,7 +163,7 @@ async function handleBookingFlow(decryptedBody) {
     if (componentAction === "update_date") {
       const fecha = payload.fecha || "";
       const sucursal = payload.sucursal || "centro";
-      const slots = bookingFlow.slotsScreenData(fecha, sucursal);
+      const slots = await bookingFlow.slotsScreenData(fecha, sucursal);
 
       await FlowStore.recordEndpointEvent({
         type: "data_exchange",
@@ -173,6 +173,7 @@ async function handleBookingFlow(decryptedBody) {
         fecha,
         sucursal,
         slots: slots.available_slots.length,
+        source: slots.slots_source,
       });
 
       return {
@@ -191,13 +192,34 @@ async function handleBookingFlow(decryptedBody) {
       const sucursalLabel = bookingFlow.branchTitle(sucursal);
       const fechaLabel = bookingFlow.formatDateLabel(fecha);
 
-      await BookingStore.confirm(flowToken, {
+      const confirmed = await BookingStore.confirm(flowToken, {
         branchId: sucursal,
         date: fecha,
         slotId: horario,
         slotLabel: horarioLabel,
         customerName: nombre,
       });
+
+      if (!confirmed.ok) {
+        await FlowStore.recordEndpointEvent({
+          type: "data_exchange",
+          channel: "booking",
+          flowToken,
+          action: "confirm_conflict",
+          fecha,
+          sucursal,
+          horario,
+        });
+        const refreshed = await bookingFlow.slotsScreenData(fecha, sucursal);
+        return {
+          version,
+          screen: "BOOK",
+          data: {
+            ...refreshed,
+            slot_conflict: true,
+          },
+        };
+      }
 
       await FlowStore.recordEndpointEvent({
         type: "data_exchange",

@@ -394,3 +394,65 @@ Endpoints equivalentes sin autenticación (solo UI interna):
 3. **Plantillas multimedia:** Encabezados IMAGE/VIDEO/DOCUMENT no están soportados en cargas masivas (fase actual).
 4. **CSV vs API:** El CSV sigue disponible con variables en el archivo; la API es para integración en dos fases.
 5. **Reintentos:** Si un evento falla (`ok: false` en `results`), corrige el `externalId`/`phone` o agrega el destinatario con `/recipients`.
+
+---
+
+## Reservas de cita (Flows + horarios reales)
+
+El Flow `punto_pago_reserva_cita` consulta disponibilidad al elegir fecha. Los horarios se calculan así:
+
+1. **Agenda base** por sucursal (`data/booking-schedule.json`): días laborables y franjas horarias (zona `America/Panama`).
+2. **Reservas confirmadas** en Redis bloquean el slot para otros clientes.
+3. **Opcional — CRM externo:** variable `BOOKING_SLOTS_URL` (POST JSON `{ branchId, date }` → `{ slots: [{ id, title }] }`).
+4. **Opcional — sync manual/API:** bloquear o reemplazar horarios por día.
+
+### Consultar disponibilidad
+
+```http
+GET /api/bookings/availability?branch=centro&date=2026-06-10
+```
+
+**Respuesta:**
+
+```json
+{
+  "ok": true,
+  "branchId": "centro",
+  "date": "2026-06-10",
+  "source": "schedule",
+  "slots": [{ "id": "1000", "title": "10:00" }],
+  "takenCount": 2,
+  "externalConfigured": false
+}
+```
+
+`source` puede ser: `schedule`, `override`, `external`, `schedule_closed`.
+
+### Sincronizar desde tu CRM
+
+```http
+POST /api/bookings/slots/sync
+X-API-Key: {tu_clave}
+Content-Type: application/json
+
+{
+  "branchId": "centro",
+  "date": "2026-06-10",
+  "blockedSlotIds": ["1030", "1100"],
+  "availableSlots": [{ "id": "1000", "title": "10:00" }, { "id": "1400", "title": "14:00" }],
+  "ttlHours": 24
+}
+```
+
+- `availableSlots` (opcional): reemplaza la agenda base ese día.
+- `blockedSlotIds` (opcional): quita horarios concretos.
+- `ttlHours`: caducidad del override (1–168 h).
+
+### Variables de entorno
+
+```env
+BOOKING_SLOTS_URL=https://tu-crm.com/api/whatsapp/slots
+BOOKING_SLOTS_TIMEOUT_MS=8000
+```
+
+El endpoint externo recibe el mismo header `X-API-Key` si `INTEGRATION_API_KEY` está configurada.

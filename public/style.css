@@ -1468,6 +1468,10 @@ input, textarea, select { font-family: inherit; }
 .fs-layout-icon { display: block; height: 36px; margin: 0 auto 6px; border-radius: 6px; background: linear-gradient(180deg, #eef0fe, #fff); border: 1px solid var(--border); }
 .fs-fields-box { margin-bottom: 12px; }
 .fs-field-row input, .fs-field-row select { margin: 0; font-size: 12px; }
+.flows-booking-avail { margin: 12px 0 16px; padding: 12px; border: 1px solid var(--border); border-radius: 10px; background: #fafbfc; }
+.flows-booking-avail h4 { margin: 0 0 10px; font-size: 12px; font-weight: 700; }
+.booking-avail-result { margin-top: 10px; line-height: 1.5; }
+.booking-avail-slot { display: inline-block; font-size: 11px; padding: 3px 8px; margin: 2px 4px 0 0; border-radius: 6px; background: var(--brand-50); color: var(--brand-700); }
 .fs-action-fieldset { border: none; padding: 0; margin: 0 0 8px; }
 .fs-radio { display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 500; color: var(--text); margin-bottom: 8px; cursor: pointer; }
 .fs-radio input { width: auto; margin: 0; }

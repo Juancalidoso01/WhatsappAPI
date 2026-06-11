@@ -45,6 +45,8 @@ const variableSchema = require('./services/variable-schema');
 const flowPerformance = require('./services/flow-performance');
 const CardImageStore = require('./services/card-image-store');
 const BookingStore = require('./services/booking-store');
+const bookingSchedule = require('./services/booking-schedule');
+const bookingSlots = require('./services/booking-slots');
 const FlowStudioAssets = require('./services/flow-studio-assets');
 const flowUseCases = require('./services/flow-use-cases');
 const flowActivity = require('./services/flow-activity');
@@ -957,6 +959,54 @@ app.get('/api/flows/booking/recent', async (req, res) => {
     res.json({ ok: true, data: await BookingStore.listRecent({ limit: 20 }) });
   } catch (err) {
     res.status(500).json({ ok: false, error: String(err.message || err), data: [] });
+  }
+});
+
+app.get('/api/bookings/schedule', (req, res) => {
+  res.json({ ok: true, schedule: bookingSchedule.getPublicConfig() });
+});
+
+app.get('/api/bookings/availability', async (req, res) => {
+  const branchId = String(req.query.branch || req.query.branchId || '').trim();
+  const date = String(req.query.date || '').trim();
+  if (!branchId || !date) {
+    return res.status(400).json({ ok: false, error: 'Parámetros branch y date requeridos (YYYY-MM-DD).' });
+  }
+  try {
+    const { slots, source } = await bookingSlots.getAvailableSlots(branchId, date);
+    const taken = await BookingStore.listTakenSlotIds(branchId, date);
+    res.json({
+      ok: true,
+      branchId,
+      date,
+      source,
+      slots,
+      takenCount: taken.size,
+      externalConfigured: Boolean(process.env.BOOKING_SLOTS_URL),
+    });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: String(err.message || err) });
+  }
+});
+
+app.post('/api/bookings/slots/sync', requireIntegrationKey, apiJson, async (req, res) => {
+  const { branchId, date, availableSlots, blockedSlotIds, ttlHours } = req.body || {};
+  if (!branchId || !date) {
+    return res.status(400).json({ ok: false, error: 'branchId y date (YYYY-MM-DD) son obligatorios.' });
+  }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(date))) {
+    return res.status(400).json({ ok: false, error: 'date debe ser YYYY-MM-DD.' });
+  }
+  try {
+    const ttlSec = Math.min(Math.max(Number(ttlHours) || 24, 1), 168) * 3600;
+    const row = await bookingSlots.setOverride(branchId, date, {
+      availableSlots: Array.isArray(availableSlots) ? availableSlots : undefined,
+      blockedSlotIds: Array.isArray(blockedSlotIds) ? blockedSlotIds.map(String) : undefined,
+    }, { ttlSec });
+    const { slots, source } = await bookingSlots.getAvailableSlots(branchId, date);
+    res.json({ ok: true, override: row, slots, source });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: String(err.message || err) });
   }
 });
 

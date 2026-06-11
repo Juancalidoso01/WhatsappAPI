@@ -1,0 +1,37 @@
+{
+  "timezone": "America/Panama",
+  "minLeadDays": 1,
+  "horizonDays": 30,
+  "branches": {
+    "centro": {
+      "title": "Punto Pago — Centro",
+      "address": "Calle 50, Ciudad de Panamá",
+      "weekdays": ["Mon", "Tue", "Wed", "Thu", "Fri"],
+      "slots": [
+        "09:00", "09:30", "10:00", "10:30", "11:00", "11:30",
+        "14:00", "14:30", "15:00", "15:30", "16:00", "16:30"
+      ],
+      "closedDates": []
+    },
+    "costa": {
+      "title": "Punto Pago — Costa del Este",
+      "address": "Costa del Este, Ciudad de Panamá",
+      "weekdays": ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat"],
+      "slots": [
+        "10:00", "10:30", "11:00", "11:30",
+        "15:00", "15:30", "16:00", "16:30", "17:00"
+      ],
+      "closedDates": []
+    },
+    "albrook": {
+      "title": "Punto Pago — Albrook",
+      "address": "Albrook Mall, Ciudad de Panamá",
+      "weekdays": ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat"],
+      "slots": [
+        "11:00", "11:30", "12:00", "12:30",
+        "15:00", "15:30", "16:00", "16:30", "17:00", "17:30"
+      ],
+      "closedDates": []
+    }
+  }
+}

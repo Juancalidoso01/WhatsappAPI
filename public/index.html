@@ -559,6 +559,23 @@
               </label>
             </div>
             <p class="muted sm" data-i18n="flows.bookingTestHint">Al elegir fecha en WhatsApp, el endpoint devuelve horarios disponibles en tiempo real.</p>
+            <div class="flows-booking-avail">
+              <h4 class="sm" data-i18n="flows.bookingAvailTitle">Consultar disponibilidad real</h4>
+              <div class="flows-form-grid">
+                <label><span data-i18n="flows.bookingFieldBranch">Sucursal</span>
+                  <select id="bookingAvailBranch">
+                    <option value="centro">Punto Pago — Centro</option>
+                    <option value="costa">Punto Pago — Costa del Este</option>
+                    <option value="albrook">Punto Pago — Albrook</option>
+                  </select>
+                </label>
+                <label><span data-i18n="flows.bookingFieldDate">Fecha</span>
+                  <input id="bookingAvailDate" type="date" />
+                </label>
+              </div>
+              <button type="button" id="bookingAvailBtn" class="btn-ghost sm" data-i18n="flows.bookingAvailBtn">Ver horarios libres</button>
+              <div id="bookingAvailResult" class="booking-avail-result muted sm"></div>
+            </div>
             <div class="flows-actions">
               <button type="button" id="bookingSendBtn" class="btn-primary sm" data-i18n="flows.sendTest">Enviar prueba a WhatsApp</button>
               <button type="button" id="bookingOpenTplBtn" class="btn-ghost sm" data-i18n="flows.viewTemplate">Ver plantilla del mensaje</button>
