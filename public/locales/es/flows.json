@@ -222,7 +222,7 @@
   },
   "studio": {
     "title": "Crea tu Flow",
-    "intro": "Edita directamente en el preview de cada pantalla. Nosotros lo traducimos al formato que Meta exige.",
+    "intro": "Edita en el preview; nosotros lo adaptamos al formato Meta.",
     "presetsBtn": "Plantillas Punto Pago",
     "createDraft": "Crear borrador en Meta",
     "saveDraft": "Guardar cambios en Meta",

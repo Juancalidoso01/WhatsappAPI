@@ -2084,6 +2084,13 @@ async function loadTemplatePresetIntoModal(key) {
   applyPresetToForm(res.preset);
 }
 
+function syncFlowsCreateLayout(active) {
+  const pane = document.querySelector("#screenFlows .flows-pane");
+  pane?.classList.toggle("flows-pane-studio", active);
+  $("flowsTabs")?.classList.toggle("hidden", active);
+  $("flowsStatusBar")?.classList.toggle("flows-status-compact", active);
+}
+
 function setFlowsTab(tab) {
   if (tab !== "mis" && tab !== "actividad") tab = "mis";
   state.flowsTab = tab;
@@ -2094,6 +2101,7 @@ function setFlowsTab(tab) {
     const el = $(id);
     if (el) el.classList.add("hidden");
   });
+  syncFlowsCreateLayout(false);
   if (tab === "mis") {
     $("flowsPanelMis")?.classList.remove("hidden");
     const hasFlow = Boolean(state.activeFlowId);
@@ -2107,6 +2115,7 @@ function setFlowsTab(tab) {
 
 async function showFlowCreatePanel() {
   state.activeUseCaseId = null;
+  syncFlowsCreateLayout(true);
   ["flowsPanelMis", "flowsPanelActividad", "flowsPanelProbar"].forEach((id) => {
     $(id)?.classList.add("hidden");
   });
@@ -2127,11 +2136,13 @@ async function openFlowCreate() {
 
 function closeFlowCreate() {
   state.activeUseCaseId = null;
+  syncFlowsCreateLayout(false);
   setFlowsTab("mis");
 }
 
 function openFlowProbar(mode) {
   state.probarMode = mode === "booking" ? "booking" : "payment";
+  syncFlowsCreateLayout(false);
   ["flowsPanelMis", "flowsPanelActividad", "flowsPanelCrear"].forEach((id) => {
     $(id)?.classList.add("hidden");
   });

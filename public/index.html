@@ -673,13 +673,12 @@
 
         <!-- Panel: Crear (estudio visual tipo carrusel) -->
         <section class="flows-tab-panel hidden" id="flowsPanelCrear">
-          <button type="button" id="flowCreateCancel" class="btn-ghost sm flow-create-back" data-i18n="flows.backToMine">← Volver a mis Flows</button>
-
-          <section class="flows-panel flow-studio" id="flowStudioPanel">
+          <section class="flows-panel flow-studio flow-studio-compact" id="flowStudioPanel">
             <header class="flow-studio-top">
-              <div>
-                <h2 class="section-title" data-i18n="flows.studio.title">Crea tu Flow</h2>
-                <p class="muted sm" data-i18n="flows.studio.intro">Arma las pantallas como un carrusel. Nosotros lo traducimos al formato que Meta exige.</p>
+              <div class="flow-studio-top-main">
+                <button type="button" id="flowCreateCancel" class="btn-ghost sm flow-create-back-inline" data-i18n="flows.backToMine">← Volver a mis Flows</button>
+                <h2 class="section-title flow-studio-title" data-i18n="flows.studio.title">Crea tu Flow</h2>
+                <p class="muted sm flow-studio-intro" data-i18n="flows.studio.intro">Edita directamente en el preview de cada pantalla. Nosotros lo traducimos al formato que Meta exige.</p>
               </div>
               <div class="flow-studio-top-actions">
                 <button type="button" id="fsPickerToggle" class="btn-ghost sm" data-i18n="flows.studio.presetsBtn">Plantillas Punto Pago</button>
@@ -695,8 +694,8 @@
             </div>
 
             <div class="flow-studio-body flow-studio-preview-only">
-              <div class="fs-flow-meta">
-                <div class="fs-flow-meta-row">
+              <div class="fs-flow-meta fs-flow-meta-compact">
+                <div class="fs-flow-meta-row fs-flow-meta-grid">
                   <label class="fs-meta-field"><span data-i18n="flows.studio.internalName">Nombre interno</span>
                     <input id="fsName" type="text" data-i18n-placeholder="flows.studio.namePh" placeholder="encuesta_bienvenida" maxlength="80" />
                   </label>
