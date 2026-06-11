@@ -1,5 +1,7 @@
 "use strict";
 
+const flowDynamic = require("./flow-dynamic");
+
 const FLOW_VERSION = "7.3";
 
 const FIELD_TYPES = [
@@ -168,6 +170,9 @@ function validateDefinition(def) {
       return { ok: false, error: "Agrega una pantalla de confirmación final o un formulario único." };
     }
   }
+
+  const dynamicCheck = flowDynamic.validateDynamicDefinition(def);
+  if (!dynamicCheck.ok) return dynamicCheck;
 
   return { ok: true };
 }
@@ -423,6 +428,8 @@ function buildFlowJson(definition) {
         formFields.push(buildFieldComponent(f, fname));
         fieldRefs.push({
           key: fname,
+          label: String(f.label || fname).trim(),
+          screenId,
           ref: `\${screen.${screenId}.form.${fname}}`,
         });
       });
@@ -497,12 +504,57 @@ function buildFlowJson(definition) {
     flowJson.routing_model = routing;
   }
 
+  let dataFormScreenId = null;
+  let resultScreenId = confirmId;
+  let dynamicFieldRefs = fieldRefs;
+
+  if (definition.dynamic) {
+    const formIdx = flowDynamic.findLastFormScreenIndex(bodyScreens);
+    if (formIdx >= 0) {
+      dataFormScreenId = screenIds[formIdx];
+      dynamicFieldRefs = fieldRefs.filter((f) => f.screenId === dataFormScreenId);
+    }
+    if (!resultScreenId) {
+      resultScreenId = "RESULT";
+      flowScreens.push({
+        id: resultScreenId,
+        title: "Resultado",
+        terminal: true,
+        success: true,
+        data: {},
+        layout: {
+          type: "SingleColumnLayout",
+          children: [{
+            type: "Footer",
+            label: "Cerrar",
+            "on-click-action": { name: "complete", payload: {} },
+          }],
+        },
+      });
+      routing[resultScreenId] = [];
+      flowJson.routing_model = routing;
+    }
+    const finalized = flowDynamic.finalizeDynamicFlow(flowJson, {
+      dynamicHandler: definition.dynamicHandler || "generic",
+      dataFormScreenId,
+      resultScreenId,
+      fieldRefs: dynamicFieldRefs,
+    });
+    dataFormScreenId = finalized.dataFormScreenId;
+    resultScreenId = finalized.resultScreenId;
+  }
+
   return {
     ok: true,
     flowJson,
     firstScreenId: screenIds[0],
     defaultCta: String(definition.cta || "Abrir").trim(),
     fieldKeys: fieldRefs.map((f) => f.key),
+    dynamic: Boolean(definition.dynamic),
+    dynamicHandler: definition.dynamicHandler || null,
+    dataFormScreenId,
+    dynamicResultScreen: resultScreenId,
+    dynamicFieldKeys: dynamicFieldRefs.map((f) => f.key),
   };
 }
 
@@ -528,6 +580,7 @@ function getSchema() {
       { id: "confirm", label: "Confirmación", description: "Pantalla final de agradecimiento." },
     ],
     limits: LIMITS,
+    dynamicHandlers: flowDynamic.DYNAMIC_HANDLERS,
   };
 }
 

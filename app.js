@@ -36,6 +36,7 @@ const templateBuilder = require('./services/template-builder');
 const FlowStore = require('./services/flow-store');
 const flowSamples = require('./services/flow-samples');
 const flowBuilder = require('./services/flow-builder');
+const flowDynamic = require('./services/flow-dynamic');
 const FlowKeys = require('./services/flow-keys');
 const { decryptRequest, encryptResponse, FlowEndpointException, isFlowSignatureValid } = require('./services/flow-encryption');
 const FlowStudioStore = require('./services/flow-studio-store');
@@ -675,10 +676,23 @@ app.get('/api/flows/builder/schema', (req, res) => {
 });
 
 app.post('/api/flows/studio/preview-json', apiJson, (req, res) => {
-  const { name, category, cta, screens } = req.body || {};
-  const built = flowBuilder.buildFlowJson({ name: name || 'preview', category, cta, screens: screens || [] });
+  const { name, category, cta, screens, dynamic, dynamicHandler } = req.body || {};
+  const built = flowBuilder.buildFlowJson({
+    name: name || 'preview',
+    category,
+    cta,
+    screens: screens || [],
+    dynamic: Boolean(dynamic),
+    dynamicHandler: dynamicHandler || 'generic',
+  });
   if (!built.ok) return res.status(400).json({ ok: false, error: built.error });
-  res.json({ ok: true, flowJson: built.flowJson, firstScreenId: built.firstScreenId });
+  res.json({
+    ok: true,
+    flowJson: built.flowJson,
+    firstScreenId: built.firstScreenId,
+    dynamic: built.dynamic,
+    dynamicResultScreen: built.dynamicResultScreen,
+  });
 });
 
 app.post('/api/flows/studio/import-json', apiJson, async (req, res) => {
@@ -823,25 +837,73 @@ app.post('/api/flows/build', apiJson, async (req, res) => {
     return res.status(400).json({ ok: false, error: 'Falta ACCESS_TOKEN o WABA_ID.' });
   }
 
-  const { name, category, publish, cta, screens } = req.body || {};
-  const enrichedScreens = await enrichFlowScreensWithAssets(screens);
-  const built = flowBuilder.buildFlowJson({
-    name,
-    category,
-    cta,
-    screens: enrichedScreens,
-  });
-  if (!built.ok) {
-    return res.status(400).json({ ok: false, error: built.error });
+  const {
+    name, category, publish, cta, screens, dynamic, dynamicHandler, chatBody,
+  } = req.body || {};
+  const isDynamic = Boolean(dynamic);
+  const handler = dynamicHandler || 'generic';
+
+  let endpointUri = null;
+  let flowJson;
+  let built = null;
+
+  if (isDynamic && handler === 'booking') {
+    const tpl = flowSamples.getSample('booking');
+    if (!tpl || !tpl.flow_json) {
+      return res.status(400).json({ ok: false, error: 'Sample de reservas no disponible.' });
+    }
+    try {
+      endpointUri = await ensureFlowEndpointReady();
+    } catch (err) {
+      return res.status(400).json({ ok: false, error: String(err.message || err) });
+    }
+    flowJson = tpl.flow_json;
+    built = {
+      ok: true,
+      firstScreenId: tpl.defaultScreen || 'BOOK',
+      defaultCta: cta || tpl.defaultCta || 'Abrir',
+      fieldKeys: [],
+      dynamic: true,
+      dynamicHandler: 'booking',
+      dataFormScreenId: 'BOOK',
+      dynamicResultScreen: 'SUCCESS',
+      dynamicFieldKeys: [],
+    };
+  } else {
+    const enrichedScreens = await enrichFlowScreensWithAssets(screens);
+    built = flowBuilder.buildFlowJson({
+      name,
+      category,
+      cta,
+      screens: enrichedScreens,
+      dynamic: isDynamic,
+      dynamicHandler: handler,
+    });
+    if (!built.ok) {
+      return res.status(400).json({ ok: false, error: built.error });
+    }
+    flowJson = built.flowJson;
+    if (isDynamic) {
+      try {
+        endpointUri = await ensureFlowEndpointReady();
+      } catch (err) {
+        return res.status(400).json({ ok: false, error: String(err.message || err) });
+      }
+    }
   }
 
   const cat = category || 'OTHER';
+  const enrichedScreens = isDynamic && handler === 'booking'
+    ? (screens || [])
+    : await enrichFlowScreensWithAssets(screens);
+
   try {
     const result = await GraphApi.createFlow(config.wabaId, {
       name: String(name).trim().toLowerCase(),
       categories: [cat],
-      flowJson: built.flowJson,
+      flowJson,
       publish: Boolean(publish),
+      endpointUri,
     });
     const validationErrors = result.validation_errors || [];
     if (validationErrors.length) {
@@ -857,8 +919,14 @@ app.post('/api/flows/build', apiJson, async (req, res) => {
       name: String(name).trim().toLowerCase(),
       category: cat,
       cta: cta || built.defaultCta,
-      chatBody: (req.body && req.body.chatBody) || '',
+      chatBody: chatBody || '',
       screens: enrichedScreens,
+      dynamic: isDynamic,
+      dynamicHandler: handler,
+      firstScreenId: built.firstScreenId,
+      dataFormScreenId: built.dataFormScreenId,
+      dynamicResultScreen: built.dynamicResultScreen,
+      fieldKeys: built.dynamicFieldKeys || built.fieldKeys,
       source: 'studio',
     });
     res.status(201).json({
@@ -867,7 +935,10 @@ app.post('/api/flows/build', apiJson, async (req, res) => {
       defaultScreen: built.firstScreenId,
       defaultCta: built.defaultCta,
       fieldKeys: built.fieldKeys,
-      flowAction: 'navigate',
+      flowAction: isDynamic ? 'data_exchange' : 'navigate',
+      dynamic: isDynamic,
+      dynamicHandler: handler,
+      endpointUri,
     });
   } catch (err) {
     console.error('buildFlow error:', err.message);
@@ -879,15 +950,26 @@ app.get('/api/flows/:id/studio', async (req, res) => {
   if (!config.accessToken) return res.status(400).json({ ok: false, error: 'Falta ACCESS_TOKEN.' });
   try {
     const flow = await GraphApi.getFlow(req.params.id, 'id,name,status,categories,endpoint_uri');
+    const stored = await FlowStudioStore.getDefinition(req.params.id);
+    if (flow.endpoint_uri && stored && stored.screens && stored.screens.length) {
+      return res.json({
+        ok: true,
+        editable: true,
+        source: 'store',
+        dynamic: true,
+        definition: stored,
+        flowStatus: flow.status,
+        flowName: flow.name,
+      });
+    }
     if (flow.endpoint_uri) {
       return res.json({
         ok: false,
         editable: false,
-        error: 'Los Flows dinámicos con endpoint se editan recreando el sample o en Meta.',
+        error: 'Los Flows dinámicos sin definición en Studio se editan recreando el sample o en Meta.',
         flowStatus: flow.status,
       });
     }
-    const stored = await FlowStudioStore.getDefinition(req.params.id);
     if (stored && stored.screens && stored.screens.length) {
       return res.json({
         ok: true,
@@ -933,24 +1015,55 @@ app.get('/api/flows/:id/studio', async (req, res) => {
 
 app.put('/api/flows/:id', apiJson, async (req, res) => {
   if (!config.accessToken) return res.status(400).json({ ok: false, error: 'Falta ACCESS_TOKEN.' });
-  const { name, category, cta, screens, chatBody } = req.body || {};
+  const {
+    name, category, cta, screens, chatBody, dynamic, dynamicHandler,
+  } = req.body || {};
   try {
     const flow = await GraphApi.getFlow(req.params.id, 'id,name,status,endpoint_uri');
     if (String(flow.status || '').toUpperCase() !== 'DRAFT') {
       return res.status(400).json({ ok: false, error: 'Solo se pueden editar Flows en borrador (DRAFT).' });
     }
-    if (flow.endpoint_uri) {
-      return res.status(400).json({ ok: false, error: 'No se puede editar un Flow dinámico con endpoint desde el Studio.' });
+    const stored = await FlowStudioStore.getDefinition(req.params.id);
+    const isDynamic = Boolean(flow.endpoint_uri || dynamic || (stored && stored.dynamic));
+    if (flow.endpoint_uri && !(stored && stored.screens && stored.screens.length)) {
+      return res.status(400).json({
+        ok: false,
+        error: 'No se puede editar un Flow dinámico sin definición guardada en Studio.',
+      });
     }
+    const handler = dynamicHandler || (stored && stored.dynamicHandler) || 'generic';
     const enrichedScreens = await enrichFlowScreensWithAssets(screens);
-    const built = flowBuilder.buildFlowJson({
-      name: name || flow.name,
-      category: category || (flow.categories && flow.categories[0]) || 'OTHER',
-      cta,
-      screens: enrichedScreens,
-    });
-    if (!built.ok) return res.status(400).json({ ok: false, error: built.error });
-    const result = await GraphApi.updateFlowJson(req.params.id, built.flowJson);
+
+    let flowJson;
+    let built;
+    if (isDynamic && handler === 'booking') {
+      const tpl = flowSamples.getSample('booking');
+      if (!tpl || !tpl.flow_json) {
+        return res.status(400).json({ ok: false, error: 'Sample de reservas no disponible.' });
+      }
+      flowJson = tpl.flow_json;
+      built = {
+        ok: true,
+        firstScreenId: tpl.defaultScreen || 'BOOK',
+        defaultCta: cta || tpl.defaultCta || 'Abrir',
+        dataFormScreenId: 'BOOK',
+        dynamicResultScreen: 'SUCCESS',
+        dynamicFieldKeys: [],
+      };
+    } else {
+      built = flowBuilder.buildFlowJson({
+        name: name || flow.name,
+        category: category || (flow.categories && flow.categories[0]) || 'OTHER',
+        cta,
+        screens: enrichedScreens,
+        dynamic: isDynamic,
+        dynamicHandler: handler,
+      });
+      if (!built.ok) return res.status(400).json({ ok: false, error: built.error });
+      flowJson = built.flowJson;
+    }
+
+    const result = await GraphApi.updateFlowJson(req.params.id, flowJson);
     const validationErrors = result.validation_errors || [];
     if (validationErrors.length) {
       const first = validationErrors[0];
@@ -966,6 +1079,12 @@ app.put('/api/flows/:id', apiJson, async (req, res) => {
       cta: cta || built.defaultCta,
       chatBody: chatBody || '',
       screens: enrichedScreens,
+      dynamic: isDynamic,
+      dynamicHandler: handler,
+      firstScreenId: built.firstScreenId,
+      dataFormScreenId: built.dataFormScreenId,
+      dynamicResultScreen: built.dynamicResultScreen,
+      fieldKeys: built.dynamicFieldKeys || built.fieldKeys,
       source: 'studio',
     });
     res.json({
@@ -973,6 +1092,7 @@ app.put('/api/flows/:id', apiJson, async (req, res) => {
       flowId: req.params.id,
       defaultScreen: built.firstScreenId,
       defaultCta: built.defaultCta,
+      flowAction: isDynamic ? 'data_exchange' : 'navigate',
     });
   } catch (err) {
     console.error('updateFlow error:', err.message);
@@ -1376,13 +1496,40 @@ app.get('/api/flows/:id/send-profile', async (req, res) => {
   if (!config.accessToken) return res.status(400).json({ ok: false, error: 'Falta ACCESS_TOKEN.' });
   try {
     const flow = await GraphApi.getFlow(req.params.id, 'id,name,status,endpoint_uri');
-    const profile = flowSamples.resolveSendProfileByFlowName(flow.name);
+    const stored = await FlowStudioStore.getDefinition(req.params.id);
+    const sampleProfile = flowSamples.resolveSendProfileByFlowName(flow.name);
+    if (stored && stored.dynamic) {
+      res.json({
+        ok: true,
+        flowId: req.params.id,
+        flowName: flow.name || '',
+        flowStatus: flow.status || '',
+        profile: {
+          sampleKey: null,
+          label: stored.name || flow.name || '',
+          dynamic: true,
+          dynamicHandler: stored.dynamicHandler || 'generic',
+          flowAction: 'data_exchange',
+          defaultScreen: stored.firstScreenId || stored.dataFormScreenId || 'SCREEN_A',
+          defaultCta: stored.cta || 'Abrir',
+          sendDefaults: {
+            headerText: '',
+            bodyText: stored.chatBody || '',
+            footerText: '',
+            cta: stored.cta || 'Abrir',
+            screen: stored.firstScreenId || stored.dataFormScreenId || 'SCREEN_A',
+          },
+          screens: [],
+        },
+      });
+      return;
+    }
     res.json({
       ok: true,
       flowId: req.params.id,
       flowName: flow.name || '',
       flowStatus: flow.status || '',
-      profile: profile || {
+      profile: sampleProfile || {
         sampleKey: null,
         label: flow.name || '',
         dynamic: Boolean(flow.endpoint_uri),
@@ -1625,6 +1772,7 @@ app.post('/api/flows/:id/send', apiJson, async (req, res) => {
       flowToken: token,
       flowName: flowMeta.name || null,
       mode: sendMode,
+      dynamicHandler: (await FlowStudioStore.getDefinition(req.params.id))?.dynamicHandler || null,
     });
     const stored = await Store.addMessage({
       phone: normPhone,

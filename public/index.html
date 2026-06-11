@@ -703,6 +703,17 @@
                     <select id="fsCategory"></select>
                   </label>
                 </div>
+                <div class="fs-flow-meta-row fs-dynamic-row">
+                  <label class="fs-meta-check">
+                    <input type="checkbox" id="fsDynamic" />
+                    <span data-i18n="flows.studio.dynamicToggle">Flow dinámico (endpoint Meta)</span>
+                  </label>
+                  <label class="fs-meta-field fs-dynamic-handler hidden" id="fsDynamicHandlerWrap">
+                    <span data-i18n="flows.studio.dynamicHandler">Handler del endpoint</span>
+                    <select id="fsDynamicHandler"></select>
+                  </label>
+                </div>
+                <p class="muted sm fs-dynamic-hint hidden" id="fsDynamicHint" data-i18n="flows.studio.dynamicHint">Requiere PUBLIC_BASE_URL en producción. El endpoint calcula datos en tiempo real (data_exchange).</p>
                 <details class="fs-chat-meta">
                   <summary data-i18n="flows.studio.chatMessage">Mensaje en el chat</summary>
                   <p class="muted sm" data-i18n="flows.studio.chatMessageHint">Lo que verá el cliente antes de abrir el formulario (para la plantilla en Meta).</p>

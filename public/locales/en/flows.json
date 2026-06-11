@@ -72,7 +72,7 @@
     "exportTitle": "Export Flow JSON",
     "importTitle": "Import Flow JSON",
     "previewTitle": "JSON preview",
-    "dynamicHint": "Dynamic flow: imported for reference. Advanced components (Switch, If) may need manual JSON editing."
+    "dynamicHint": "Dynamic flow: imported for reference. Studio-created dynamic flows can be edited if saved in Studio."
   },
   "openMeta": "Open in Meta",
   "tabPreview": "Preview",
@@ -232,6 +232,10 @@
     "general": "General",
     "internalName": "Internal name",
     "metaCategory": "Meta category",
+    "dynamicToggle": "Dynamic flow (Meta endpoint)",
+    "dynamicHandler": "Endpoint handler",
+    "dynamicHint": "Requires PUBLIC_BASE_URL in production. The form uses data_exchange and the endpoint fills the result screen.",
+    "dynamicBookingHint": "Uses Punto Pago booking structure (calendar + dynamic slots). Editor screens are ignored on create.",
     "chatMessage": "Chat message",
     "chatMessageHint": "What the customer sees before opening the form (for the Meta template).",
     "messageText": "Message text",

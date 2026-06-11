@@ -52,7 +52,7 @@
     "exportTitle": "Экспорт Flow JSON",
     "importTitle": "Импорт Flow JSON",
     "previewTitle": "Предпросмотр JSON",
-    "dynamicHint": "Динамический flow: импортирован для справки. Компоненты Switch/If могут требовать ручного редактирования JSON."
+    "dynamicHint": "Динамический flow: импортирован для справки. Flows из Studio с endpoint можно редактировать, если есть сохранённое определение."
   },
   "openMeta": "Открыть в Meta",
   "tabPreview": "Предпросмотр",
@@ -212,6 +212,10 @@
     "general": "Общее",
     "internalName": "Внутреннее имя",
     "metaCategory": "Категория Meta",
+    "dynamicToggle": "Динамический flow (endpoint Meta)",
+    "dynamicHandler": "Обработчик endpoint",
+    "dynamicHint": "Нужен PUBLIC_BASE_URL в production. Форма отправляет data_exchange, endpoint заполняет экран результата.",
+    "dynamicBookingHint": "Используется структура бронирования Punto Pago. Экраны редактора при создании не применяются.",
     "chatMessage": "Сообщение в чате",
     "chatMessageHint": "Что увидит клиент перед открытием формы (для шаблона Meta).",
     "messageText": "Текст сообщения",

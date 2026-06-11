@@ -31,9 +31,23 @@ Si Meta responde `139000 Blocked by Integrity`, completa la verificación del ne
 |--------|------|-------------|
 | GET | `/api/flows/capability` | Compatibilidad y notas |
 | GET | `/api/flows` | Listar Flows del WABA |
-| POST | `/api/flows/build` | **Constructor:** crear Flow desde pantallas y campos |
+| POST | `/api/flows/build` | **Constructor:** crear Flow estático o dinámico desde Studio |
+
+### Flows dinámicos desde Studio (P1)
+
+En **Crea tu Flow**, activa **Flow dinámico** y elige un handler:
+
+| Handler | Comportamiento |
+|---------|----------------|
+| `generic` | Eco de campos del formulario → pantalla resultado vía endpoint |
+| `quote` | Lista producto + monto → calcula cuota (como sample cotización) |
+| `booking` | Despliega estructura de reservas Punto Pago (calendario + horarios) |
+
+Al crear, se registra `data_api_version: 4.0`, `endpoint_uri` y la clave pública en Meta (`PUBLIC_BASE_URL` obligatorio).
+
+Los borradores dinámicos creados en Studio se pueden **editar** si la definición está guardada en Redis (`FlowStudioStore`).
 | GET | `/api/flows/:id/studio` | Definición editable para el Flow Studio |
-| PUT | `/api/flows/:id` | Actualizar borrador (solo `DRAFT`, sin endpoint) |
+| PUT | `/api/flows/:id` | Actualizar borrador (`DRAFT`); dinámicos con definición en Studio |
 | GET | `/api/flows/builder/schema` | Tipos de campo y categorías del constructor |
 | POST | `/api/flows/:id/send` | Enviar a un teléfono |
 | POST | `/api/flows/:id/publish` | Publicar borrador |

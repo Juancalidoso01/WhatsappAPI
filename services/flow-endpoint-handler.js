@@ -2,10 +2,12 @@
 
 const config = require("./config");
 const FlowStore = require("./flow-store");
+const FlowStudioStore = require("./flow-studio-store");
 const PaymentAuthStore = require("./payment-auth-store");
 const CardImageStore = require("./card-image-store");
 const BookingStore = require("./booking-store");
 const bookingFlow = require("./flow-booking");
+const { handleStudioGenericFlow, handleStudioQuoteFlow } = require("./flow-dynamic");
 const { PRODUCTS, productTitle } = require("./flow-quote");
 
 function isPaymentAuthToken(flowToken) {
@@ -313,6 +315,16 @@ async function handleQuoteFlow(decryptedBody) {
   };
 }
 
+async function resolveStudioDynamicRoute(flowToken) {
+  const tokenMeta = await FlowStore.resolveTokenMeta(flowToken);
+  const flowId = tokenMeta && tokenMeta.flowId ? String(tokenMeta.flowId) : null;
+  if (!flowId) return null;
+  const studio = await FlowStudioStore.getDefinition(flowId);
+  if (!studio || !studio.dynamic) return null;
+  const handler = tokenMeta.dynamicHandler || studio.dynamicHandler || "generic";
+  return { handler, studio, flowId };
+}
+
 async function handleFlowRequest(decryptedBody) {
   const { flow_token: flowToken } = decryptedBody;
   if (isPaymentAuthToken(flowToken)) {
@@ -324,6 +336,14 @@ async function handleFlowRequest(decryptedBody) {
 
   const tokenMeta = await FlowStore.resolveTokenMeta(flowToken);
   const flowName = String(tokenMeta?.flowName || "").toLowerCase();
+
+  const studioRoute = await resolveStudioDynamicRoute(flowToken);
+  if (studioRoute) {
+    if (studioRoute.handler === "quote") return handleStudioQuoteFlow(decryptedBody);
+    if (studioRoute.handler === "booking") return handleBookingFlow(decryptedBody);
+    return handleStudioGenericFlow(decryptedBody, studioRoute.studio);
+  }
+
   if (flowName.includes("autorizacion_pago") || flowName.includes("3ds") || flowName.includes("payment_auth")) {
     return handlePaymentAuth(decryptedBody);
   }

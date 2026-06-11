@@ -15,6 +15,12 @@ async function saveDefinition(flowId, definition) {
     cta: definition.cta || "",
     chatBody: definition.chatBody || "",
     screens: definition.screens || [],
+    dynamic: Boolean(definition.dynamic),
+    dynamicHandler: definition.dynamicHandler || null,
+    firstScreenId: definition.firstScreenId || null,
+    dataFormScreenId: definition.dataFormScreenId || null,
+    dynamicResultScreen: definition.dynamicResultScreen || null,
+    fieldKeys: definition.fieldKeys || [],
     updatedAt: Date.now(),
     source: definition.source || "studio",
   };

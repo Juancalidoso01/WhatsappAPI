@@ -1521,6 +1521,11 @@ input, textarea, select { font-family: inherit; }
 .fs-meta-field input, .fs-meta-field select, .fs-meta-field textarea {
   width: 100%; margin-top: 5px; font-size: 13px; font-weight: 400; color: var(--text);
 }
+.fs-dynamic-row { align-items: center; gap: 16px; margin-top: 8px; }
+.fs-meta-check { display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 600; color: var(--muted); margin: 0; cursor: pointer; }
+.fs-meta-check input { width: auto; margin: 0; }
+.fs-dynamic-handler { flex: 1; min-width: 180px; max-width: 280px; }
+.fs-dynamic-hint { margin: 4px 0 0; }
 .fs-chat-meta { margin-top: 12px; }
 .fs-chat-meta summary { cursor: pointer; font-size: 12px; font-weight: 600; color: var(--text); }
 .fs-chat-meta .fs-flow-meta-row { margin-top: 10px; }

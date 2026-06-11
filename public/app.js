@@ -4131,8 +4131,20 @@ function syncFlowEditButton(status) {
   const btn = $("flowEditDraftBtn");
   if (!btn) return;
   const isDraft = String(status || "").toUpperCase() === "DRAFT";
-  const isDynamic = Boolean(state.activeFlowDetail?.endpoint_uri);
-  btn.classList.toggle("hidden", !isDraft || isDynamic);
+  btn.classList.toggle("hidden", !isDraft);
+}
+
+function syncFsDynamicUi() {
+  const on = Boolean(($("fsDynamic") || {}).checked);
+  $("fsDynamicHandlerWrap")?.classList.toggle("hidden", !on);
+  $("fsDynamicHint")?.classList.toggle("hidden", !on);
+  const handler = ($("fsDynamicHandler") || {}).value || "generic";
+  const hint = $("fsDynamicHint");
+  if (hint && on) {
+    hint.textContent = handler === "booking"
+      ? t("flows.studio.dynamicBookingHint")
+      : t("flows.studio.dynamicHint");
+  }
 }
 
 function syncFlowLifecycleButtons(status) {
@@ -4335,7 +4347,22 @@ async function initFlowStudio() {
         .map((c) => `<option value="${escapeHtml(c.id)}">${escapeHtml(c.label)}</option>`)
         .join("");
     }
+    const handlerSel = $("fsDynamicHandler");
+    if (handlerSel && !handlerSel.dataset.ready) {
+      handlerSel.innerHTML = (fsState.schema.dynamicHandlers || [
+        { id: "generic", label: "Genérico" },
+        { id: "quote", label: "Cotización" },
+        { id: "booking", label: "Reservas" },
+      ]).map((h) => `<option value="${escapeHtml(h.id)}">${escapeHtml(h.label)}</option>`).join("");
+      handlerSel.dataset.ready = "1";
+    }
   }
+  if ($("fsDynamic") && !$("fsDynamic").dataset.bound) {
+    $("fsDynamic").addEventListener("change", syncFsDynamicUi);
+    $("fsDynamicHandler")?.addEventListener("change", syncFsDynamicUi);
+    $("fsDynamic").dataset.bound = "1";
+  }
+  syncFsDynamicUi();
   if (!fsState.screens.length && !fsState.editingFlowId) fsState.screens = defaultFsScreens();
   fsState.activeIndex = 0;
   syncFsStudioEditUi();
@@ -5325,6 +5352,8 @@ function collectFsDefinition() {
     cta: ($("fsCta") || {}).value.trim() || t("flows.studio.defaultCta"),
     chatBody: ($("fsChatBody") || {}).value.trim(),
     publish: false,
+    dynamic: Boolean(($("fsDynamic") || {}).checked),
+    dynamicHandler: ($("fsDynamicHandler") || {}).value || "generic",
     screens,
   };
 }
@@ -5344,6 +5373,9 @@ function loadStudioDefinition(def) {
   if ($("fsCategory")) $("fsCategory").value = def.category || "OTHER";
   if ($("fsChatBody")) $("fsChatBody").value = def.chatBody || "";
   if ($("fsCta")) $("fsCta").value = def.cta || "";
+  if ($("fsDynamic")) $("fsDynamic").checked = Boolean(def.dynamic);
+  if ($("fsDynamicHandler")) $("fsDynamicHandler").value = def.dynamicHandler || "generic";
+  syncFsDynamicUi();
   fsState.screens.forEach(ensureScreenBlocks);
 }
 
@@ -5551,11 +5583,11 @@ async function createFlowFromStudio() {
   closeFlowCreate();
   if (res.flow && res.flow.id) {
     selectFlow(res.flow.id);
-    openTemplateFromFlow(def, res.flow.id, res.defaultScreen || "SCREEN_A");
+    openTemplateFromFlow(def, res.flow.id, res.defaultScreen || "SCREEN_A", res.flowAction);
   }
 }
 
-function openTemplateFromFlow(def, flowId, defaultScreen) {
+function openTemplateFromFlow(def, flowId, defaultScreen, flowAction) {
   const slug = def.name.replace(/[^a-z0-9_]/gi, "_").slice(0, 40);
   const bodyText = def.chatBody || t("flows.studio.defaultChatBody");
   const cta = def.cta || t("flows.studio.defaultCta");

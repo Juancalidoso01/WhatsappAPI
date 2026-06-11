@@ -72,7 +72,7 @@
     "exportTitle": "Exportar Flow JSON",
     "importTitle": "Importar Flow JSON",
     "previewTitle": "Vista previa JSON",
-    "dynamicHint": "Flow dinámico: importado para referencia. Algunos componentes avanzados (Switch, If) requieren edición manual del JSON."
+    "dynamicHint": "Flow dinámico: importado para referencia. Los creados en Studio con endpoint se pueden editar si hay definición guardada."
   },
   "openMeta": "Abrir en Meta",
   "tabPreview": "Vista previa",
@@ -232,6 +232,10 @@
     "general": "General",
     "internalName": "Nombre interno",
     "metaCategory": "Categoría Meta",
+    "dynamicToggle": "Flow dinámico (endpoint Meta)",
+    "dynamicHandler": "Handler del endpoint",
+    "dynamicHint": "Requiere PUBLIC_BASE_URL en producción. El formulario envía data_exchange y el endpoint responde con datos en la pantalla final.",
+    "dynamicBookingHint": "Usa la estructura de reservas Punto Pago (calendario + horarios dinámicos). Las pantallas del editor no se usan al crear.",
     "chatMessage": "Mensaje en el chat",
     "chatMessageHint": "Lo que verá el cliente antes de abrir el formulario (para la plantilla en Meta).",
     "messageText": "Texto del mensaje",

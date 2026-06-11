@@ -50,7 +50,7 @@ async function saveResponse({ phone, flowToken, responseJson, messageId, context
   return row;
 }
 
-async function recordSend({ phone, flowId, flowToken, mode, flowName }) {
+async function recordSend({ phone, flowId, flowToken, mode, flowName, dynamicHandler }) {
   const id = `fs_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
   const row = {
     id,
@@ -58,6 +58,7 @@ async function recordSend({ phone, flowId, flowToken, mode, flowName }) {
     flowId,
     flowToken,
     flowName: flowName || null,
+    dynamicHandler: dynamicHandler || null,
     mode: mode || "published",
     sentAt: Date.now(),
   };
@@ -68,7 +69,9 @@ async function recordSend({ phone, flowId, flowToken, mode, flowName }) {
       redis.hincrby(STATS_KEY, "sends", 1),
     ];
     if (flowToken && flowId) {
-      ops.push(redis.set(`wa:flow:token:${flowToken}`, JSON.stringify({ flowId: String(flowId), flowName: flowName || null }), { ex: 604800 }));
+      const meta = { flowId: String(flowId), flowName: flowName || null };
+      if (row.dynamicHandler) meta.dynamicHandler = row.dynamicHandler;
+      ops.push(redis.set(`wa:flow:token:${flowToken}`, JSON.stringify(meta), { ex: 604800 }));
     }
     await Promise.all(ops);
   } else {
