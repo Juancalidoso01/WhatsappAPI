@@ -426,7 +426,9 @@ function showInboundAlert(c) {
   const body = previewText(last) || t("notifications.newMessage");
   const open = () => {
     switchScreen("chats");
-    openConversation(c.phone, c.name);
+    openConversation(c.phone, c.name, null, {
+      minTimestamp: (c.lastMessage && c.lastMessage.timestamp) || Date.now(),
+    });
   };
   alertChatInbound(title, body, open, c.phone);
 }
@@ -1413,7 +1415,7 @@ function renderTemplateRow(t, i) {
   return `<tr class="tpl-row${isFlowTpl ? " tpl-row-flow" : ""}" data-i="${i}" title="${escapeHtml(fullPreview)}">
     <td class="tpl-name-cell">
       <span class="tpl-table-name">${escapeHtml(t.name)}</span>
-      ${isFlowTpl ? `<span class="tpl-flow-tag">Flow</span>` : ""}
+      ${isFlowTpl ? `<span class="tpl-flow-tag">${escapeHtml(t("templates.rowWithTour"))}</span>` : ""}
       ${comment ? `<span class="tpl-table-note" title="${escapeHtml(comment)}">${escapeHtml(comment)}</span>` : ""}
     </td>
     <td>${escapeHtml(t.language || "—")}</td>
@@ -1715,6 +1717,40 @@ function metaStatusBadge(status, fallbackLabel) {
   return `<span class="status-badge ${cls}">${escapeHtml(text)}</span>`;
 }
 
+function presetMetaVariantHtml(preset, ms) {
+  if (!preset) return "";
+  const textSt = (ms && ms.text && ms.text.status) || "NOT_SUBMITTED";
+  const textName = (ms && ms.text && ms.text.name) || preset.name;
+  const flowName = preset.templateFlowName;
+  const flowSt = flowName && ms && ms.flow ? ms.flow.status : "NOT_SUBMITTED";
+  const catKey = String(preset.category || "UTILITY").toLowerCase();
+  const catHintKey = `templates.metaCategoryHint.${catKey}`;
+  const catHint = t(catHintKey);
+  const ready = ms && ms.readyForProduction
+    ? `<p class="tpl-preset-ready-hint">${escapeHtml(t("templates.readyForProdHint"))}</p>`
+    : `<p class="muted sm tpl-preset-ready-hint">${escapeHtml(t("templates.presetPendingHint"))}</p>`;
+  return `
+    <div class="tpl-preset-variants">
+      <div class="tpl-preset-variant">
+        <span class="tpl-preset-variant-label">${escapeHtml(t("templates.badgeTextExplain"))}</span>
+        <span class="tpl-preset-variant-name">${escapeHtml(textName)}</span>
+        ${metaStatusBadge(textSt)}
+      </div>
+      ${flowName ? `
+      <div class="tpl-preset-variant">
+        <span class="tpl-preset-variant-label">${escapeHtml(t("templates.badgeFlowExplain"))}</span>
+        <span class="tpl-preset-variant-name">${escapeHtml(flowName)}</span>
+        ${metaStatusBadge(flowSt)}
+      </div>` : ""}
+      <div class="tpl-preset-variant tpl-preset-variant-cat">
+        <span class="tpl-preset-variant-label">${escapeHtml(t("templates.metaCategoryLabel"))}</span>
+        <span class="tpl-preset-tag">${escapeHtml(catKey)}</span>
+        ${catHint !== catHintKey ? `<span class="muted sm">${escapeHtml(catHint)}</span>` : ""}
+      </div>
+      ${ready}
+    </div>`;
+}
+
 async function loadTplVariableCatalog() {
   const res = await api("/api/templates/variable-catalog");
   state.variableCatalog = (res && res.ok && res.catalog) || [];
@@ -1815,17 +1851,7 @@ function renderTplDraftMetaBar(key) {
     el.innerHTML = `<p class="muted sm tpl-draft-meta-hint">${escapeHtml(t("templates.draftMetaSyncHint"))}</p>`;
     return;
   }
-  const textBadge = metaStatusBadge(ms.text && ms.text.status);
-  const flowBadge = preset.templateFlowName
-    ? metaStatusBadge(ms.flow && ms.flow.status)
-    : "";
-  const readyTag = ms.readyForProduction
-    ? `<span class="tpl-preset-tag tpl-ready-prod">${escapeHtml(t("templates.readyForProd"))}</span>`
-    : `<p class="muted sm tpl-draft-meta-hint">${escapeHtml(t("templates.draftMetaReadyHint"))}</p>`;
-  el.innerHTML = `
-    <span class="tpl-preset-tag">${escapeHtml(t("templates.badgeText"))} ${textBadge}</span>
-    ${preset.templateFlowName ? `<span class="tpl-preset-tag">${escapeHtml(t("templates.badgeFlow"))} ${flowBadge}</span>` : ""}
-    ${readyTag}`;
+  el.innerHTML = presetMetaVariantHtml(preset, ms);
 }
 
 function updateTplSyncHint() {
@@ -1847,24 +1873,13 @@ function renderTplPresetCards() {
   }
   box.innerHTML = state.templatePresets.map((p) => {
     const ms = presetMetaForKey(p.key);
-    const textBadge = ms ? metaStatusBadge(ms.text && ms.text.status) : metaStatusBadge("NOT_SUBMITTED");
-    const flowBadge = p.templateFlowName && ms
-      ? metaStatusBadge(ms.flow && ms.flow.status)
-      : "";
-    const ready = ms && ms.readyForProduction
-      ? `<span class="tpl-preset-tag tpl-ready-prod">${escapeHtml(t("templates.readyForProd"))}</span>`
-      : "";
     return `
     <button type="button" class="tpl-preset-card${p.isFlowPreset ? " flow-preset" : ""}" data-preset="${escapeHtml(p.key)}">
       <h3>${escapeHtml(p.label)}</h3>
       <p>${escapeHtml(p.description || "")}</p>
       <div class="tpl-card-meta">
-        <span class="tpl-preset-tag">${escapeHtml(t("templates.badgeText"))} ${textBadge}</span>
-        ${p.templateFlowName ? `<span class="tpl-preset-tag">${escapeHtml(t("templates.badgeFlow"))} ${flowBadge}</span>` : ""}
-        ${ready}
-        <span class="tpl-preset-tag">${escapeHtml(String(p.category || "UTILITY").toLowerCase())}</span>
+        ${presetMetaVariantHtml(p, ms)}
       </div>
-      <p class="tpl-preset-names muted sm">${escapeHtml(p.name)}${p.templateFlowName ? ` · ${escapeHtml(p.templateFlowName)}` : ""}</p>
     </button>`;
   }).join("");
   box.querySelectorAll(".tpl-preset-card").forEach((btn) =>
@@ -2655,8 +2670,7 @@ async function openNewChat(prefillName, opts) {
   renderVariableGuide($("ncVarGuide"), []);
   $("ncVarGuideWrap")?.classList.add("hidden");
   sel.innerHTML = `<option>${escapeHtml(t("common.loading"))}</option>`;
-  if (!state.templates.length) await loadTemplates();
-  if (!state.templatePresets.length) await loadTemplatePresets();
+  await Promise.all([loadTemplates(), loadTemplatePresets()]);
   if (!state.flows.length) await loadFlows();
   const approved = state.templates.filter((t) => isTemplateApproved(t));
   if (!approved.length) {
