@@ -78,6 +78,13 @@
         if (hit != null) return hit;
       }
     }
+    if (key.startsWith("flows.")) {
+      const sub = key.slice(6);
+      for (const l of langs) {
+        const bucket = cache[cacheKey(l, "flows")];
+        if (bucket && bucket[sub] != null) return bucket[sub];
+      }
+    }
     return null;
   }
 

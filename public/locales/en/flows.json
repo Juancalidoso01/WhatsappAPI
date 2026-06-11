@@ -255,7 +255,14 @@
     "metaNoBg": "Background color per screen is not supported.",
     "metaImages": "Images",
     "metaBooking": "Bookings",
-    "metaComponents": "Available components"
+    "metaComponents": "Available components",
+    "previewBadge": "Preview",
+    "previewStepOf": "Screen {n} of {total}",
+    "previewCancelLabel": "Cancel",
+    "previewCancelHint": "This is how it looks in the client's WhatsApp; it does not close the editor",
+    "previewDecorNote": "Visual simulation. «Cancel» at the top is decorative (like WhatsApp).",
+    "stripHint": "Tap a thumbnail to edit it. The × on the thumbnail removes that screen (not the preview «Cancel»).",
+    "deleteScreen": "Remove screen"
   },
   "layouts": {
     "message": "Heading and text",

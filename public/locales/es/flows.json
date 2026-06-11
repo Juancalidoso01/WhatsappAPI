@@ -255,7 +255,14 @@
     "metaNoBg": "No se puede elegir color de fondo por pantalla.",
     "metaImages": "Imágenes",
     "metaBooking": "Reservas",
-    "metaComponents": "Componentes disponibles"
+    "metaComponents": "Componentes disponibles",
+    "previewBadge": "Vista previa",
+    "previewStepOf": "Pantalla {n} de {total}",
+    "previewCancelLabel": "Cancelar",
+    "previewCancelHint": "Así se ve en WhatsApp del cliente; no cierra el editor",
+    "previewDecorNote": "Simulación visual. «Cancelar» arriba es decorativo (como en WhatsApp).",
+    "stripHint": "Toca una miniatura para editarla. El × en la miniatura elimina esa pantalla (no el «Cancelar» del preview).",
+    "deleteScreen": "Eliminar pantalla"
   },
   "layouts": {
     "message": "Título y texto",

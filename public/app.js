@@ -32,6 +32,55 @@ const flowDecisionLabel = (decision) => {
   return t("flows.decision.pending");
 };
 const fsLayoutLabel = (id) => t(`flows.layouts.${id}`) || id;
+const FS_I18N_KEY = /^flows\.(studio|defaults|layouts)\.[A-Za-z0-9_.]+$/;
+
+function isUnresolvedFlowI18n(val, expectedKey) {
+  if (typeof val !== "string" || !val.trim()) return false;
+  if (expectedKey && val === expectedKey) return true;
+  return FS_I18N_KEY.test(val.trim());
+}
+
+function resolveFlowI18n(val) {
+  if (typeof val !== "string" || !val.trim()) return val;
+  const key = val.trim();
+  if (!FS_I18N_KEY.test(key)) return val;
+  const resolved = t(key);
+  return resolved !== key ? resolved : val;
+}
+
+function repairFlowStudioTranslations() {
+  fsState.screens.forEach((scr) => {
+    scr.title = resolveFlowI18n(scr.title);
+    scr.buttonLabel = resolveFlowI18n(scr.buttonLabel);
+    if (scr.heading) scr.heading = resolveFlowI18n(scr.heading);
+    if (scr.body) scr.body = resolveFlowI18n(scr.body);
+    (scr.blocks || []).forEach((b) => {
+      if (b.text) b.text = resolveFlowI18n(b.text);
+      if (b.altText) b.altText = resolveFlowI18n(b.altText);
+    });
+    (scr.fields || []).forEach((f) => {
+      if (f.label) f.label = resolveFlowI18n(f.label);
+    });
+  });
+}
+
+function syncFlowStudioFormDefaults() {
+  const cta = $("fsCta");
+  if (cta && (isUnresolvedFlowI18n(cta.value, "flows.studio.defaultCta")
+    || ["Abrir formulario", "Open form", "Открыть форму"].includes(cta.value.trim()))) {
+    cta.value = t("flows.studio.defaultCta");
+  }
+  const chat = $("fsChatBody");
+  if (chat && (isUnresolvedFlowI18n(chat.value, "flows.studio.defaultChatBody") || !chat.value.trim())) {
+    chat.value = t("flows.studio.defaultChatBody");
+  }
+  const btn = $("fsButton");
+  if (btn && (isUnresolvedFlowI18n(btn.value)
+    || ["Continuar", "Continue", "Продолжить"].includes(btn.value.trim()))) {
+    btn.value = t("flows.studio.continue");
+  }
+}
+
 const LEAD_TYPE_VALUES = ["", "prospecto", "cliente", "lead_caliente", "lead_frio", "soporte", "otro"];
 const LEAD_USER_VALUES = ["", "titular", "beneficiario", "representante", "empleado", "otro"];
 
@@ -735,7 +784,11 @@ async function onLocaleChange() {
     loadFlowCapability();
     renderFlowsList();
     if (state.activeFlowId) loadFlowDetail(state.activeFlowId);
-    if (!$("flowsPanelCrear")?.classList.contains("hidden")) renderFlowStudio();
+    if (!$("flowsPanelCrear")?.classList.contains("hidden")) {
+      repairFlowStudioTranslations();
+      syncFlowStudioFormDefaults();
+      renderFlowStudio();
+    }
     if (!$("flowsPanelActividad")?.classList.contains("hidden")) loadFlowActivity();
     if (!$("flowsPanelProbar")?.classList.contains("hidden")) {
       updatePayAuthFlowPreview();
@@ -2048,14 +2101,16 @@ function setFlowsTab(tab) {
   }
 }
 
-function openFlowCreate() {
+async function openFlowCreate() {
   state.activeUseCaseId = null;
   ["flowsPanelMis", "flowsPanelActividad", "flowsPanelProbar"].forEach((id) => {
     $(id)?.classList.add("hidden");
   });
   $("flowsPanelCrear")?.classList.remove("hidden");
   $("flowCreatePicker")?.classList.add("hidden");
-  initFlowStudio();
+  if (window.I18n) await I18n.ensureScreen("flows");
+  await initFlowStudio();
+  if (window.I18n) I18n.applyDom($("flowStudioPanel"));
 }
 
 function closeFlowCreate() {
@@ -4114,6 +4169,7 @@ function fsBlockLabel(type) {
 }
 
 async function initFlowStudio() {
+  if (window.I18n) await I18n.ensureScreen("flows");
   if (!fsState.schema) {
     const res = await api("/api/flows/builder/schema");
     fsState.schema = (res && res.schema) || { fieldTypes: [], categories: [], limits: { maxScreens: 8 } };
@@ -4128,12 +4184,8 @@ async function initFlowStudio() {
   fsState.activeIndex = 0;
   fsState.viewMode = "all";
   if ($("fsName") && !$("fsName").value) $("fsName").value = "";
-  if ($("fsCta") && ($("fsCta").value === "Abrir formulario" || $("fsCta").value === "Open form" || $("fsCta").value === "Открыть форму")) {
-    $("fsCta").value = t("flows.studio.defaultCta");
-  }
-  if ($("fsChatBody") && !$("fsChatBody").value.trim()) {
-    $("fsChatBody").value = t("flows.studio.defaultChatBody");
-  }
+  repairFlowStudioTranslations();
+  syncFlowStudioFormDefaults();
   fsState.screens.forEach(ensureScreenBlocks);
   renderFsMetaCaps();
   renderFlowStudio();
@@ -4507,21 +4559,30 @@ function renderFsPhonePreview(scr, index, editing) {
     ).join("");
   }
   const stepTitle = scr.title || t("flows.studio.step", { n: index + 1 });
+  const cancelHint = t("flows.studio.previewCancelHint");
+  const cancelLabel = t("flows.studio.previewCancelLabel");
+  const badge = t("flows.studio.previewBadge");
+  const stepOf = t("flows.studio.previewStepOf", { n: index + 1, total: fsState.screens.length });
   return `
     <div class="fs-phone-wrap${editing ? " editing" : ""}" data-fs-i="${index}">
+      <div class="fs-preview-meta">
+        <span class="fs-preview-badge">${escapeHtml(badge)}</span>
+        <span class="fs-preview-step muted sm">${escapeHtml(stepOf)}</span>
+      </div>
       <div class="flow-phone fs-phone-mini">
-        <div class="flow-phone-nav">
-          <span class="flow-phone-cancel">✕</span>
+        <div class="flow-phone-nav fs-preview-nav">
+          <span class="flow-phone-cancel fs-preview-decor" title="${escapeHtml(cancelHint)}" aria-hidden="true">${escapeHtml(cancelLabel)}</span>
           <span class="flow-phone-title">${escapeHtml(stepTitle)}</span>
-          <span class="flow-phone-menu">⋯</span>
+          <span class="flow-phone-menu fs-preview-decor" aria-hidden="true">⋯</span>
         </div>
         <div class="flow-phone-body">
           ${bodyHtml || `<h3>${escapeHtml(t("flows.studio.screenTitle"))}</h3><p>${escapeHtml(t("flows.studio.screenBody"))}</p>`}
         </div>
         <div class="flow-phone-footer">
-          <button type="button">${escapeHtml(btnLabel)}</button>
+          <button type="button" disabled tabindex="-1">${escapeHtml(btnLabel)}</button>
         </div>
       </div>
+      <p class="fs-preview-foot muted sm">${escapeHtml(t("flows.studio.previewDecorNote"))}</p>
       <div class="fs-phone-dots">${fsState.screens.map((_, i) =>
         `<span class="${i === index ? "on" : ""}"></span>`
       ).join("")}</div>
@@ -4544,10 +4605,15 @@ function renderFlowStudio() {
   if (!strip || !row) return;
 
   const max = fsState.schema?.limits?.maxScreens || 8;
+  const canDelete = fsState.screens.length > 1;
   strip.innerHTML = fsState.screens.map((scr, i) =>
-    `<button type="button" class="fs-thumb${i === fsState.activeIndex ? " active" : ""}" data-fs-i="${i}" title="${escapeHtml(scr.title || "")}">
-      <div class="fs-thumb-inner">${escapeHtml(fsThumbLabel(scr))}</div>
-    </button>`
+    `<div class="fs-thumb-slot${i === fsState.activeIndex ? " active" : ""}">
+      <button type="button" class="fs-thumb" data-fs-i="${i}" title="${escapeHtml(scr.title || t("flows.studio.step", { n: i + 1 }))}">
+        <span class="fs-thumb-step">${escapeHtml(t("flows.studio.step", { n: i + 1 }))}</span>
+        <div class="fs-thumb-inner">${escapeHtml(fsThumbLabel(scr))}</div>
+      </button>
+      ${canDelete ? `<button type="button" class="fs-thumb-del" data-fs-del="${i}" title="${escapeHtml(t("flows.studio.deleteScreen"))}" aria-label="${escapeHtml(t("flows.studio.deleteScreen"))}">×</button>` : ""}
+    </div>`
   ).join("")
     + (fsState.screens.length < max
       ? `<button type="button" class="fs-thumb-add" id="fsAddScreen" title="${escapeHtml(t("flows.studio.addScreen"))}">+</button>`
@@ -4563,6 +4629,14 @@ function renderFlowStudio() {
         b.classList.toggle("active", b.dataset.fsView === "one")
       );
       renderFlowStudio();
+    });
+  });
+  strip.querySelectorAll(".fs-thumb-del").forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      syncFsFromSidebar();
+      syncFsFieldsFromDom();
+      fsRemoveScreen(Number(btn.dataset.fsDel));
     });
   });
   const addBtn = $("fsAddScreen");

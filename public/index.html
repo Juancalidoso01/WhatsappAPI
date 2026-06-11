@@ -700,7 +700,7 @@
                   <textarea id="fsChatBody" rows="3" data-i18n-placeholder="flows.studio.defaultChatBody" placeholder="Hola, completa este formulario para continuar."></textarea>
                 </label>
                 <label><span data-i18n="flows.studio.buttonText">Texto del botón</span>
-                  <input id="fsCta" type="text" value="Abrir formulario" />
+                  <input id="fsCta" type="text" data-i18n-placeholder="flows.studio.defaultCta" placeholder="Abrir formulario" />
                 </label>
 
                 <h3 class="fs-sidebar-title" data-i18n="flows.studio.thisScreen">Esta pantalla</h3>
@@ -718,7 +718,7 @@
                   <button type="button" id="fsAddField" class="btn-ghost sm" data-i18n="flows.studio.addField">+ Agregar campo</button>
                 </div>
                 <label><span data-i18n="flows.studio.screenButton">Botón de la pantalla</span>
-                  <input id="fsButton" type="text" value="Continuar" />
+                  <input id="fsButton" type="text" data-i18n-placeholder="flows.studio.continue" placeholder="Continuar" />
                 </label>
                 <fieldset class="fs-action-fieldset">
                   <legend class="muted sm" data-i18n="flows.studio.onButtonTap">Al tocar el botón</legend>
@@ -737,6 +737,7 @@
                   <button type="button" class="fs-view-btn active" data-fs-view="all" data-i18n="flows.studio.viewAll">Todas las pantallas</button>
                   <button type="button" class="fs-view-btn" data-fs-view="one" data-i18n="flows.studio.viewOne">Editar una</button>
                 </div>
+                <p class="muted sm fs-strip-hint" data-i18n="flows.studio.stripHint">Toca una miniatura para editarla. El × en la miniatura elimina esa pantalla (no el botón «Cancelar» del preview).</p>
                 <div id="fsScreenStrip" class="fs-screen-strip"></div>
                 <div id="fsPreviewRow" class="fs-preview-row"></div>
               </div>
