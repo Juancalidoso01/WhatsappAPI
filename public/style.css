@@ -648,7 +648,9 @@ input, textarea, select { font-family: inherit; }
 }
 .tpl-flow-link-tag { font-size: 10px; font-weight: 600; color: var(--brand-600); }
 .tpl-other-section { margin-top: 8px; }
-.tpl-other-section summary { cursor: pointer; font-size: 13px; font-weight: 600; padding: 8px 0; }
+.tpl-other-section summary { cursor: pointer; font-size: 13px; font-weight: 600; padding: 8px 0; list-style: disclosure-closed; }
+.tpl-other-section[open] summary { list-style: disclosure-open; }
+.tpl-other-section summary::-webkit-details-marker { display: inline; }
 .templates-table-compact .tpl-name-cell { max-width: 200px; }
 .flow-template-link {
   margin: 12px 0; padding: 12px 14px; border-radius: 12px;

@@ -1406,16 +1406,16 @@ function templateTypeLabel(tpl) {
   return t("templates.typeText");
 }
 
-function renderTemplateRow(t, i, list) {
-  const st = (t.status || "").toLowerCase();
+function renderTemplateRow(tpl, i, list) {
+  const st = (tpl.status || "").toLowerCase();
   const cls = st === "approved" ? "approved" : st === "rejected" ? "rejected" : "pending";
   const canSend = st === "approved";
-  const isFlowTpl = templateHasFlowButtonMeta(t);
+  const isFlowTpl = templateHasFlowButtonMeta(tpl);
   const src = list || state.templates;
   return `<tr class="tpl-row${isFlowTpl ? " tpl-row-flow" : ""}" data-i="${i}">
-    <td class="tpl-name-cell"><span class="tpl-table-name">${escapeHtml(t.name)}</span></td>
-    <td>${escapeHtml(templateTypeLabel(t))}</td>
-    <td><span class="status-badge ${cls}">${escapeHtml(t.status || "—")}</span></td>
+    <td class="tpl-name-cell"><span class="tpl-table-name">${escapeHtml(tpl.name)}</span></td>
+    <td>${escapeHtml(templateTypeLabel(tpl))}</td>
+    <td><span class="status-badge ${cls}">${escapeHtml(tpl.status || "—")}</span></td>
     <td>${isFlowTpl ? `<span class="tpl-flow-link-tag">${escapeHtml(t("templates.linkedFlow"))}</span>` : "—"}</td>
     <td class="tpl-action-cell">
       ${canSend
@@ -1471,13 +1471,15 @@ function renderTplOtherList() {
   const countEl = $("tplOtherCount");
   if (!list) return;
   const orphans = orphanTemplates();
+  const wasOpen = section?.hasAttribute("open");
   if (section) section.classList.toggle("hidden", !orphans.length);
   if (countEl) countEl.textContent = orphans.length ? `(${orphans.length})` : "";
   if (!orphans.length) {
     list.innerHTML = "";
     return;
   }
-  list.innerHTML = `
+  try {
+    list.innerHTML = `
     <div class="billing-table-wrap">
       <table class="templates-table billing-table templates-table-compact">
         <thead>
@@ -1489,9 +1491,14 @@ function renderTplOtherList() {
             <th></th>
           </tr>
         </thead>
-        <tbody>${orphans.map((t, i) => renderTemplateRow(t, i, orphans)).join("")}</tbody>
+        <tbody>${orphans.map((tpl, i) => renderTemplateRow(tpl, i, orphans)).join("")}</tbody>
       </table>
     </div>`;
+  } catch (err) {
+    console.error("renderTplOtherList:", err);
+    list.innerHTML = `<p class="muted sm">${escapeHtml(t("templates.otherLoadError"))}</p>`;
+  }
+  if (wasOpen && section) section.setAttribute("open", "");
   list.querySelectorAll(".tpl-send-btn").forEach((btn) =>
     btn.addEventListener("click", (e) => {
       e.stopPropagation();
