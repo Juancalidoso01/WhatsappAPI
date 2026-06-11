@@ -279,6 +279,9 @@ app.get('/api/config', async (req, res) => {
     phoneNumberId: config.phoneNumberId || null,
     hasCredentials: Boolean(config.accessToken && config.phoneNumberId),
     templatesEnabled: Boolean(config.accessToken && config.wabaId),
+    metaTemplatesUrl: config.wabaId
+      ? `https://business.facebook.com/wa/manage/message-templates/?waba_id=${config.wabaId}`
+      : 'https://business.facebook.com/latest/whatsapp_manager/message_templates',
     flowsEnabled: Boolean(config.accessToken && config.wabaId && config.phoneNumberId),
     flowEndpointUri: config.publicBaseUrl ? `${config.publicBaseUrl}/api/flows/endpoint` : null,
     botEnabled: config.botEnabled,

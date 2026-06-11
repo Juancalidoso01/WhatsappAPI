@@ -286,10 +286,13 @@
             <h1 data-i18n="templates.title">Plantillas</h1>
             <p class="muted templates-intro" data-i18n="templates.intro">Mensajes aprobados por Meta para iniciar conversaciones.</p>
           </div>
-          <button id="newTemplateBtn" class="btn-primary sm">
-            <svg viewBox="0 0 24 24" class="ic"><path d="M12 5v14M5 12h14"/></svg>
-            <span data-i18n="templates.createNew">Crear nueva</span>
-          </button>
+          <div class="pane-header-actions">
+            <a id="tplMetaManagerLink" class="btn-ghost sm" href="https://business.facebook.com/latest/whatsapp_manager/message_templates" target="_blank" rel="noopener noreferrer" data-i18n="templates.openMetaManager" data-i18n-title="templates.openMetaManagerHint">Abrir en Meta</a>
+            <button id="newTemplateBtn" class="btn-primary sm">
+              <svg viewBox="0 0 24 24" class="ic"><path d="M12 5v14M5 12h14"/></svg>
+              <span data-i18n="templates.createNew">Crear nueva</span>
+            </button>
+          </div>
         </header>
 
         <section class="tpl-drafts-section" id="tplDraftsSection">

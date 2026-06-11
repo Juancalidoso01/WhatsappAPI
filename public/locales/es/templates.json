@@ -2,6 +2,8 @@
   "title": "Plantillas",
   "intro": "Mensajes aprobados por Meta para iniciar conversaciones.",
   "createNew": "Crear nueva",
+  "openMetaManager": "Abrir en Meta",
+  "openMetaManagerHint": "Gestiona plantillas, estados y aprobaciones en WhatsApp Manager.",
   "draftsTitle": "Borradores Punto Pago",
   "draftsIntro": "Listos para revisar y enviar a Meta. Al abrir un borrador verás la leyenda de variables (qué es cada dato y formato). Los testigos Texto / + Flow se actualizan al sincronizar.",
   "approvedTitle": "Plantillas en tu cuenta",

@@ -720,6 +720,15 @@ function applyBranding() {
   }
   if ($("sidebarBrandName")) $("sidebarBrandName").textContent = name;
   updateWorkspaceHubPreview(name, ws.hasProfilePhoto);
+  updateMetaTemplatesLink();
+}
+
+function updateMetaTemplatesLink() {
+  const link = $("tplMetaManagerLink");
+  if (!link) return;
+  const url = (state.config && state.config.metaTemplatesUrl)
+    || "https://business.facebook.com/latest/whatsapp_manager/message_templates";
+  link.href = url;
 }
 
 function avatarSrc(hasPhoto) {

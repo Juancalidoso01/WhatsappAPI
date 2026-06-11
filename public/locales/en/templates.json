@@ -2,6 +2,8 @@
   "title": "Templates",
   "intro": "Meta-approved messages to start conversations.",
   "createNew": "Create new",
+  "openMetaManager": "Open in Meta",
+  "openMetaManagerHint": "Manage templates, statuses, and approvals in WhatsApp Manager.",
   "draftsTitle": "Punto Pago drafts",
   "draftsIntro": "Ready to review and submit to Meta. Opening a draft shows the variable legend (data meaning and format). Text / + Flow badges update on sync.",
   "approvedTitle": "Templates in your account",
