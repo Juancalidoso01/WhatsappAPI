@@ -1453,10 +1453,66 @@ input, textarea, select { font-family: inherit; }
   border: none; background: transparent;
 }
 .flow-create-picker .flow-template-card { margin: 0; }
-.flow-studio-body { display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: 20px; align-items: start; }
-.flow-studio-sidebar label { display: block; font-size: 12px; font-weight: 600; color: var(--muted); margin-bottom: 12px; }
-.flow-studio-sidebar input, .flow-studio-sidebar select, .flow-studio-sidebar textarea {
+.flow-studio-body { display: block; }
+.flow-studio-preview-only { max-width: 100%; }
+.fs-flow-meta {
+  margin-bottom: 16px; padding: 14px 16px; border-radius: 12px;
+  background: var(--surface-2); border: 1px solid var(--border);
+}
+.fs-flow-meta-row { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; }
+.fs-meta-field { flex: 1; min-width: 160px; margin: 0; font-size: 12px; font-weight: 600; color: var(--muted); }
+.fs-meta-field.fs-meta-grow { flex: 2; min-width: 220px; }
+.fs-meta-field input, .fs-meta-field select, .fs-meta-field textarea {
   width: 100%; margin-top: 5px; font-size: 13px; font-weight: 400; color: var(--text);
+}
+.fs-chat-meta { margin-top: 12px; }
+.fs-chat-meta summary { cursor: pointer; font-size: 12px; font-weight: 600; color: var(--text); }
+.fs-chat-meta .fs-flow-meta-row { margin-top: 10px; }
+.fs-screen-del {
+  margin-left: auto; border: 1px solid #fecaca; background: #fff; color: #dc2626;
+  font-size: 11px; font-weight: 600; padding: 4px 10px; border-radius: 999px; cursor: pointer;
+}
+.fs-screen-del:hover { background: #fef2f2; }
+.fs-ed-layouts {
+  display: flex; gap: 4px; padding: 8px 10px; border-bottom: 1px solid #e9edef; background: #fafbfc; flex-wrap: wrap;
+}
+.fs-ed-layout {
+  border: 1px solid var(--border); background: #fff; border-radius: 999px; padding: 4px 10px;
+  font-size: 10px; font-weight: 600; cursor: pointer; color: var(--muted);
+}
+.fs-ed-layout.active { border-color: var(--brand); background: var(--brand-50); color: var(--brand-700); }
+.fs-ed-body { min-height: 200px; }
+.fs-ed-block {
+  margin-bottom: 10px; padding: 8px; border: 1px dashed #e2e8f0; border-radius: 8px; background: #fff;
+}
+.fs-ed-block-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+.fs-ed-block-type { font-size: 10px; font-weight: 700; text-transform: uppercase; color: var(--brand-700); }
+.fs-ed-block-actions { display: flex; gap: 2px; }
+.fs-ed-text {
+  outline: none; min-height: 1.4em; border-radius: 4px; padding: 2px 4px; margin: 0;
+}
+.fs-ed-text:focus { background: #f0f9ff; box-shadow: 0 0 0 2px var(--brand-50); }
+.fs-ed-text:empty:before { content: attr(data-placeholder); color: #94a3b8; }
+.fs-ed-title { outline: none; min-width: 0; }
+.fs-ed-title:focus { background: rgba(0,165,244,.08); border-radius: 4px; }
+.fs-ed-add-blocks { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; padding-top: 8px; border-top: 1px dashed #e2e8f0; }
+.fs-ed-fields { margin-top: 12px; padding-top: 10px; border-top: 1px solid #e9edef; }
+.fs-ed-fields-label { display: block; font-size: 10px; font-weight: 700; text-transform: uppercase; color: var(--muted); margin-bottom: 8px; }
+.fs-ed-field {
+  display: grid; grid-template-columns: 1fr 110px 28px; gap: 6px; margin-bottom: 8px; align-items: start;
+}
+.fs-ed-field .fs-f-opts { grid-column: 1 / -1; width: 100%; font-size: 11px; }
+.fs-ed-footer { display: flex; flex-direction: column; gap: 8px; }
+.fs-ed-footer-btn { width: 100%; padding: 10px; border: none; border-radius: 24px; background: #1fb56b; color: #fff; font-size: 13px; font-weight: 600; text-align: center; }
+.fs-ed-action-wrap { display: flex; flex-direction: column; gap: 4px; font-size: 11px; }
+.fs-ed-action-wrap select { font-size: 11px; margin: 0; }
+.fs-preview-img-empty { padding: 24px; text-align: center; background: #f0f2f5; border-radius: 8px; }
+.fs-add-screen-card { width: 280px; min-height: 420px; align-self: stretch; font-size: 32px; }
+.fs-thumb.active { border-color: var(--brand); box-shadow: 0 0 0 2px var(--brand-50); }
+.fs-preview-meta { flex-wrap: wrap; }
+@media (max-width: 960px) {
+  .flow-studio-body { grid-template-columns: 1fr; }
+  .fs-layout-grid { grid-template-columns: repeat(3, 1fr); }
 }
 .fs-sidebar-title { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 16px 0 10px; }
 .fs-sidebar-title:first-child { margin-top: 0; }

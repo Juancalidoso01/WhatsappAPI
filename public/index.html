@@ -684,63 +684,38 @@
               <div id="flowUseCaseGrid" class="flow-use-case-grid" data-i18n-dynamic>Cargando…</div>
             </div>
 
-            <div class="flow-studio-body">
-              <aside class="flow-studio-sidebar">
-                <h3 class="fs-sidebar-title" data-i18n="flows.studio.general">General</h3>
-                <label><span data-i18n="flows.studio.internalName">Nombre interno</span>
-                  <input id="fsName" type="text" data-i18n-placeholder="flows.studio.namePh" placeholder="encuesta_bienvenida" maxlength="80" />
-                </label>
-                <label><span data-i18n="flows.studio.metaCategory">Categoría Meta</span>
-                  <select id="fsCategory"></select>
-                </label>
-
-                <h3 class="fs-sidebar-title" data-i18n="flows.studio.chatMessage">Mensaje en el chat</h3>
-                <p class="muted sm" data-i18n="flows.studio.chatMessageHint">Lo que verá el cliente antes de abrir el formulario (para la plantilla en Meta).</p>
-                <label><span data-i18n="flows.studio.messageText">Texto del mensaje</span>
-                  <textarea id="fsChatBody" rows="3" data-i18n-placeholder="flows.studio.defaultChatBody" placeholder="Hola, completa este formulario para continuar."></textarea>
-                </label>
-                <label><span data-i18n="flows.studio.buttonText">Texto del botón</span>
-                  <input id="fsCta" type="text" data-i18n-placeholder="flows.studio.defaultCta" placeholder="Abrir formulario" />
-                </label>
-
-                <h3 class="fs-sidebar-title" data-i18n="flows.studio.thisScreen">Esta pantalla</h3>
-                <div class="fs-layout-grid" id="fsLayoutGrid"></div>
-
-                <h3 class="fs-sidebar-title" data-i18n="flows.studio.contentLayers">Capas de contenido</h3>
-                <p class="muted sm fs-blocks-hint" data-i18n="flows.studio.contentLayersHint">Ordena bloques como en Meta: título, párrafo, imagen. El preview es aproximado; WhatsApp aplica su propio diseño.</p>
-                <div id="fsBlocksBox" class="fs-blocks-box"></div>
-                <div class="fs-block-add-row" id="fsBlockAddRow"></div>
-
-                <div id="fsFieldsBox" class="fs-fields-box hidden">
-                  <span class="fs-sidebar-title" data-i18n="flows.studio.formFields">Campos del formulario</span>
-                  <p class="muted sm" data-i18n="flows.studio.formFieldsHint">Incluye fecha, calendario (reservas) y casillas de aceptación soportadas por Meta.</p>
-                  <div id="fsFieldsList"></div>
-                  <button type="button" id="fsAddField" class="btn-ghost sm" data-i18n="flows.studio.addField">+ Agregar campo</button>
+            <div class="flow-studio-body flow-studio-preview-only">
+              <div class="fs-flow-meta">
+                <div class="fs-flow-meta-row">
+                  <label class="fs-meta-field"><span data-i18n="flows.studio.internalName">Nombre interno</span>
+                    <input id="fsName" type="text" data-i18n-placeholder="flows.studio.namePh" placeholder="encuesta_bienvenida" maxlength="80" />
+                  </label>
+                  <label class="fs-meta-field"><span data-i18n="flows.studio.metaCategory">Categoría Meta</span>
+                    <select id="fsCategory"></select>
+                  </label>
                 </div>
-                <label><span data-i18n="flows.studio.screenButton">Botón de la pantalla</span>
-                  <input id="fsButton" type="text" data-i18n-placeholder="flows.studio.continue" placeholder="Continuar" />
-                </label>
-                <fieldset class="fs-action-fieldset">
-                  <legend class="muted sm" data-i18n="flows.studio.onButtonTap">Al tocar el botón</legend>
-                  <label class="fs-radio"><input type="radio" name="fsAction" value="next" checked /> <span data-i18n="flows.studio.actionNext">Ir a la siguiente pantalla</span></label>
-                  <label class="fs-radio"><input type="radio" name="fsAction" value="complete" /> <span data-i18n="flows.studio.actionComplete">Terminar (última pantalla)</span></label>
-                </fieldset>
-
-                <details class="fs-meta-caps" id="fsMetaCaps">
-                  <summary data-i18n="flows.studio.metaLimitsTitle">¿Qué permite Meta?</summary>
-                  <div id="fsMetaCapsBody" class="fs-meta-caps-body muted sm"></div>
+                <details class="fs-chat-meta">
+                  <summary data-i18n="flows.studio.chatMessage">Mensaje en el chat</summary>
+                  <p class="muted sm" data-i18n="flows.studio.chatMessageHint">Lo que verá el cliente antes de abrir el formulario (para la plantilla en Meta).</p>
+                  <div class="fs-flow-meta-row">
+                    <label class="fs-meta-field fs-meta-grow"><span data-i18n="flows.studio.messageText">Texto del mensaje</span>
+                      <textarea id="fsChatBody" rows="2" data-i18n-placeholder="flows.studio.defaultChatBody" placeholder="Hola, completa este formulario para continuar."></textarea>
+                    </label>
+                    <label class="fs-meta-field"><span data-i18n="flows.studio.buttonText">Texto del botón</span>
+                      <input id="fsCta" type="text" data-i18n-placeholder="flows.studio.defaultCta" placeholder="Abrir formulario" />
+                    </label>
+                  </div>
                 </details>
-              </aside>
-
-              <div class="flow-studio-canvas">
-                <div class="fs-strip-head">
-                  <button type="button" class="fs-view-btn active" data-fs-view="all" data-i18n="flows.studio.viewAll">Todas las pantallas</button>
-                  <button type="button" class="fs-view-btn" data-fs-view="one" data-i18n="flows.studio.viewOne">Editar una</button>
-                </div>
-                <p class="muted sm fs-strip-hint" data-i18n="flows.studio.stripHint">Toca una miniatura para editarla. El × en la miniatura elimina esa pantalla (no el botón «Cancelar» del preview).</p>
-                <div id="fsScreenStrip" class="fs-screen-strip"></div>
-                <div id="fsPreviewRow" class="fs-preview-row"></div>
               </div>
+
+              <p class="muted sm fs-strip-hint" data-i18n="flows.studio.editOnPreview">Edita directamente en cada pantalla. Usa «Eliminar pantalla» si solo necesitas una.</p>
+              <div id="fsScreenStrip" class="fs-screen-strip"></div>
+              <div id="fsPreviewRow" class="fs-preview-row"></div>
+
+              <details class="fs-meta-caps" id="fsMetaCaps">
+                <summary data-i18n="flows.studio.metaLimitsTitle">¿Qué permite Meta?</summary>
+                <div id="fsMetaCapsBody" class="fs-meta-caps-body muted sm"></div>
+              </details>
             </div>
           </section>
         </section>

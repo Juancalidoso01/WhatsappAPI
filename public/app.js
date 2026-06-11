@@ -2108,6 +2108,8 @@ async function openFlowCreate() {
   });
   $("flowsPanelCrear")?.classList.remove("hidden");
   $("flowCreatePicker")?.classList.add("hidden");
+  fsState.screens = [];
+  fsState.activeIndex = 0;
   if (window.I18n) await I18n.ensureScreen("flows");
   await initFlowStudio();
   if (window.I18n) I18n.applyDom($("flowStudioPanel"));
@@ -4083,7 +4085,6 @@ async function loadFlowDetail(id) {
 
 const fsState = {
   schema: null,
-  viewMode: "all",
   activeIndex: 0,
   screens: [],
 };
@@ -4098,28 +4099,6 @@ function defaultFsScreens() {
       blocks: [
         { type: "heading", text: t("flows.defaults.step1Heading") },
         { type: "body", text: t("flows.defaults.step1Body"), emphasis: "normal" },
-      ],
-      buttonLabel: t("flows.studio.continue"),
-      buttonAction: "next",
-      fields: [],
-    },
-    {
-      layout: "message",
-      title: t("flows.defaults.step2Title"),
-      blocks: [
-        { type: "heading", text: t("flows.defaults.step2Heading") },
-        { type: "body", text: t("flows.defaults.step2Body"), emphasis: "normal" },
-      ],
-      buttonLabel: t("flows.studio.continue"),
-      buttonAction: "next",
-      fields: [],
-    },
-    {
-      layout: "confirm",
-      title: t("flows.defaults.thanksTitle"),
-      blocks: [
-        { type: "heading", text: t("flows.defaults.thanksHeading") },
-        { type: "body", text: t("flows.defaults.thanksBody"), emphasis: "normal" },
       ],
       buttonLabel: t("flows.studio.close"),
       buttonAction: "complete",
@@ -4182,7 +4161,6 @@ async function initFlowStudio() {
   }
   if (!fsState.screens.length) fsState.screens = defaultFsScreens();
   fsState.activeIndex = 0;
-  fsState.viewMode = "all";
   if ($("fsName") && !$("fsName").value) $("fsName").value = "";
   repairFlowStudioTranslations();
   syncFlowStudioFormDefaults();
@@ -4212,79 +4190,235 @@ function fsActiveScreen() {
   return fsState.screens[fsState.activeIndex] || fsState.screens[0];
 }
 
-function syncFsFromSidebar() {
-  const scr = fsActiveScreen();
-  if (!scr) return;
-  syncFsBlocksFromDom();
-  syncFsFieldsFromDom();
-  if ($("fsButton")) scr.buttonLabel = $("fsButton").value;
-  const action = document.querySelector('input[name="fsAction"]:checked');
+function syncFsPreviewScreen(index, wrap) {
+  const scr = fsState.screens[index];
+  if (!scr || !wrap) return;
+  ensureScreenBlocks(scr);
+  const titleEl = wrap.querySelector(".fs-ed-title");
+  if (titleEl) scr.title = titleEl.textContent.trim().slice(0, 40);
+  wrap.querySelectorAll(".fs-ed-block").forEach((blockEl) => {
+    const bi = Number(blockEl.dataset.bi);
+    const block = scr.blocks[bi];
+    if (!block) return;
+    if (block.type === "image") {
+      block.altText = (blockEl.querySelector(".fs-b-alt") || {}).value || "";
+      block.scaleType = (blockEl.querySelector(".fs-b-scale") || {}).value || "contain";
+    } else {
+      const textEl = blockEl.querySelector(".fs-ed-text");
+      if (textEl) block.text = textEl.textContent.trim();
+      const emph = blockEl.querySelector(".fs-b-emphasis");
+      if (emph) block.emphasis = emph.value || "normal";
+    }
+  });
+  if (scr.layout === "form") {
+    scr.fields = [];
+    wrap.querySelectorAll(".fs-ed-field").forEach((row) => {
+      const type = (row.querySelector(".fs-f-type") || {}).value || "text";
+      const field = {
+        type,
+        label: (row.querySelector(".fs-f-label") || {}).value || "",
+        required: true,
+      };
+      const optsRaw = (row.querySelector(".fs-f-opts") || {}).value || "";
+      if (type === "select" || type === "checkbox") {
+        field.options = optsRaw.split(",").map((s) => s.trim()).filter(Boolean);
+      }
+      scr.fields.push(field);
+    });
+  }
+  const footer = wrap.querySelector(".fs-ed-footer-btn");
+  if (footer) scr.buttonLabel = footer.value.trim();
+  const action = wrap.querySelector(".fs-ed-action");
   if (action) scr.buttonAction = action.value;
   syncScreenLegacyFromBlocks(scr);
-  scr.title = scr.heading.slice(0, 40) || scr.title || t("flows.studio.step", { n: fsState.activeIndex + 1 });
 }
 
-function loadFsSidebarFromScreen() {
-  const scr = fsActiveScreen();
-  if (!scr) return;
-  ensureScreenBlocks(scr);
-  if ($("fsButton")) $("fsButton").value = scr.buttonLabel || t("flows.studio.continue");
-  document.querySelectorAll('input[name="fsAction"]').forEach((r) => {
-    r.checked = r.value === (scr.buttonAction || "next");
-  });
-  document.querySelectorAll(".fs-layout-btn").forEach((b) =>
-    b.classList.toggle("active", b.dataset.layout === scr.layout)
-  );
-  const fieldsBox = $("fsFieldsBox");
-  if (fieldsBox) fieldsBox.classList.toggle("hidden", scr.layout !== "form");
-  renderFsBlocksList();
-  renderFsBlockAddRow();
-  renderFsFieldsList();
-}
-
-function renderFsLayoutGrid() {
-  const box = $("fsLayoutGrid");
-  if (!box) return;
-  const scr = fsActiveScreen();
-  box.innerHTML = FS_LAYOUTS.map((id) =>
-    `<button type="button" class="fs-layout-btn${scr && scr.layout === id ? " active" : ""}" data-layout="${id}">
-      <span class="fs-layout-icon"></span>${escapeHtml(fsLayoutLabel(id))}
-    </button>`
-  ).join("");
-  box.querySelectorAll(".fs-layout-btn").forEach((btn) =>
-    btn.addEventListener("click", () => {
-      syncFsFromSidebar();
-      const s = fsActiveScreen();
-      if (!s) return;
-      s.layout = btn.dataset.layout;
-      if (s.layout === "form" && !(s.fields || []).length) {
-        s.fields = [{ type: "text", label: t("flows.studio.defaultFieldName"), required: true }];
-      }
-      if (s.layout === "confirm") {
-        s.buttonAction = "complete";
-        s.buttonLabel = s.buttonLabel || t("flows.studio.close");
-      }
-      loadFsSidebarFromScreen();
-      renderFlowStudio();
-    })
-  );
-}
-
-function renderFsBlockAddRow() {
-  const row = $("fsBlockAddRow");
+function syncFsFromAllPreviews() {
+  const row = $("fsPreviewRow");
   if (!row) return;
-  const types = fsState.schema?.blockTypes || [
-    { id: "heading", label: "Título" },
-    { id: "body", label: "Párrafo" },
-    { id: "image", label: "Imagen" },
+  row.querySelectorAll(".fs-phone-wrap").forEach((wrap) => {
+    syncFsPreviewScreen(Number(wrap.dataset.fsI), wrap);
+  });
+}
+
+function fsFieldTypeOptions(selected) {
+  const types = fsState.schema?.fieldTypes || [
+    { id: "text", label: "Texto" },
+    { id: "email", label: "Email" },
+    { id: "phone", label: "Teléfono" },
+    { id: "date", label: "Fecha" },
+    { id: "calendar", label: "Calendario" },
+    { id: "select", label: "Lista" },
+    { id: "yesno", label: "Sí / No" },
+    { id: "optin", label: "Aceptación" },
+    { id: "checkbox", label: "Casillas" },
   ];
-  row.innerHTML = types.map((bt) =>
+  return types.map((ft) =>
+    `<option value="${escapeHtml(ft.id)}"${ft.id === selected ? " selected" : ""}>${escapeHtml(ft.label)}</option>`
+  ).join("");
+}
+
+function fsEditableBlockHtml(b, bi, scrLen) {
+  const upDisabled = bi === 0 ? " disabled" : "";
+  const downDisabled = bi === scrLen - 1 ? " disabled" : "";
+  const bar = `
+    <div class="fs-ed-block-bar">
+      <span class="fs-ed-block-type">${escapeHtml(fsBlockLabel(b.type))}</span>
+      <div class="fs-ed-block-actions">
+        <button type="button" class="btn-ghost sm fs-b-up"${upDisabled}>↑</button>
+        <button type="button" class="btn-ghost sm fs-b-down"${downDisabled}>↓</button>
+        <button type="button" class="btn-ghost sm fs-b-remove">×</button>
+      </div>
+    </div>`;
+  if (b.type === "image") {
+    const preview = b.previewUrl || (b.src ? `data:image/png;base64,${b.src}` : "");
+    return `
+      <div class="fs-ed-block" data-bi="${bi}" data-block-type="image">
+        ${bar}
+        ${preview ? `<img class="fs-preview-img" src="${escapeHtml(preview)}" alt="" />` : `<div class="fs-preview-img fs-preview-img-empty muted sm">${escapeHtml(t("flows.studio.noImageYet"))}</div>`}
+        <label class="flows-upload-label sm fs-ed-upload"><span>${escapeHtml(t("flows.studio.uploadImage"))}</span>
+          <input type="file" accept="image/png,image/jpeg" class="fs-block-file" data-bi="${bi}" />
+        </label>
+        <input type="text" class="fs-b-alt sm" placeholder="${escapeHtml(t("flows.studio.imageAlt"))}" value="${escapeHtml(b.altText || "")}" />
+        <select class="fs-b-scale sm">
+          <option value="contain"${b.scaleType !== "cover" ? " selected" : ""}>${escapeHtml(t("flows.studio.scaleContain"))}</option>
+          <option value="cover"${b.scaleType === "cover" ? " selected" : ""}>${escapeHtml(t("flows.studio.scaleCover"))}</option>
+        </select>
+      </div>`;
+  }
+  const ph = escapeHtml(t("flows.studio.blockTextPh"));
+  const textContent = escapeHtml(b.text || "");
+  let textHtml;
+  if (b.type === "heading") {
+    textHtml = `<h3 class="fs-ed-text" contenteditable="true" data-placeholder="${ph}">${textContent}</h3>`;
+  } else if (b.type === "subheading") {
+    textHtml = `<p class="fs-preview-sub fs-ed-text" contenteditable="true" data-placeholder="${ph}">${textContent}</p>`;
+  } else if (b.type === "caption") {
+    textHtml = `<p class="fs-preview-caption fs-ed-text" contenteditable="true" data-placeholder="${ph}">${textContent}</p>`;
+  } else {
+    textHtml = `<p class="fs-ed-text" contenteditable="true" data-placeholder="${ph}">${textContent}</p>`;
+  }
+  const emphasisRow = (b.type === "body" || b.type === "caption") ? `
+    <select class="fs-b-emphasis sm">
+      <option value="normal"${(!b.emphasis || b.emphasis === "normal") ? " selected" : ""}>${escapeHtml(t("flows.studio.emphasisNormal"))}</option>
+      <option value="bold"${b.emphasis === "bold" ? " selected" : ""}>${escapeHtml(t("flows.studio.emphasisBold"))}</option>
+      <option value="italic"${b.emphasis === "italic" ? " selected" : ""}>${escapeHtml(t("flows.studio.emphasisItalic"))}</option>
+      <option value="bold_italic"${b.emphasis === "bold_italic" ? " selected" : ""}>${escapeHtml(t("flows.studio.emphasisBoldItalic"))}</option>
+    </select>` : "";
+  return `
+    <div class="fs-ed-block" data-bi="${bi}" data-block-type="${escapeHtml(b.type)}">
+      ${bar}
+      ${textHtml}
+      ${emphasisRow}
+    </div>`;
+}
+
+function fsEditableFieldsHtml(scr) {
+  if (scr.layout !== "form") return "";
+  const fields = scr.fields || [];
+  const rows = fields.map((f, fi) => {
+    const needsOpts = f.type === "select" || f.type === "checkbox";
+    const optsVal = (f.options || []).join(", ");
+    return `
+      <div class="fs-ed-field" data-fi="${fi}">
+        <input type="text" class="fs-f-label" placeholder="${escapeHtml(t("flows.studio.fieldLabel"))}" value="${escapeHtml(f.label || "")}" />
+        <select class="fs-f-type">${fsFieldTypeOptions(f.type)}</select>
+        <button type="button" class="btn-ghost sm fs-f-remove" title="×">×</button>
+        ${needsOpts ? `<input type="text" class="fs-f-opts sm" placeholder="${escapeHtml(t("flows.studio.fieldOptionsPh"))}" value="${escapeHtml(optsVal)}" />` : ""}
+      </div>`;
+  }).join("");
+  return `
+    <div class="fs-ed-fields">
+      <span class="fs-ed-fields-label">${escapeHtml(t("flows.studio.formFields"))}</span>
+      ${rows}
+      <button type="button" class="btn-ghost sm fs-add-field">+ ${escapeHtml(t("flows.studio.addField"))}</button>
+    </div>`;
+}
+
+function renderFsPhoneEditor(scr, index) {
+  ensureScreenBlocks(scr);
+  const isLast = index === fsState.screens.length - 1;
+  const canDelete = fsState.screens.length > 1;
+  const btnLabel = scr.buttonLabel || (isLast ? t("flows.studio.close") : t("flows.studio.continue"));
+  const stepOf = t("flows.studio.previewStepOf", { n: index + 1, total: fsState.screens.length });
+  const blocksHtml = (scr.blocks || []).map((b, bi) => fsEditableBlockHtml(b, bi, scr.blocks.length)).join("");
+  const layoutBtns = FS_LAYOUTS.map((id) =>
+    `<button type="button" class="fs-ed-layout${scr.layout === id ? " active" : ""}" data-layout="${id}">${escapeHtml(fsLayoutLabel(id))}</button>`
+  ).join("");
+  const blockTypes = fsState.schema?.blockTypes || [
+    { id: "heading", label: t("flows.studio.blockHeading") },
+    { id: "body", label: t("flows.studio.blockBody") },
+    { id: "image", label: t("flows.studio.blockImage") },
+  ];
+  const addBlockBtns = blockTypes.map((bt) =>
     `<button type="button" class="btn-ghost sm fs-block-add-btn" data-block-type="${escapeHtml(bt.id)}">+ ${escapeHtml(bt.label)}</button>`
   ).join("");
+  const actionNext = isLast ? "" : `<option value="next"${scr.buttonAction !== "complete" ? " selected" : ""}>${escapeHtml(t("flows.studio.actionNext"))}</option>`;
+  const actionComplete = `<option value="complete"${scr.buttonAction === "complete" || isLast ? " selected" : ""}>${escapeHtml(t("flows.studio.actionComplete"))}</option>`;
+
+  return `
+    <div class="fs-phone-wrap editing" data-fs-i="${index}" id="fsPhone${index}">
+      <div class="fs-preview-meta">
+        <span class="fs-preview-badge">${escapeHtml(t("flows.studio.previewBadge"))}</span>
+        <span class="fs-preview-step muted sm">${escapeHtml(stepOf)}</span>
+        ${canDelete ? `<button type="button" class="fs-screen-del" data-fs-del="${index}">${escapeHtml(t("flows.studio.removeScreenBtn"))}</button>` : ""}
+      </div>
+      <div class="flow-phone fs-phone-mini">
+        <div class="flow-phone-nav fs-preview-nav">
+          <span class="flow-phone-cancel fs-preview-decor" aria-hidden="true">${escapeHtml(t("flows.studio.previewCancelLabel"))}</span>
+          <span class="flow-phone-title fs-ed-title" contenteditable="true" data-placeholder="${escapeHtml(t("flows.studio.screenTitle"))}">${escapeHtml(scr.title || t("flows.studio.step", { n: index + 1 }))}</span>
+          <span class="flow-phone-menu fs-preview-decor" aria-hidden="true">⋯</span>
+        </div>
+        <div class="fs-ed-layouts">${layoutBtns}</div>
+        <div class="flow-phone-body fs-ed-body">
+          ${blocksHtml}
+          ${fsEditableFieldsHtml(scr)}
+          <div class="fs-ed-add-blocks">${addBlockBtns}</div>
+        </div>
+        <div class="flow-phone-footer fs-ed-footer">
+          <input type="text" class="fs-ed-footer-btn" value="${escapeHtml(btnLabel)}" placeholder="${escapeHtml(t("flows.studio.screenButton"))}" />
+          <label class="fs-ed-action-wrap muted sm">
+            <span>${escapeHtml(t("flows.studio.onButtonTap"))}</span>
+            <select class="fs-ed-action">${actionNext}${actionComplete}</select>
+          </label>
+        </div>
+      </div>
+    </div>`;
+}
+
+function bindFsPreviewRow(row) {
+  if (!row) return;
+  row.querySelectorAll(".fs-ed-text[contenteditable]").forEach((el) => {
+    el.addEventListener("input", () => {
+      if (!el.textContent.trim()) el.classList.add("empty");
+      else el.classList.remove("empty");
+    });
+  });
+  row.querySelectorAll(".fs-ed-layout").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      syncFsFromAllPreviews();
+      const wrap = btn.closest(".fs-phone-wrap");
+      const i = Number(wrap.dataset.fsI);
+      const scr = fsState.screens[i];
+      if (!scr) return;
+      scr.layout = btn.dataset.layout;
+      if (scr.layout === "form" && !(scr.fields || []).length) {
+        scr.fields = [{ type: "text", label: t("flows.studio.defaultFieldName"), required: true }];
+      }
+      if (scr.layout === "confirm") {
+        scr.buttonAction = "complete";
+        scr.buttonLabel = scr.buttonLabel || t("flows.studio.close");
+      }
+      fsState.activeIndex = i;
+      renderFlowStudio();
+    });
+  });
   row.querySelectorAll(".fs-block-add-btn").forEach((btn) => {
     btn.addEventListener("click", () => {
-      syncFsFromSidebar();
-      const scr = fsActiveScreen();
+      syncFsFromAllPreviews();
+      const wrap = btn.closest(".fs-phone-wrap");
+      const i = Number(wrap.dataset.fsI);
+      const scr = fsState.screens[i];
       if (!scr) return;
       ensureScreenBlocks(scr);
       const max = fsState.schema?.limits?.maxBlocksPerScreen || 10;
@@ -4302,122 +4436,147 @@ function renderFsBlockAddRow() {
         block.text = "";
       }
       scr.blocks.push(block);
-      renderFsBlocksList();
+      fsState.activeIndex = i;
       renderFlowStudio();
     });
   });
-}
-
-function renderFsBlocksList() {
-  const box = $("fsBlocksBox");
-  const scr = fsActiveScreen();
-  if (!box || !scr) return;
-  ensureScreenBlocks(scr);
-  box.innerHTML = scr.blocks.map((b, bi) => {
-    const upDisabled = bi === 0 ? " disabled" : "";
-    const downDisabled = bi === scr.blocks.length - 1 ? " disabled" : "";
-    let inner = "";
-    if (b.type === "image") {
-      const preview = b.previewUrl || (b.src ? `data:image/png;base64,${b.src}` : "");
-      inner = `
-        ${preview ? `<img class="fs-block-img-preview" src="${escapeHtml(preview)}" alt="" />` : `<p class="muted sm">${escapeHtml(t("flows.studio.noImageYet"))}</p>`}
-        <label class="flows-upload-label sm"><span>${escapeHtml(t("flows.studio.uploadImage"))}</span>
-          <input type="file" accept="image/png,image/jpeg" class="fs-block-file" data-bi="${bi}" />
-        </label>
-        <input type="text" class="fs-b-alt" data-bi="${bi}" placeholder="${escapeHtml(t("flows.studio.imageAlt"))}" value="${escapeHtml(b.altText || "")}" />
-        <select class="fs-b-scale" data-bi="${bi}">
-          <option value="contain"${b.scaleType !== "cover" ? " selected" : ""}>${escapeHtml(t("flows.studio.scaleContain"))}</option>
-          <option value="cover"${b.scaleType === "cover" ? " selected" : ""}>${escapeHtml(t("flows.studio.scaleCover"))}</option>
-        </select>`;
-    } else {
-      const emphasisRow = (b.type === "body" || b.type === "caption") ? `
-        <select class="fs-b-emphasis" data-bi="${bi}">
-          <option value="normal"${(!b.emphasis || b.emphasis === "normal") ? " selected" : ""}>${escapeHtml(t("flows.studio.emphasisNormal"))}</option>
-          <option value="bold"${b.emphasis === "bold" ? " selected" : ""}>${escapeHtml(t("flows.studio.emphasisBold"))}</option>
-          <option value="italic"${b.emphasis === "italic" ? " selected" : ""}>${escapeHtml(t("flows.studio.emphasisItalic"))}</option>
-          <option value="bold_italic"${b.emphasis === "bold_italic" ? " selected" : ""}>${escapeHtml(t("flows.studio.emphasisBoldItalic"))}</option>
-        </select>` : "";
-      inner = `
-        <textarea class="fs-b-text" data-bi="${bi}" rows="${b.type === "caption" ? 2 : 3}" placeholder="${escapeHtml(t("flows.studio.blockTextPh"))}">${escapeHtml(b.text || "")}</textarea>
-        ${emphasisRow}`;
-    }
-    return `
-      <div class="fs-block-card" data-bi="${bi}">
-        <div class="fs-block-card-head">
-          <span class="fs-block-type">${escapeHtml(fsBlockLabel(b.type))}</span>
-          <div class="fs-block-actions">
-            <button type="button" class="btn-ghost sm fs-b-up"${upDisabled} title="↑">↑</button>
-            <button type="button" class="btn-ghost sm fs-b-down"${downDisabled} title="↓">↓</button>
-            <button type="button" class="btn-ghost sm fs-b-remove" title="×">×</button>
-          </div>
-        </div>
-        ${inner}
-      </div>`;
-  }).join("");
-
-  box.querySelectorAll(".fs-b-text, .fs-b-alt, .fs-b-scale, .fs-b-emphasis").forEach((el) =>
-    el.addEventListener("input", syncFsBlocksFromDom)
-  );
-  box.querySelectorAll(".fs-b-scale, .fs-b-emphasis").forEach((el) =>
-    el.addEventListener("change", syncFsBlocksFromDom)
-  );
-  box.querySelectorAll(".fs-block-file").forEach((input) => {
-    input.addEventListener("change", () => uploadFsBlockImage(Number(input.dataset.bi), input));
-  });
-  box.querySelectorAll(".fs-b-remove").forEach((btn) => {
+  row.querySelectorAll(".fs-b-remove").forEach((btn) => {
     btn.addEventListener("click", () => {
-      syncFsBlocksFromDom();
-      const bi = Number(btn.closest(".fs-block-card").dataset.bi);
-      if (scr.blocks.length <= 1) {
+      syncFsFromAllPreviews();
+      const wrap = btn.closest(".fs-phone-wrap");
+      const i = Number(wrap.dataset.fsI);
+      const scr = fsState.screens[i];
+      const bi = Number(btn.closest(".fs-ed-block").dataset.bi);
+      if (!scr || scr.blocks.length <= 1) {
         toast(t("toast.minOneBlock"), "error");
         return;
       }
       scr.blocks.splice(bi, 1);
-      renderFsBlocksList();
+      fsState.activeIndex = i;
       renderFlowStudio();
     });
   });
-  box.querySelectorAll(".fs-b-up").forEach((btn) => {
+  row.querySelectorAll(".fs-b-up").forEach((btn) => {
     btn.addEventListener("click", () => {
-      syncFsBlocksFromDom();
-      const bi = Number(btn.closest(".fs-block-card").dataset.bi);
-      if (bi <= 0) return;
+      syncFsFromAllPreviews();
+      const wrap = btn.closest(".fs-phone-wrap");
+      const i = Number(wrap.dataset.fsI);
+      const scr = fsState.screens[i];
+      const bi = Number(btn.closest(".fs-ed-block").dataset.bi);
+      if (!scr || bi <= 0) return;
       [scr.blocks[bi - 1], scr.blocks[bi]] = [scr.blocks[bi], scr.blocks[bi - 1]];
-      renderFsBlocksList();
+      fsState.activeIndex = i;
       renderFlowStudio();
     });
   });
-  box.querySelectorAll(".fs-b-down").forEach((btn) => {
+  row.querySelectorAll(".fs-b-down").forEach((btn) => {
     btn.addEventListener("click", () => {
-      syncFsBlocksFromDom();
-      const bi = Number(btn.closest(".fs-block-card").dataset.bi);
-      if (bi >= scr.blocks.length - 1) return;
+      syncFsFromAllPreviews();
+      const wrap = btn.closest(".fs-phone-wrap");
+      const i = Number(wrap.dataset.fsI);
+      const scr = fsState.screens[i];
+      const bi = Number(btn.closest(".fs-ed-block").dataset.bi);
+      if (!scr || bi >= scr.blocks.length - 1) return;
       [scr.blocks[bi + 1], scr.blocks[bi]] = [scr.blocks[bi], scr.blocks[bi + 1]];
-      renderFsBlocksList();
+      fsState.activeIndex = i;
       renderFlowStudio();
+    });
+  });
+  row.querySelectorAll(".fs-block-file").forEach((input) => {
+    input.addEventListener("change", () => {
+      syncFsFromAllPreviews();
+      const wrap = input.closest(".fs-phone-wrap");
+      const i = Number(wrap.dataset.fsI);
+      fsState.activeIndex = i;
+      uploadFsBlockImage(Number(input.dataset.bi), input);
+    });
+  });
+  row.querySelectorAll(".fs-add-field").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      syncFsFromAllPreviews();
+      const wrap = btn.closest(".fs-phone-wrap");
+      const i = Number(wrap.dataset.fsI);
+      const scr = fsState.screens[i];
+      if (!scr || scr.layout !== "form") return;
+      scr.fields = scr.fields || [];
+      scr.fields.push({ type: "text", label: "", required: true });
+      fsState.activeIndex = i;
+      renderFlowStudio();
+    });
+  });
+  row.querySelectorAll(".fs-f-remove").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      syncFsFromAllPreviews();
+      const wrap = btn.closest(".fs-phone-wrap");
+      const i = Number(wrap.dataset.fsI);
+      const scr = fsState.screens[i];
+      const fi = Number(btn.closest(".fs-ed-field").dataset.fi);
+      if (!scr || !scr.fields) return;
+      scr.fields.splice(fi, 1);
+      fsState.activeIndex = i;
+      renderFlowStudio();
+    });
+  });
+  row.querySelectorAll(".fs-f-type").forEach((el) => {
+    el.addEventListener("change", () => {
+      syncFsFromAllPreviews();
+      const wrap = el.closest(".fs-phone-wrap");
+      fsState.activeIndex = Number(wrap.dataset.fsI);
+      renderFlowStudio();
+    });
+  });
+  row.querySelectorAll(".fs-screen-del").forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      fsRemoveScreen(Number(btn.dataset.fsDel));
     });
   });
 }
 
-function syncFsBlocksFromDom() {
-  const scr = fsActiveScreen();
-  const box = $("fsBlocksBox");
-  if (!scr || !box) return;
+function fsThumbLabel(scr) {
   ensureScreenBlocks(scr);
-  box.querySelectorAll(".fs-block-card").forEach((card) => {
-    const bi = Number(card.dataset.bi);
-    const block = scr.blocks[bi];
-    if (!block) return;
-    if (block.type === "image") {
-      block.altText = (card.querySelector(".fs-b-alt") || {}).value || "";
-      block.scaleType = (card.querySelector(".fs-b-scale") || {}).value || "contain";
-    } else {
-      block.text = (card.querySelector(".fs-b-text") || {}).value || "";
-      const emph = card.querySelector(".fs-b-emphasis");
-      if (emph) block.emphasis = emph.value || "normal";
-    }
+  const heading = scr.blocks.find((b) => b.type === "heading");
+  const text = heading?.text || scr.title || t("flows.studio.screenDefault");
+  return String(text).slice(0, 24);
+}
+
+function renderFlowStudio() {
+  const strip = $("fsScreenStrip");
+  const row = $("fsPreviewRow");
+  if (!strip || !row) return;
+  if (row.querySelector(".fs-phone-wrap")) syncFsFromAllPreviews();
+
+  const max = fsState.schema?.limits?.maxScreens || 8;
+  strip.innerHTML = fsState.screens.map((scr, i) =>
+    `<button type="button" class="fs-thumb${i === fsState.activeIndex ? " active" : ""}" data-fs-i="${i}" title="${escapeHtml(scr.title || t("flows.studio.step", { n: i + 1 }))}">
+      <span class="fs-thumb-step">${escapeHtml(t("flows.studio.step", { n: i + 1 }))}</span>
+      <div class="fs-thumb-inner">${escapeHtml(fsThumbLabel(scr))}</div>
+    </button>`
+  ).join("")
+    + (fsState.screens.length < max
+      ? `<button type="button" class="fs-thumb-add" id="fsAddScreen" title="${escapeHtml(t("flows.studio.addScreen"))}">+</button>`
+      : "");
+
+  strip.querySelectorAll(".fs-thumb").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      syncFsFromAllPreviews();
+      fsState.activeIndex = Number(btn.dataset.fsI);
+      renderFlowStudio();
+      const target = $(`fsPhone${fsState.activeIndex}`) || row.querySelector(`[data-fs-i="${fsState.activeIndex}"]`);
+      target?.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
+    });
   });
-  syncScreenLegacyFromBlocks(scr);
+  const addBtn = $("fsAddScreen");
+  if (addBtn) addBtn.addEventListener("click", fsAddScreen);
+
+  row.innerHTML = fsState.screens.map((scr, i) => renderFsPhoneEditor(scr, i)).join("")
+    + (fsState.screens.length < max
+      ? `<button type="button" class="fs-thumb-add fs-add-screen-card" id="fsAddScreenRow" title="${escapeHtml(t("flows.studio.addScreen"))}">+</button>`
+      : "");
+  bindFsPreviewRow(row);
+  const addRow = $("fsAddScreenRow");
+  if (addRow) addRow.addEventListener("click", fsAddScreen);
 }
 
 async function uploadFsBlockImage(bi, input) {
@@ -4449,228 +4608,11 @@ async function uploadFsBlockImage(bi, input) {
     scaleType: scr.blocks[bi].scaleType || "contain",
   };
   toast(t("toast.imageUploaded"), "ok");
-  renderFsBlocksList();
   renderFlowStudio();
 }
 
-function fsFieldTypeOptions(selected) {
-  return (fsState.schema?.fieldTypes || [
-    { id: "text", label: "Texto" },
-    { id: "email", label: "Correo" },
-    { id: "rating", label: "1–5" },
-  ]).map((ft) => `<option value="${escapeHtml(ft.id)}"${ft.id === selected ? " selected" : ""}>${escapeHtml(ft.label)}</option>`).join("");
-}
-
-function renderFsFieldsList() {
-  const box = $("fsFieldsList");
-  const scr = fsActiveScreen();
-  if (!box || !scr || scr.layout !== "form") return;
-  scr.fields = scr.fields || [];
-  box.innerHTML = scr.fields.map((f, fi) => {
-    const needsOpts = f.type === "select" || f.type === "checkbox";
-    const optsVal = (f.options || []).join(", ");
-    return `
-    <div class="fs-field-row" data-fi="${fi}">
-      <input type="text" class="fs-f-label" placeholder="${escapeHtml(t("flows.studio.fieldLabel"))}" value="${escapeHtml(f.label || "")}" />
-      <select class="fs-f-type">${fsFieldTypeOptions(f.type)}</select>
-      <button type="button" class="btn-ghost sm fs-f-remove">×</button>
-      ${needsOpts ? `<label class="fs-field-options muted">${escapeHtml(t("flows.studio.fieldOptions"))}
-        <input type="text" class="fs-f-opts" placeholder="${escapeHtml(t("flows.studio.fieldOptionsPh"))}" value="${escapeHtml(optsVal)}" />
-      </label>` : ""}
-    </div>`;
-  }).join("");
-  box.querySelectorAll(".fs-f-label, .fs-f-type, .fs-f-opts").forEach((el) =>
-    el.addEventListener("input", syncFsFieldsFromDom)
-  );
-  box.querySelectorAll(".fs-f-type").forEach((el) =>
-    el.addEventListener("change", syncFsFieldsFromDom)
-  );
-  box.querySelectorAll(".fs-f-remove").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      syncFsFieldsFromDom();
-      const fi = Number(btn.closest(".fs-field-row").dataset.fi);
-      scr.fields.splice(fi, 1);
-      renderFsFieldsList();
-      renderFlowStudio();
-    });
-  });
-}
-
-function syncFsFieldsFromDom() {
-  const scr = fsActiveScreen();
-  const box = $("fsFieldsList");
-  if (!scr || !box || scr.layout !== "form") return;
-  scr.fields = [];
-  box.querySelectorAll(".fs-field-row").forEach((row) => {
-    const type = (row.querySelector(".fs-f-type") || {}).value || "text";
-    const field = {
-      type,
-      label: (row.querySelector(".fs-f-label") || {}).value || "",
-      required: true,
-    };
-    const optsRaw = (row.querySelector(".fs-f-opts") || {}).value || "";
-    if (type === "select" || type === "checkbox") {
-      field.options = optsRaw.split(",").map((s) => s.trim()).filter(Boolean);
-    }
-    scr.fields.push(field);
-  });
-}
-
-function fsPreviewBlockHtml(b) {
-  if (!b) return "";
-  if (b.type === "image") {
-    const src = b.previewUrl || (b.src ? `data:image/png;base64,${b.src}` : "");
-    if (!src) return `<div class="fs-preview-img muted sm" style="padding:24px;text-align:center">${escapeHtml(t("flows.studio.noImageYet"))}</div>`;
-    return `<img class="fs-preview-img" src="${escapeHtml(src)}" alt="${escapeHtml(b.altText || "")}" />`;
-  }
-  const text = escapeHtml(b.text || "");
-  if (b.type === "heading") return `<h3>${text || escapeHtml(t("flows.studio.screenTitle"))}</h3>`;
-  if (b.type === "subheading") return `<p class="fs-preview-sub">${text}</p>`;
-  if (b.type === "caption") {
-    const style = b.emphasis && b.emphasis !== "normal" ? ` style="font-style:${b.emphasis.includes("italic") ? "italic" : "normal"};font-weight:${b.emphasis.includes("bold") ? "700" : "400"}"` : "";
-    return `<p class="fs-preview-caption"${style}>${text}</p>`;
-  }
-  const style = b.emphasis && b.emphasis !== "normal" ? ` style="font-style:${b.emphasis.includes("italic") ? "italic" : "normal"};font-weight:${b.emphasis.includes("bold") ? "700" : "400"}"` : "";
-  return `<p${style}>${text || escapeHtml(t("flows.studio.screenBody"))}</p>`;
-}
-
-function fsFieldPreviewLabel(f) {
-  const icons = {
-    date: "📅",
-    calendar: "🗓",
-    optin: "☑",
-    checkbox: "☑",
-    select: "▾",
-    yesno: "○",
-    rating: "★",
-  };
-  const prefix = icons[f.type] ? `${icons[f.type]} ` : "";
-  return prefix + (f.label || t("flows.studio.fieldDefault"));
-}
-
-function renderFsPhonePreview(scr, index, editing) {
-  ensureScreenBlocks(scr);
-  const isLast = index === fsState.screens.length - 1;
-  const btnLabel = scr.buttonLabel || (isLast ? t("flows.studio.close") : t("flows.studio.continue"));
-  let bodyHtml = (scr.blocks || []).map((b) => fsPreviewBlockHtml(b)).join("");
-  if (scr.layout === "form" && (scr.fields || []).length) {
-    bodyHtml += (scr.fields || []).map((f) =>
-      `<p style="margin:8px 0;padding:10px;border:1px solid #e9edef;border-radius:8px;font-size:12px;color:#667781">${escapeHtml(fsFieldPreviewLabel(f))}</p>`
-    ).join("");
-  }
-  const stepTitle = scr.title || t("flows.studio.step", { n: index + 1 });
-  const cancelHint = t("flows.studio.previewCancelHint");
-  const cancelLabel = t("flows.studio.previewCancelLabel");
-  const badge = t("flows.studio.previewBadge");
-  const stepOf = t("flows.studio.previewStepOf", { n: index + 1, total: fsState.screens.length });
-  return `
-    <div class="fs-phone-wrap${editing ? " editing" : ""}" data-fs-i="${index}">
-      <div class="fs-preview-meta">
-        <span class="fs-preview-badge">${escapeHtml(badge)}</span>
-        <span class="fs-preview-step muted sm">${escapeHtml(stepOf)}</span>
-      </div>
-      <div class="flow-phone fs-phone-mini">
-        <div class="flow-phone-nav fs-preview-nav">
-          <span class="flow-phone-cancel fs-preview-decor" title="${escapeHtml(cancelHint)}" aria-hidden="true">${escapeHtml(cancelLabel)}</span>
-          <span class="flow-phone-title">${escapeHtml(stepTitle)}</span>
-          <span class="flow-phone-menu fs-preview-decor" aria-hidden="true">⋯</span>
-        </div>
-        <div class="flow-phone-body">
-          ${bodyHtml || `<h3>${escapeHtml(t("flows.studio.screenTitle"))}</h3><p>${escapeHtml(t("flows.studio.screenBody"))}</p>`}
-        </div>
-        <div class="flow-phone-footer">
-          <button type="button" disabled tabindex="-1">${escapeHtml(btnLabel)}</button>
-        </div>
-      </div>
-      <p class="fs-preview-foot muted sm">${escapeHtml(t("flows.studio.previewDecorNote"))}</p>
-      <div class="fs-phone-dots">${fsState.screens.map((_, i) =>
-        `<span class="${i === index ? "on" : ""}"></span>`
-      ).join("")}</div>
-    </div>`;
-}
-
-function fsThumbLabel(scr) {
-  ensureScreenBlocks(scr);
-  const heading = scr.blocks.find((b) => b.type === "heading");
-  const text = heading?.text || scr.title || t("flows.studio.screenDefault");
-  return String(text).slice(0, 24);
-}
-
-function renderFlowStudio() {
-  renderFsLayoutGrid();
-  loadFsSidebarFromScreen();
-
-  const strip = $("fsScreenStrip");
-  const row = $("fsPreviewRow");
-  if (!strip || !row) return;
-
-  const max = fsState.schema?.limits?.maxScreens || 8;
-  const canDelete = fsState.screens.length > 1;
-  strip.innerHTML = fsState.screens.map((scr, i) =>
-    `<div class="fs-thumb-slot${i === fsState.activeIndex ? " active" : ""}">
-      <button type="button" class="fs-thumb" data-fs-i="${i}" title="${escapeHtml(scr.title || t("flows.studio.step", { n: i + 1 }))}">
-        <span class="fs-thumb-step">${escapeHtml(t("flows.studio.step", { n: i + 1 }))}</span>
-        <div class="fs-thumb-inner">${escapeHtml(fsThumbLabel(scr))}</div>
-      </button>
-      ${canDelete ? `<button type="button" class="fs-thumb-del" data-fs-del="${i}" title="${escapeHtml(t("flows.studio.deleteScreen"))}" aria-label="${escapeHtml(t("flows.studio.deleteScreen"))}">×</button>` : ""}
-    </div>`
-  ).join("")
-    + (fsState.screens.length < max
-      ? `<button type="button" class="fs-thumb-add" id="fsAddScreen" title="${escapeHtml(t("flows.studio.addScreen"))}">+</button>`
-      : "");
-
-  strip.querySelectorAll(".fs-thumb").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      syncFsFromSidebar();
-      syncFsFieldsFromDom();
-      fsState.activeIndex = Number(btn.dataset.fsI);
-      fsState.viewMode = "one";
-      document.querySelectorAll(".fs-view-btn").forEach((b) =>
-        b.classList.toggle("active", b.dataset.fsView === "one")
-      );
-      renderFlowStudio();
-    });
-  });
-  strip.querySelectorAll(".fs-thumb-del").forEach((btn) => {
-    btn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      syncFsFromSidebar();
-      syncFsFieldsFromDom();
-      fsRemoveScreen(Number(btn.dataset.fsDel));
-    });
-  });
-  const addBtn = $("fsAddScreen");
-  if (addBtn) addBtn.addEventListener("click", fsAddScreen);
-
-  row.className = "fs-preview-row" + (fsState.viewMode === "one" ? " single" : "");
-  if (fsState.viewMode === "one") {
-    row.innerHTML = renderFsPhonePreview(fsActiveScreen(), fsState.activeIndex, true);
-  } else {
-    row.innerHTML = fsState.screens.map((scr, i) =>
-      renderFsPhonePreview(scr, i, i === fsState.activeIndex)
-    ).join("")
-      + (fsState.screens.length < max
-        ? `<button type="button" class="fs-thumb-add" style="width:240px;height:320px;font-size:32px" id="fsAddScreenRow">+</button>`
-        : "");
-    row.querySelectorAll(".fs-phone-wrap").forEach((el) => {
-      el.addEventListener("click", () => {
-        syncFsFromSidebar();
-        fsState.activeIndex = Number(el.dataset.fsI);
-        fsState.viewMode = "one";
-        document.querySelectorAll(".fs-view-btn").forEach((b) =>
-          b.classList.toggle("active", b.dataset.fsView === "one")
-        );
-        renderFlowStudio();
-      });
-    });
-    const addRow = $("fsAddScreenRow");
-    if (addRow) addRow.addEventListener("click", fsAddScreen);
-  }
-}
-
 function fsAddScreen() {
-  syncFsFromSidebar();
-  syncFsFieldsFromDom();
+  syncFsFromAllPreviews();
   const max = fsState.schema?.limits?.maxScreens || 8;
   if (fsState.screens.length >= max) {
     toast(t("toast.maxScreens", { max }), "error");
@@ -4694,6 +4636,7 @@ function fsAddScreen() {
 }
 
 function fsRemoveScreen(index) {
+  syncFsFromAllPreviews();
   if (fsState.screens.length <= 1) {
     toast(t("toast.minOneScreen"), "error");
     return;
@@ -4701,7 +4644,10 @@ function fsRemoveScreen(index) {
   fsState.screens.splice(index, 1);
   if (fsState.activeIndex >= fsState.screens.length) {
     fsState.activeIndex = fsState.screens.length - 1;
+  } else if (fsState.activeIndex > index) {
+    fsState.activeIndex -= 1;
   }
+  toast(t("flows.studio.screenRemoved"), "ok");
   renderFlowStudio();
 }
 
@@ -4751,8 +4697,7 @@ function mapFsScreenToDef(s, i, fsStateScreens) {
 }
 
 function collectFsDefinition() {
-  syncFsFromSidebar();
-  syncFsFieldsFromDom();
+  syncFsFromAllPreviews();
   const screens = fsState.screens.map((s, i) => mapFsScreenToDef(s, i, fsState.screens));
   const hasConfirm = screens.some((s) => s.type === "confirm");
   if (!hasConfirm && screens.length) {
@@ -5683,35 +5628,6 @@ function bindEvents() {
   const fsPickerToggle = $("fsPickerToggle");
   if (fsPickerToggle) {
     fsPickerToggle.addEventListener("click", () => $("flowCreatePicker")?.classList.toggle("hidden"));
-  }
-  document.querySelectorAll(".fs-view-btn").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      syncFsFromSidebar();
-      fsState.viewMode = btn.dataset.fsView || "all";
-      document.querySelectorAll(".fs-view-btn").forEach((b) =>
-        b.classList.toggle("active", b.dataset.fsView === fsState.viewMode)
-      );
-      renderFlowStudio();
-    });
-  });
-  ["fsButton"].forEach((id) => {
-    const el = $(id);
-    if (el) el.addEventListener("input", () => { syncFsFromSidebar(); renderFlowStudio(); });
-  });
-  document.querySelectorAll('input[name="fsAction"]').forEach((el) =>
-    el.addEventListener("change", () => { syncFsFromSidebar(); renderFlowStudio(); })
-  );
-  const fsAddField = $("fsAddField");
-  if (fsAddField) {
-    fsAddField.addEventListener("click", () => {
-      syncFsFieldsFromDom();
-      const scr = fsActiveScreen();
-      if (!scr || scr.layout !== "form") return;
-      scr.fields = scr.fields || [];
-      scr.fields.push({ type: "text", label: "", required: true });
-      renderFsFieldsList();
-      renderFlowStudio();
-    });
   }
   ["payAuthCustomerName", "payAuthMerchant", "payAuthAmount", "payAuthCard4"].forEach((id) => {
     const el = $(id);

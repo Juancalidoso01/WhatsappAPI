@@ -180,7 +180,7 @@
   },
   "studio": {
     "title": "Create your Flow",
-    "intro": "Build screens like a carousel. We translate them to the format Meta requires.",
+    "intro": "Edit directly on each screen preview. We translate it into the format Meta requires.",
     "presetsBtn": "Punto Pago templates",
     "createDraft": "Create Meta draft",
     "presetsHint": "Ready shortcuts for common cases (payment authorization, surveys, etc.)",
@@ -262,7 +262,10 @@
     "previewCancelHint": "This is how it looks in the client's WhatsApp; it does not close the editor",
     "previewDecorNote": "Visual simulation. «Cancel» at the top is decorative (like WhatsApp).",
     "stripHint": "Tap a thumbnail to edit it. The × on the thumbnail removes that screen (not the preview «Cancel»).",
-    "deleteScreen": "Remove screen"
+    "deleteScreen": "Remove screen",
+    "editOnPreview": "Edit directly on each screen. Use «Remove screen» if you only need one.",
+    "removeScreenBtn": "Remove screen",
+    "screenRemoved": "Screen removed"
   },
   "layouts": {
     "message": "Heading and text",
