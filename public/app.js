@@ -4165,25 +4165,7 @@ async function initFlowStudio() {
   repairFlowStudioTranslations();
   syncFlowStudioFormDefaults();
   fsState.screens.forEach(ensureScreenBlocks);
-  renderFsMetaCaps();
   renderFlowStudio();
-}
-
-function renderFsMetaCaps() {
-  const box = $("fsMetaCapsBody");
-  const caps = fsState.schema?.metaCapabilities;
-  if (!box || !caps) return;
-  const noAlign = t("flows.studio.metaNoAlign");
-  const noBg = t("flows.studio.metaNoBg");
-  const comps = (caps.components || []).map((c) => `<span class="fs-meta-tag">${escapeHtml(c)}</span>`).join("");
-  box.innerHTML = `
-    <p><strong>${escapeHtml(t("flows.studio.metaLayout"))}</strong> ${escapeHtml(caps.layout)}</p>
-    <p><strong>${escapeHtml(t("flows.studio.metaText"))}</strong> ${escapeHtml(noAlign)} ${escapeHtml(t("flows.studio.metaTextStyles"))}: ${(caps.textStyles || []).join(", ")}.</p>
-    <p><strong>${escapeHtml(t("flows.studio.metaColors"))}</strong> ${escapeHtml(noBg)}</p>
-    <p><strong>${escapeHtml(t("flows.studio.metaImages"))}</strong> PNG/JPG · máx. ${caps.image?.maxKb || 100} KB · escala: ${(caps.image?.scaleTypes || []).join(" / ")}.</p>
-    <p><strong>${escapeHtml(t("flows.studio.metaBooking"))}</strong> ${escapeHtml(caps.dynamicBooking)}</p>
-    <p><strong>${escapeHtml(t("flows.studio.metaComponents"))}</strong></p>
-    <div>${comps}</div>`;
 }
 
 function fsActiveScreen() {
