@@ -55,7 +55,7 @@
   "launch": {
     "title": "Send to customer",
     "panelTitle": "Send to customers",
-    "panelIntro": "Uses the Meta-approved template. Just enter phone and variables.",
+    "panelIntro": "Opens send with the approved template linked to this Flow.",
     "send": "Send now",
     "sendPrimary": "Send to customer",
     "viewTour": "View tour",
@@ -66,7 +66,7 @@
     "readyFull": "Ready: will send template with tour («{tpl}»).",
     "readyInteractive": "Ready: will send message with published tour (interactive button).",
     "readyTextOnly": "Will send text template («{tpl}»).",
-    "blocked": "Flow or text template must be approved in Meta first.",
+    "blocked": "No approved template linked to this Flow. Request it in Templates.",
     "requestFlowTpl": "Request template with tour",
     "noPreset": "This Flow has no linked template. Send it from Chats → Template.",
     "sent": "Message sent to customer."

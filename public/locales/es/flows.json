@@ -55,7 +55,7 @@
   "launch": {
     "title": "Enviar a cliente",
     "panelTitle": "Enviar a clientes",
-    "panelIntro": "Usa la plantilla aprobada por Meta. Solo completa teléfono y variables.",
+    "panelIntro": "Abre el envío con la plantilla aprobada vinculada a este Flow.",
     "send": "Enviar ahora",
     "sendPrimary": "Enviar a cliente",
     "viewTour": "Ver tour",
@@ -66,7 +66,7 @@
     "readyFull": "Listo: se enviará la plantilla con tour («{tpl}»).",
     "readyInteractive": "Listo: se enviará el mensaje con el tour publicado (botón interactivo).",
     "readyTextOnly": "Se enviará la plantilla de texto («{tpl}»).",
-    "blocked": "Falta aprobar el Flow o la plantilla de texto en Meta.",
+    "blocked": "No hay plantilla aprobada vinculada a este Flow. Solicítala en Plantillas.",
     "requestFlowTpl": "Solicitar plantilla con tour",
     "noPreset": "Este Flow no tiene plantilla vinculada. Envíalo desde Conversaciones → Plantilla.",
     "sent": "Mensaje enviado al cliente."

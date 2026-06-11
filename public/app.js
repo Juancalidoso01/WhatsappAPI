@@ -2441,48 +2441,73 @@ function isFlowTemplateApproved(preset) {
   return Boolean(meta && meta.flow && meta.flow.approved && meta.flow.hasFlowButton);
 }
 
-async function phoneInServiceWindow(phone) {
-  if (!phone) return false;
-  try {
-    const detail = await api(`/api/conversations/${encodeURIComponent(phone)}/detail`);
-    if (!detail) return false;
-    if (detail.windowExpiresAt) return Date.now() < Number(detail.windowExpiresAt) * 1000;
-    if (detail.lastInbound) return Date.now() - Number(detail.lastInbound) < 24 * 60 * 60 * 1000;
-    return false;
-  } catch (_) {
-    return false;
+function presetForTemplateName(tplName) {
+  return state.templatePresets.find((p) => p.name === tplName || p.templateFlowName === tplName) || null;
+}
+
+function isTemplateApproved(tpl) {
+  return Boolean(tpl && String(tpl.status || "").toLowerCase() === "approved");
+}
+
+function preferredTemplateForPreset(preset) {
+  if (!preset) return null;
+  if (isFlowTemplateApproved(preset)) return preset.templateFlowName;
+  const textTpl = tplByName(preset.name);
+  if (isTemplateApproved(textTpl)) return preset.name;
+  return null;
+}
+
+function templateSendOptionLabel(tpl, preset) {
+  const bill = tpl.categoryInfo ? tpl.categoryInfo.billingLabel : String(tpl.category || "").toLowerCase();
+  const warn = tpl.categoryInfo && tpl.categoryInfo.impactsBilling ? " ⚠" : "";
+  const withTour = templateHasFlowButtonMeta(tpl);
+  const variant = withTour ? t("templates.ncVariantWithTour") : t("templates.ncVariantTextOnly");
+  if (preset) return `${preset.label} — ${variant} · ${bill}${warn}`;
+  return `${tpl.name} — ${variant} · ${bill}${warn}`;
+}
+
+function buildNcTemplateSelectHtml(approved) {
+  const groups = new Map();
+  const orphans = [];
+  approved.forEach((tpl) => {
+    const preset = presetForTemplateName(tpl.name);
+    if (preset) {
+      if (!groups.has(preset.key)) groups.set(preset.key, { preset, templates: [] });
+      groups.get(preset.key).templates.push(tpl);
+    } else {
+      orphans.push(tpl);
+    }
+  });
+  let html = "";
+  groups.forEach(({ preset, templates }) => {
+    const sorted = templates.slice().sort((a, b) => {
+      const af = templateHasFlowButtonMeta(a) ? 1 : 0;
+      const bf = templateHasFlowButtonMeta(b) ? 1 : 0;
+      return af - bf;
+    });
+    html += `<optgroup label="${escapeHtml(preset.label)}">`;
+    sorted.forEach((tpl) => {
+      html += `<option value="${escapeHtml(tpl.name)}">${escapeHtml(templateSendOptionLabel(tpl, preset))}</option>`;
+    });
+    html += "</optgroup>";
+  });
+  if (orphans.length) {
+    html += `<optgroup label="${escapeHtml(t("templates.ncOtherTemplates"))}">`;
+    orphans.forEach((tpl) => {
+      html += `<option value="${escapeHtml(tpl.name)}">${escapeHtml(templateSendOptionLabel(tpl, null))}</option>`;
+    });
+    html += "</optgroup>";
   }
+  return html;
 }
 
 function getNcPresetContext(tplName) {
-  const preset = state.templatePresets.find((p) => p.name === tplName || p.templateFlowName === tplName);
+  const preset = presetForTemplateName(tplName);
   if (!preset) return null;
-  const meta = presetMetaForKey(preset.key);
-  const isFlowTpl = tplName === preset.templateFlowName;
-  const flowApproved = isFlowTemplateApproved(preset);
-  const publishedFlow = findPublishedFlowForPreset(preset);
-  const flowPublished = Boolean(publishedFlow);
-  const canIncludeTour = Boolean(preset.templateFlowName && !isFlowTpl && (flowApproved || flowPublished));
   return {
     preset,
-    meta,
-    isFlowTpl,
-    flowApproved,
-    flowPublished,
-    canIncludeTour,
-    publishedFlowId: publishedFlow?.id || null,
-    flowTemplateName: preset.templateFlowName,
-    textTemplateName: preset.name,
+    isFlowTpl: tplName === preset.templateFlowName,
   };
-}
-
-function getNcEffectiveTemplateName() {
-  const sel = ($("ncTemplate") && $("ncTemplate").value) || "";
-  const ctx = getNcPresetContext(sel);
-  if (ctx && !ctx.isFlowTpl && $("ncIncludeFlow") && $("ncIncludeFlow").checked && ctx.flowApproved) {
-    return ctx.flowTemplateName;
-  }
-  return sel;
 }
 
 function collectNcPresetOverrides() {
@@ -2495,7 +2520,7 @@ function collectNcPresetOverrides() {
     const el = box.querySelector(`[data-field="body${i}"]`);
     if (el && el.value.trim()) overrides[`var${i}`] = el.value.trim();
   }
-  const preset = state.templatePresets.find((p) => p.name === tpl.name || p.templateFlowName === tpl.name);
+  const preset = presetForTemplateName(tpl.name);
   if (preset && preset.variables) {
     preset.variables.forEach((v, i) => {
       const val = overrides[`var${i + 1}`];
@@ -2508,7 +2533,7 @@ function collectNcPresetOverrides() {
 async function updateNcPreview() {
   const selected = ($("ncTemplate") && $("ncTemplate").value) || "";
   const ctx = getNcPresetContext(selected);
-  const effective = getNcEffectiveTemplateName();
+  const tpl = tplByName(selected);
   const waBox = $("ncWaPreview");
   const flowWrap = $("ncFlowPreviewWrap");
   if (!ctx || !waBox) {
@@ -2519,10 +2544,7 @@ async function updateNcPreview() {
   const q = new URLSearchParams(collectNcPresetOverrides()).toString();
   const res = await api(`/api/templates/presets/${encodeURIComponent(ctx.preset.key)}${q ? `?${q}` : ""}`);
   const preview = res && res.preview;
-  const includeFlow = $("ncIncludeFlow") && $("ncIncludeFlow").checked;
-  const showFlow = templateHasFlowButtonMeta(tplByName(effective))
-    || (ctx.canIncludeTour && includeFlow)
-    || ctx.isFlowTpl;
+  const showFlow = templateHasFlowButtonMeta(tpl);
   renderWaMessagePreview(waBox, {
     headerText: (preview && preview.headerText) || "",
     bodyText: (preview && preview.bodyText) || "—",
@@ -2536,31 +2558,6 @@ async function updateNcPreview() {
   } else if (flowWrap) {
     flowWrap.classList.add("hidden");
   }
-}
-
-function updateNcFlowSection() {
-  const tplName = ($("ncTemplate") && $("ncTemplate").value) || "";
-  const ctx = getNcPresetContext(tplName);
-  const section = $("ncFlowSection");
-  const cb = $("ncIncludeFlow");
-  const readyHint = $("ncFlowReadyHint");
-  if (!section) return;
-  section.classList.remove("is-ready");
-  const showFlowMix = ctx && ctx.canIncludeTour;
-  if (!showFlowMix) {
-    section.classList.add("hidden");
-    if (cb) cb.checked = false;
-    updateNcPreview();
-    return;
-  }
-  section.classList.remove("hidden");
-  section.classList.add("is-ready");
-  if (cb && !cb.dataset.touched) cb.checked = true;
-  if (readyHint) {
-    if (ctx.flowApproved) readyHint.textContent = t("templates.ncFlowReadyTemplate");
-    else readyHint.textContent = t("templates.ncFlowReadyInteractive");
-  }
-  updateNcPreview();
 }
 
 async function ensureNcFlowPreviewProfile(tplName) {
@@ -2583,39 +2580,36 @@ async function openNewChat(prefillName, opts) {
   $("ncFields").innerHTML = "";
   renderVariableGuide($("ncVarGuide"), []);
   $("ncVarGuideWrap")?.classList.add("hidden");
-  if ($("ncIncludeFlow")) {
-    $("ncIncludeFlow").checked = false;
-    delete $("ncIncludeFlow").dataset.touched;
-  }
-  $("ncFlowSection")?.classList.add("hidden");
   sel.innerHTML = `<option>${escapeHtml(t("common.loading"))}</option>`;
   if (!state.templates.length) await loadTemplates();
   if (!state.templatePresets.length) await loadTemplatePresets();
   if (!state.flows.length) await loadFlows();
-  const approved = state.templates.filter((t) => (t.status || "").toLowerCase() === "approved");
+  const approved = state.templates.filter((t) => isTemplateApproved(t));
   if (!approved.length) {
     sel.innerHTML = `<option value="">${escapeHtml(t("bulk.noApprovedTemplates"))}</option>`;
     hint.className = "hint error";
     hint.textContent = t("templates.ncNoApprovedHint");
     return;
   }
-  sel.innerHTML = approved
-    .map((t) => {
-      const bill = t.categoryInfo ? t.categoryInfo.billingLabel : String(t.category || "").toLowerCase();
-      const warn = t.categoryInfo && t.categoryInfo.impactsBilling ? " ⚠" : "";
-      const hasFlow = templateHasFlowButtonMeta(t) ? " · Flow" : "";
-      return `<option value="${escapeHtml(t.name)}">${escapeHtml(t.name)} · ${escapeHtml(bill)}${hasFlow}${warn}</option>`;
-    })
-    .join("");
-  if (prefillName && approved.some((t) => t.name === prefillName)) sel.value = prefillName;
+  sel.innerHTML = buildNcTemplateSelectHtml(approved);
+  let pick = prefillName || "";
+  if (!pick && opts && opts.presetKey) {
+    const preset = state.templatePresets.find((p) => p.key === opts.presetKey);
+    pick = preferredTemplateForPreset(preset) || "";
+  }
+  if (pick && approved.some((t) => t.name === pick)) sel.value = pick;
+  else if (opts && opts.preferFlow) {
+    const flowTpl = approved.find((t) => templateHasFlowButtonMeta(t));
+    if (flowTpl) sel.value = flowTpl.name;
+  }
   if (opts && opts.phone && $("ncPhone")) $("ncPhone").value = opts.phone;
   if (opts && opts.name && $("ncName")) $("ncName").value = opts.name;
-  else if (state.activePhone && $("ncPhone") && !($("ncPhone").value)) $("ncPhone").value = state.activePhone;
+  else if (state.activePhone && $("ncPhone") && !$("ncPhone").value) $("ncPhone").value = state.activePhone;
   updateNewChatCategoryHint();
   renderTemplateFields(tplByName(sel.value));
   syncNcNameToBodyVar();
   await ensureNcFlowPreviewProfile(sel.value);
-  updateNcFlowSection();
+  await updateNcPreview();
 }
 
 function updateNewChatCategoryHint() {
@@ -2636,58 +2630,32 @@ function updateNewChatCategoryHint() {
 
 async function sendNewChat() {
   const phone = $("ncPhone").value.replace(/[^0-9]/g, "");
-  const selTpl = ($("ncTemplate") && $("ncTemplate").value) || "";
-  const ctx = getNcPresetContext(selTpl);
-  const includeFlow = $("ncIncludeFlow") && $("ncIncludeFlow").checked && ctx && ctx.canIncludeTour;
+  const tplName = ($("ncTemplate") && $("ncTemplate").value) || "";
   const overrides = collectNcPresetOverrides();
   const name = overrides.nombre_cliente || overrides.var1 || $("ncName").value.trim();
-  if (!phone) { toast(t("toast.phoneAndTemplateRequired"), "error"); return; }
-
-  const inWindow = await phoneInServiceWindow(phone);
-  const useInteractive = Boolean(
-    includeFlow && ctx && ctx.flowPublished && !ctx.flowApproved && ctx.publishedFlowId && inWindow
-  );
-  let sentTextOnlyFallback = false;
-
-  let res;
-  if (useInteractive) {
-    const q = new URLSearchParams(overrides).toString();
-    const presetRes = await api(`/api/templates/presets/${encodeURIComponent(ctx.preset.key)}${q ? `?${q}` : ""}`);
-    const preview = (presetRes && presetRes.preview) || {};
-    const screen = (state.flowSendProfile && state.flowSendProfile.defaultScreen) || "INTRO";
-    res = await post(`/api/flows/${encodeURIComponent(ctx.publishedFlowId)}/send`, {
-      phone,
-      headerText: preview.headerText || "",
-      bodyText: preview.bodyText || "",
-      footerText: preview.footerText || "",
-      cta: ctx.preset.flowCta || "Conocer tarjeta",
-      screen,
-    });
-  } else {
-    if (includeFlow && ctx && !ctx.flowApproved) sentTextOnlyFallback = true;
-    const tplName = getNcEffectiveTemplateName();
-    if (!tplName) { toast(t("toast.phoneAndTemplateRequired"), "error"); return; }
-    const tpl = tplByName(tplName) || tplByName(selTpl);
-    const components = tpl ? collectComponents(tpl) : [];
-    const bodyN = tpl ? bodyVarCount(tpl) : 0;
-    if (bodyN > 0) {
-      const missing = [];
-      for (let i = 1; i <= bodyN; i++) {
-        const el = $("ncFields") && $("ncFields").querySelector(`[data-field="body${i}"], [data-fl-index="${i}"]`);
-        if (!el || !el.value.trim()) missing.push(i);
-      }
-      if (missing.length) {
+  if (!phone || !tplName) { toast(t("toast.phoneAndTemplateRequired"), "error"); return; }
+  const tpl = tplByName(tplName);
+  const components = tpl ? collectComponents(tpl) : [];
+  const bodyN = tpl ? bodyVarCount(tpl) : 0;
+  if (bodyN > 0) {
+    for (let i = 1; i <= bodyN; i++) {
+      const el = $("ncFields") && $("ncFields").querySelector(`[data-field="body${i}"]`);
+      if (!el || !el.value.trim()) {
         toast(t("templates.ncMissingVars"), "error");
         return;
       }
     }
-    res = await post("/api/send-template", { phone, name, template: tplName, language: tpl ? tpl.language : "es", components });
   }
-
+  const res = await post("/api/send-template", {
+    phone,
+    name,
+    template: tplName,
+    language: tpl ? tpl.language : "es",
+    components,
+  });
   if (res.ok) {
     closeModals();
-    if (sentTextOnlyFallback) toast(t("templates.ncSentTextOnlyCold"), "ok");
-    else toast(t("toast.templateSent"), "ok");
+    toast(t("toast.templateSent"), "ok");
     switchScreen("chats");
     await loadConversations();
     openConversation(phone, name || phone);
@@ -4508,12 +4476,8 @@ function buildFlowLaunchContext(perfRes) {
   const flowPublished = flowStatus === "PUBLISHED";
   const textApproved = Boolean(meta && meta.text && meta.text.approved);
   const flowApproved = preset ? isFlowTemplateApproved(preset) : false;
-  const useFlowTemplate = flowApproved;
-  const useInteractiveFlow = flowPublished && !flowApproved;
-  const effectiveTemplateName = preset
-    ? (useFlowTemplate ? preset.templateFlowName : preset.name)
-    : null;
-  const canSend = Boolean(preset && textApproved && flowPublished);
+  const preferredTemplateName = preset ? preferredTemplateForPreset(preset) : null;
+  const canSend = Boolean(preferredTemplateName);
   return {
     presetKey,
     preset,
@@ -4521,12 +4485,8 @@ function buildFlowLaunchContext(perfRes) {
     flowPublished,
     textApproved,
     flowApproved,
-    useFlowTemplate,
-    useInteractiveFlow,
-    effectiveTemplateName,
+    preferredTemplateName,
     canSend,
-    hasFlowVariant: Boolean(preset && preset.templateFlowName),
-    publishedFlowId: state.activeFlowId || null,
   };
 }
 
@@ -4560,7 +4520,6 @@ async function renderFlowLaunchPanel(perfRes) {
   if (ctx.flowPublished) chips.push(flowLaunchChip(t("flows.launch.chipFlow"), "ok"));
   if (ctx.textApproved) chips.push(flowLaunchChip(t("flows.launch.chipTextTpl"), "ok"));
   if (ctx.flowApproved) chips.push(flowLaunchChip(t("flows.launch.chipFlowTpl"), "ok"));
-  else if (ctx.flowPublished) chips.push(flowLaunchChip(t("flows.launch.chipFlowTpl"), "ok"));
   panel.classList.remove("hidden");
   panel.innerHTML = `
     <h4>${escapeHtml(t("flows.launch.panelTitle"))}</h4>
@@ -4570,172 +4529,17 @@ async function renderFlowLaunchPanel(perfRes) {
       <button type="button" class="btn-primary" id="flowLaunchOpenBtn" ${ctx.canSend ? "" : "disabled"}>${escapeHtml(t("flows.launch.sendPrimary"))}</button>
       <button type="button" class="btn-ghost sm" id="flowLaunchViewBtn">${escapeHtml(t("flows.launch.viewTour"))}</button>
     </div>`;
-  $("flowLaunchOpenBtn")?.addEventListener("click", openFlowLaunchModal);
+  $("flowLaunchOpenBtn")?.addEventListener("click", openFlowLaunchFromPanel);
   $("flowLaunchViewBtn")?.addEventListener("click", openFlowViewModal);
 }
 
-function collectFlowLaunchOverrides() {
-  const box = $("flVarFields");
-  const overrides = {};
-  if (!box) return overrides;
-  box.querySelectorAll("[data-fl-var]").forEach((el) => {
-    const key = el.dataset.flVar;
-    const idx = el.dataset.flIndex;
-    const val = el.value.trim();
-    if (!val) return;
-    if (key) overrides[key] = val;
-    if (idx) overrides[`var${idx}`] = val;
-  });
-  return overrides;
-}
-
-function collectFlComponents(tpl) {
-  const box = $("flVarFields");
-  const val = (f) => {
-    const el = box && box.querySelector(`[data-field="${f}"]`);
-    if (el && el.value.trim()) return el.value.trim();
-    const m = f.match(/^body(\d+)$/);
-    if (m && box) {
-      const byIdx = box.querySelector(`[data-fl-index="${m[1]}"]`);
-      if (byIdx && byIdx.value.trim()) return byIdx.value.trim();
-    }
-    return "";
-  };
-  const comps = [];
-  const hs = headerSpec(tpl);
-  if (hs && hs.kind === "text" && val("header")) comps.push({ type: "header", parameters: [{ type: "text", text: val("header") }] });
-  if (hs && hs.kind === "media" && val("headerMedia")) {
-    const k = hs.format.toLowerCase();
-    comps.push({ type: "header", parameters: [{ type: k, [k]: { link: val("headerMedia") } }] });
-  }
-  const n = bodyVarCount(tpl);
-  if (n > 0) {
-    const params = [];
-    for (let i = 1; i <= n; i++) params.push({ type: "text", text: val("body" + i) || " " });
-    comps.push({ type: "body", parameters: params });
-  }
-  buttonSpecs(tpl).forEach((s) => {
-    if (s.kind === "url") comps.push({ type: "button", sub_type: "url", index: String(s.idx), parameters: [{ type: "text", text: val("btnurl" + s.idx) }] });
-    else if (s.kind === "copy") comps.push({ type: "button", sub_type: "copy_code", index: String(s.idx), parameters: [{ type: "coupon_code", coupon_code: val("btncode" + s.idx) }] });
-    else if (s.kind === "flow") comps.push({ type: "button", sub_type: "flow", index: String(s.idx), parameters: [{ type: "action", action: { flow_token: val("flow" + s.idx) || "unused" } }] });
-  });
-  return comps;
-}
-
-function renderFlowLaunchVarFields(preset) {
-  const box = $("flVarFields");
-  if (!box) return;
-  const vars = (preset && preset.variables) || [];
-  if (!vars.length) {
-    box.innerHTML = "";
+function openFlowLaunchFromPanel() {
+  const ctx = state.flowLaunchContext || buildFlowLaunchContext(state.activeFlowPerformance);
+  if (!ctx.canSend || !ctx.preferredTemplateName) {
+    toast(t("templates.ncNoApprovedHint"), "error");
     return;
   }
-  box.innerHTML = vars.map((v, i) => `
-    <label><span>${escapeHtml(v.label || v.key)}</span>
-      <input type="text" data-fl-var="${escapeHtml(v.key)}" data-fl-index="${i + 1}" placeholder="${escapeHtml(v.example || "")}" ${v.maxLength ? `maxlength="${v.maxLength}"` : ""} />
-    </label>`).join("");
-  box.querySelectorAll("input").forEach((inp) => inp.addEventListener("input", updateFlowLaunchPreview));
-}
-
-function flowLaunchStatusMessage(ctx) {
-  if (!ctx.canSend) return { cls: "partial", text: t("flows.launch.blocked") };
-  if (ctx.flowApproved) return { cls: "ready", text: t("flows.launch.readyFull", { tpl: ctx.effectiveTemplateName }) };
-  if (ctx.useInteractiveFlow) return { cls: "ready", text: t("flows.launch.readyInteractive") };
-  return { cls: "ready", text: t("flows.launch.readyTextOnly", { tpl: ctx.effectiveTemplateName }) };
-}
-
-async function updateFlowLaunchPreview() {
-  const ctx = state.flowLaunchContext || buildFlowLaunchContext(state.activeFlowPerformance);
-  const waBox = $("flWaPreview");
-  const flowWrap = $("flFlowPreviewWrap");
-  if (!waBox || !ctx.preset) return;
-  const q = new URLSearchParams(collectFlowLaunchOverrides()).toString();
-  const res = await api(`/api/templates/presets/${encodeURIComponent(ctx.preset.key)}${q ? `?${q}` : ""}`);
-  const preview = res && res.preview;
-  const showFlow = ctx.useFlowTemplate || ctx.useInteractiveFlow
-    || templateHasFlowButtonMeta(tplByName(ctx.effectiveTemplateName));
-  renderWaMessagePreview(waBox, {
-    headerText: (preview && preview.headerText) || "",
-    bodyText: (preview && preview.bodyText) || "—",
-    footerText: (preview && preview.footerText) || "",
-    flowCta: showFlow ? ((preview && preview.flowCta) || ctx.preset.flowCta) : "",
-  });
-  if (flowWrap && showFlow && state.flowSendProfile) {
-    flowWrap.classList.remove("hidden");
-    const screenId = state.flowSendProfile.defaultScreen || "INTRO";
-    renderFlowScreenPreview($("flFlowPreview"), screenId, state.flowSendProfile);
-  } else if (flowWrap) {
-    flowWrap.classList.add("hidden");
-  }
-}
-
-async function openFlowLaunchModal() {
-  if (window.I18n) await I18n.ensureModules(["templates", "modals"]);
-  const ctx = state.flowLaunchContext || buildFlowLaunchContext(state.activeFlowPerformance);
-  if (!ctx.canSend) {
-    toast(t("flows.launch.blocked"), "error");
-    return;
-  }
-  if (!state.templates.length) await loadTemplates();
-  const flowName = ($("flowsDetailName") && $("flowsDetailName").textContent) || "";
-  const sub = $("flowLaunchSubtitle");
-  if (sub) sub.textContent = flowName;
-  const status = flowLaunchStatusMessage(ctx);
-  const statusEl = $("flowLaunchStatus");
-  if (statusEl) {
-    statusEl.className = `flow-launch-status ${status.cls}`;
-    statusEl.textContent = status.text;
-  }
-  renderFlowLaunchVarFields(ctx.preset);
-  if ($("flPhone") && state.activePhone && !$("flPhone").value) $("flPhone").value = state.activePhone;
-  await updateFlowLaunchPreview();
-  showModal("modalFlowLaunch");
-}
-
-async function sendFlowLaunch() {
-  const ctx = state.flowLaunchContext || buildFlowLaunchContext(state.activeFlowPerformance);
-  const phone = ($("flPhone") && $("flPhone").value || "").replace(/[^0-9]/g, "");
-  if (!phone) { toast(t("toast.phoneAndTemplateRequired"), "error"); return; }
-  const overrides = collectFlowLaunchOverrides();
-  const name = overrides.nombre_cliente || overrides.var1 || "";
-  const inWindow = await phoneInServiceWindow(phone);
-  const useInteractive = Boolean(ctx.useInteractiveFlow && ctx.publishedFlowId && inWindow);
-  let res;
-  if (useInteractive) {
-    const q = new URLSearchParams(overrides).toString();
-    const presetRes = await api(`/api/templates/presets/${encodeURIComponent(ctx.preset.key)}${q ? `?${q}` : ""}`);
-    const preview = (presetRes && presetRes.preview) || {};
-    const screen = (state.flowSendProfile && state.flowSendProfile.defaultScreen) || "INTRO";
-    res = await post(`/api/flows/${encodeURIComponent(ctx.publishedFlowId)}/send`, {
-      phone,
-      headerText: preview.headerText || "",
-      bodyText: preview.bodyText || "",
-      footerText: preview.footerText || "",
-      cta: ctx.preset.flowCta || "Conocer tarjeta",
-      screen,
-    });
-  } else {
-    const tplName = ctx.effectiveTemplateName;
-    if (!tplName) { toast(t("toast.phoneAndTemplateRequired"), "error"); return; }
-    const tpl = tplByName(tplName);
-    const components = tpl ? collectFlComponents(tpl) : [];
-    res = await post("/api/send-template", {
-      phone,
-      name,
-      template: tplName,
-      language: tpl ? tpl.language : "es",
-      components,
-    });
-  }
-  if (res.ok) {
-    closeModals();
-    toast(t("flows.launch.sent"), "ok");
-    switchScreen("chats");
-    await loadConversations();
-    openConversation(phone, name || phone);
-  } else {
-    toast(t("toast.sendFailed", { error: res.error || res.warning || "error" }), "error");
-  }
+  openNewChat(ctx.preferredTemplateName, { presetKey: ctx.presetKey });
 }
 
 async function loadFlowSendProfile(flowId) {
@@ -5137,16 +4941,9 @@ function bindEvents() {
     syncNcNameToBodyVar();
     updateNewChatCategoryHint();
     await ensureNcFlowPreviewProfile(e.target.value);
-    updateNcFlowSection();
+    await updateNcPreview();
   });
   $("ncName")?.addEventListener("input", syncNcNameToBodyVar);
-  const ncIncludeFlow = $("ncIncludeFlow");
-  if (ncIncludeFlow) {
-    ncIncludeFlow.addEventListener("change", () => {
-      ncIncludeFlow.dataset.touched = "1";
-      updateNcFlowSection();
-    });
-  }
   $("ncFields")?.addEventListener("input", () => updateNcPreview());
   $("ncSend").addEventListener("click", sendNewChat);
   $("attachBtn").addEventListener("click", () => showModal("modalMedia"));
@@ -5316,8 +5113,6 @@ function bindEvents() {
     if (el) el.addEventListener("input", updateTpPreview);
   });
   $("flowPublishBtn")?.addEventListener("click", publishActiveFlow);
-  $("flSendBtn")?.addEventListener("click", sendFlowLaunch);
-  $("flPhone")?.addEventListener("input", updateFlowLaunchPreview);
   $("flowRefreshResponses")?.addEventListener("click", loadFlowActivity);
   if ($("flowEndpointSetupBtn")) $("flowEndpointSetupBtn").addEventListener("click", setupFlowEndpoint);
   if ($("payAuthSendBtn")) $("payAuthSendBtn").addEventListener("click", sendPaymentAuthTest);

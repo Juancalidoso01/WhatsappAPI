@@ -871,13 +871,6 @@
           <label><span data-i18n="modals.newChat.template">Plantilla</span>
             <select id="ncTemplate"></select>
           </label>
-          <div id="ncFlowSection" class="nc-flow-section hidden">
-            <label class="nc-flow-toggle">
-              <input type="checkbox" id="ncIncludeFlow" />
-              <span data-i18n="templates.ncIncludeFlow">Incluir tour interactivo</span>
-            </label>
-            <p class="muted sm" id="ncFlowReadyHint"></p>
-          </div>
           <div id="ncFields" class="tpl-fields nc-fields"></div>
           <details id="ncVarGuideWrap" class="nc-var-guide-wrap hidden">
             <summary data-i18n="templates.ncVarGuideToggle">Ver leyenda de variables</summary>
@@ -887,7 +880,7 @@
         </div>
         <aside class="nc-preview-col">
           <h4 class="flows-send-section-title" data-i18n="templates.ncPreviewTitle">Vista previa aprobada</h4>
-          <p class="muted sm" data-i18n="templates.ncPreviewHint">Mensaje y tour tal como los aprobó Meta. Solo puedes cambiar variables (ej. nombre).</p>
+          <p class="muted sm" data-i18n="templates.ncPreviewHint">Elige una plantilla aprobada. Solo completa teléfono y variables.</p>
           <div id="ncWaPreview"></div>
           <div id="ncFlowPreviewWrap" class="hidden">
             <h4 class="flows-send-section-title flows-send-flow-title" data-i18n="flows.sendPreviewFlow">Pantalla del Flow</h4>
@@ -975,41 +968,6 @@
       <div class="modal-actions">
         <button class="btn-ghost" data-close data-i18n="common.close">Cerrar</button>
         <button type="button" id="tplDraftCreateBtn" class="btn-primary" data-i18n="modals.draftModal.requestMeta">Solicitar en Meta</button>
-      </div>
-    </div>
-  </div>
-
-  <div id="modalFlowLaunch" class="modal hidden">
-    <div class="modal-card modal-card-flow-send">
-      <div class="flow-send-modal-head">
-        <div>
-          <h3 id="flowLaunchTitle" data-i18n="flows.launch.title">Enviar a cliente</h3>
-          <p class="muted sm" id="flowLaunchSubtitle"></p>
-        </div>
-        <button type="button" class="icon-btn ghost" data-close aria-label="Cerrar">
-          <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M18.3 5.71a1 1 0 0 0-1.41 0L12 10.59 7.11 5.7A1 1 0 0 0 5.7 7.11L10.59 12l-4.89 4.89a1 1 0 1 0 1.41 1.42L12 13.41l4.89 4.89a1 1 0 0 0 1.42-1.41L13.41 12l4.89-4.89a1 1 0 0 0-.01-1.4z"/></svg>
-        </button>
-      </div>
-      <div id="flowLaunchStatus" class="flow-launch-status"></div>
-      <div class="flows-send-layout flow-launch-layout">
-        <div class="flow-launch-form">
-          <label><span data-i18n="flows.phone">Teléfono</span>
-            <input id="flPhone" type="tel" placeholder="50761234567" autocomplete="tel" />
-          </label>
-          <div id="flVarFields"></div>
-        </div>
-        <aside class="flow-launch-preview">
-          <p class="muted sm" data-i18n="flows.launch.previewHint">Vista de lo que Meta aprobó. El texto del mensaje no se edita aquí.</p>
-          <div id="flWaPreview"></div>
-          <div id="flFlowPreviewWrap" class="hidden">
-            <h4 class="flows-send-section-title flows-send-flow-title" data-i18n="flows.sendPreviewFlow">Pantalla del Flow</h4>
-            <div id="flFlowPreview"></div>
-          </div>
-        </aside>
-      </div>
-      <div class="modal-actions flow-send-modal-actions">
-        <button type="button" class="btn-ghost" data-close data-i18n="common.cancel">Cancelar</button>
-        <button type="button" id="flSendBtn" class="btn-primary" data-i18n="flows.launch.send">Enviar ahora</button>
       </div>
     </div>
   </div>
