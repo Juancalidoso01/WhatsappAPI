@@ -112,5 +112,18 @@
   "tplBtnCode": "Button code “{text}”",
   "tplBtnFlow": "Flow token “{text}” (optional)",
   "waPreviewNote": "Preview · Flow opens when tapping the button",
-  "sendBtn": "Send"
+  "sendBtn": "Send",
+  "quality": {
+    "green": "High quality",
+    "yellow": "Medium quality",
+    "red": "Low quality"
+  },
+  "deleteBtn": "Delete",
+  "deleteConfirm": "Delete template «{name}» on Meta? This cannot be undone.",
+  "deleteOk": "Template «{name}» deleted.",
+  "deleteFailed": "Could not delete the template.",
+  "submittingMeta": "Submitting to Meta…",
+  "submitMetaOk": "Template «{name}» submitted for Meta review.",
+  "submitMetaFailed": "Could not submit the template to Meta.",
+  "presetAlreadySubmitted": "All variants already submitted. Sync to see status."
 }

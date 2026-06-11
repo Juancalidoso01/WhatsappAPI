@@ -112,5 +112,18 @@
   "tplBtnCode": "Código del botón “{text}”",
   "tplBtnFlow": "Token del Flow “{text}” (opcional)",
   "waPreviewNote": "Vista previa · el Flow se abre al tocar el botón",
-  "sendBtn": "Enviar"
+  "sendBtn": "Enviar",
+  "quality": {
+    "green": "Calidad alta",
+    "yellow": "Calidad media",
+    "red": "Calidad baja"
+  },
+  "deleteBtn": "Eliminar",
+  "deleteConfirm": "¿Eliminar la plantilla «{name}» en Meta? Esta acción no se puede deshacer.",
+  "deleteOk": "Plantilla «{name}» eliminada.",
+  "deleteFailed": "No se pudo eliminar la plantilla.",
+  "submittingMeta": "Enviando a Meta…",
+  "submitMetaOk": "Plantilla «{name}» enviada a revisión de Meta.",
+  "submitMetaFailed": "No se pudo enviar la plantilla a Meta.",
+  "presetAlreadySubmitted": "Todas las variantes ya fueron enviadas. Sincroniza para ver el estado."
 }

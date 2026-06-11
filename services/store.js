@@ -394,6 +394,21 @@ async function getAllTemplateMeta() {
   return out;
 }
 
+async function updateTemplateStatusFromWebhook({ name, language, status, reason }) {
+  const key = templateKey(name, language);
+  const prev = await readTemplateMetaEntry(key);
+  const st = String(status || "").toUpperCase();
+  const next = {
+    ...prev,
+    lastStatus: st,
+    lastStatusAt: Date.now(),
+    updatedAt: Date.now(),
+  };
+  if (reason) next.lastRejectionReason = String(reason);
+  if (st === "APPROVED") delete next.lastRejectionReason;
+  await writeTemplateMetaEntry(key, next);
+}
+
 module.exports = {
   addMessage,
   updateMessageId,
@@ -408,5 +423,6 @@ module.exports = {
   isPersistent,
   setTemplateRequestedCategory,
   updateTemplateCategoryFromWebhook,
+  updateTemplateStatusFromWebhook,
   getAllTemplateMeta,
 };

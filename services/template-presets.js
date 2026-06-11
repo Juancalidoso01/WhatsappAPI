@@ -380,12 +380,16 @@ function tplStatusRow(tpl, { notSubmittedLabel = "Sin enviar" } = {}) {
   if (!tpl) return { status: "NOT_SUBMITTED", label: notSubmittedLabel, approved: false };
   const status = String(tpl.status || "UNKNOWN").toUpperCase();
   const labels = { APPROVED: "Aprobada", PENDING: "En revisión", REJECTED: "Rechazada" };
+  const qualityScore = tpl.quality_score && tpl.quality_score.score
+    ? String(tpl.quality_score.score).toUpperCase()
+    : null;
   return {
     name: tpl.name,
     status,
     label: labels[status] || status,
     approved: status === "APPROVED",
     id: tpl.id,
+    qualityScore,
   };
 }
 

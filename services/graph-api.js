@@ -292,6 +292,11 @@ module.exports = class GraphApi {
     });
   }
 
+  static async deleteTemplate(wabaId, name) {
+    const api = getApi();
+    return api.call("DELETE", [`${wabaId}`, "message_templates"], { name });
+  }
+
   // --- WhatsApp Flows ---
   static async listFlows(wabaId) {
     const fields = "id,name,status,categories,updated_time";

@@ -299,6 +299,32 @@ function buildComponents({ headerText, bodyText, footerText, variables, headerHa
   };
 }
 
+/** Meta AUTHENTICATION category (OTP copy-code button, no {{n}} in body). */
+function buildAuthenticationComponents({
+  addSecurityRecommendation = true,
+  codeExpirationMinutes = 10,
+  otpButtonText = "Copiar código",
+} = {}) {
+  const components = [
+    { type: "BODY", add_security_recommendation: Boolean(addSecurityRecommendation) },
+    { type: "FOOTER", code_expiration_minutes: Math.min(90, Math.max(1, Number(codeExpirationMinutes) || 10)) },
+    {
+      type: "BUTTONS",
+      buttons: [{
+        type: "OTP",
+        otp_type: "COPY_CODE",
+        text: String(otpButtonText || "Copiar código").slice(0, 25),
+      }],
+    },
+  ];
+  return {
+    ok: true,
+    components,
+    eventVariableKeys: ["codigo_otp"],
+    placeholderCount: 0,
+  };
+}
+
 module.exports = {
   LIMITS,
   COMMON_EMOJIS,
@@ -308,6 +334,7 @@ module.exports = {
   validateSequential,
   validateTemplateDraft,
   buildComponents,
+  buildAuthenticationComponents,
   validateEmojiCompatibility,
   validateFieldLength,
   displayLength,

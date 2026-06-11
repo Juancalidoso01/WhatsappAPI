@@ -1624,19 +1624,29 @@ function templateTypeLabel(tpl) {
 
 function renderTemplateRow(tpl, i, list) {
   const st = (tpl.status || "").toLowerCase();
+  const stUpper = (tpl.status || "").toUpperCase();
   const cls = st === "approved" ? "approved" : st === "rejected" ? "rejected" : "pending";
   const canSend = st === "approved";
+  const canDelete = ["REJECTED", "PAUSED", "DISABLED"].includes(stUpper);
   const isFlowTpl = templateHasFlowButtonMeta(tpl);
-  const src = list || state.templates;
+  const q = tpl.quality_score && tpl.quality_score.score;
+  const rejectReason = tpl.localMeta && tpl.localMeta.lastRejectionReason;
   return `<tr class="tpl-row${isFlowTpl ? " tpl-row-flow" : ""}" data-i="${i}">
     <td class="tpl-name-cell"><span class="tpl-table-name">${escapeHtml(tpl.name)}</span></td>
     <td>${escapeHtml(templateTypeLabel(tpl))}</td>
-    <td><span class="status-badge ${cls}">${escapeHtml(tpl.status || "—")}</span></td>
+    <td>
+      <span class="status-badge ${cls}">${escapeHtml(tpl.status || "—")}</span>
+      ${qualityScoreBadge(q)}
+      ${stUpper === "REJECTED" && rejectReason ? `<span class="tpl-reject-reason">${escapeHtml(rejectReason)}</span>` : ""}
+    </td>
     <td>${isFlowTpl ? `<span class="tpl-flow-link-tag">${escapeHtml(t("templates.linkedFlow"))}</span>` : "—"}</td>
     <td class="tpl-action-cell">
       ${canSend
     ? `<button type="button" class="btn-ghost sm tpl-send-btn" data-i="${i}">${escapeHtml(t("templates.sendBtn"))}</button>`
-    : `<span class="muted">—</span>`}
+    : ""}
+      ${canDelete
+    ? `<button type="button" class="btn-ghost sm tpl-delete-btn" data-name="${escapeHtml(tpl.name)}">${escapeHtml(t("templates.deleteBtn"))}</button>`
+    : (!canSend ? `<span class="muted">—</span>` : "")}
     </td>
   </tr>`;
 }
@@ -1677,6 +1687,32 @@ function renderTplProductGrid() {
     btn.addEventListener("click", () => {
       const presetKey = btn.closest(".tpl-product-card")?.querySelector(".tpl-preview-btn")?.dataset.preset;
       openNewChat(btn.dataset.tpl, { presetKey });
+    });
+  });
+  bindTemplateDeleteButtons(box);
+}
+
+async function deleteTemplateByName(name, btn) {
+  if (!name) return;
+  if (!window.confirm(t("templates.deleteConfirm", { name }))) return;
+  if (btn) btn.disabled = true;
+  const res = await del(`/api/templates/${encodeURIComponent(name)}`);
+  if (!res.ok) {
+    toast(res.error || t("templates.deleteFailed"), "error");
+    if (btn) btn.disabled = false;
+    return;
+  }
+  toast(t("templates.deleteOk", { name }), "ok");
+  await refreshTemplatesScreen();
+}
+
+function bindTemplateDeleteButtons(root) {
+  (root || document).querySelectorAll(".tpl-delete-btn").forEach((btn) => {
+    if (btn.dataset.boundDelete) return;
+    btn.dataset.boundDelete = "1";
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      deleteTemplateByName(btn.dataset.name, btn);
     });
   });
 }
@@ -1721,6 +1757,7 @@ function renderTplOtherList() {
       openNewChat(orphans[Number(btn.dataset.i)].name);
     })
   );
+  bindTemplateDeleteButtons(list);
 }
 
 function renderTemplatesScreen() {
@@ -1973,20 +2010,59 @@ function metaStatusBadge(status, fallbackLabel) {
   return `<span class="status-badge ${cls}">${escapeHtml(text)}</span>`;
 }
 
+function tplLookupByName(name) {
+  if (!name) return null;
+  return state.templates.find((tpl) => tpl.name === name) || null;
+}
+
+function qualityScoreBadge(score) {
+  const q = String(score || "").toUpperCase();
+  if (!q || q === "UNKNOWN") return "";
+  const cls = q === "GREEN" ? "quality-green" : q === "YELLOW" ? "quality-yellow" : q === "RED" ? "quality-red" : "";
+  if (!cls) return "";
+  const labelKey = `templates.quality.${q.toLowerCase()}`;
+  const label = t(labelKey);
+  return `<span class="tpl-quality ${cls}">${escapeHtml(label !== labelKey ? label : q)}</span>`;
+}
+
+function tplRejectionReasonHtml(name) {
+  const tpl = tplLookupByName(name);
+  const reason = tpl?.localMeta?.lastRejectionReason;
+  if (!reason) return "";
+  return `<span class="tpl-reject-reason">${escapeHtml(reason)}</span>`;
+}
+
+function variantDeleteBtn(name, status) {
+  const st = String(status || "").toUpperCase();
+  if (!name || !["REJECTED", "PAUSED", "DISABLED"].includes(st)) return "";
+  return `<button type="button" class="btn-ghost sm tpl-delete-btn" data-name="${escapeHtml(name)}" title="${escapeHtml(t("templates.deleteBtn"))}">×</button>`;
+}
+
 function presetVariantRowsHtml(preset, ms) {
   if (!preset) return "";
   const textSt = (ms && ms.text && ms.text.status) || "NOT_SUBMITTED";
+  const textName = preset.name;
+  const textQ = (ms && ms.text && ms.text.qualityScore) || tplLookupByName(textName)?.quality_score?.score;
   const flowName = preset.templateFlowName;
   const flowSt = flowName && ms && ms.flow ? ms.flow.status : "NOT_SUBMITTED";
+  const flowQ = flowName && ms && ms.flow && ms.flow.qualityScore
+    ? ms.flow.qualityScore
+    : (flowName ? tplLookupByName(flowName)?.quality_score?.score : null);
   const catKey = String(preset.category || "UTILITY").toLowerCase();
   let rows = `<div class="tpl-variant-row">
     <span class="tpl-variant-type">${escapeHtml(t("templates.typeText"))}</span>
     ${metaStatusBadge(textSt)}
+    ${qualityScoreBadge(textQ)}
+    ${variantDeleteBtn(textName, textSt)}
+    ${textSt === "REJECTED" ? tplRejectionReasonHtml(textName) : ""}
   </div>`;
   if (flowName) {
     rows += `<div class="tpl-variant-row">
       <span class="tpl-variant-type">${escapeHtml(t("templates.typeTour"))}</span>
       ${metaStatusBadge(flowSt)}
+      ${qualityScoreBadge(flowQ)}
+      ${variantDeleteBtn(flowName, flowSt)}
+      ${flowSt === "REJECTED" ? tplRejectionReasonHtml(flowName) : ""}
       <span class="tpl-flow-link-tag" title="${escapeHtml(flowName)}">${escapeHtml(t("templates.linkedFlow"))}</span>
     </div>`;
   }
@@ -2127,6 +2203,52 @@ function updateTplSyncHint() {
   hint.textContent = t("templates.syncHintUpdated", { when: localeDateTime(state.tplMetaSyncedAt) });
 }
 
+function nextPresetSubmitAction(preset, ms) {
+  if (!preset) return null;
+  const meta = ms || { text: { status: "NOT_SUBMITTED" } };
+  const textSt = (meta.text && meta.text.status) || "NOT_SUBMITTED";
+  const flowName = preset.templateFlowName;
+  const flowSt = flowName && meta.flow ? meta.flow.status : "NOT_SUBMITTED";
+  const needsText = textSt === "NOT_SUBMITTED" || textSt === "REJECTED";
+  const needsFlow = flowName && (flowSt === "NOT_SUBMITTED" || flowSt === "REJECTED");
+  if (String(preset.category || "").toUpperCase() === "AUTHENTICATION") {
+    return needsText ? { includeFlow: false, variant: "auth" } : null;
+  }
+  if (needsText) return { includeFlow: false, variant: "text" };
+  if (needsFlow) return { includeFlow: true, variant: "flow" };
+  return null;
+}
+
+async function submitPresetToMeta(key) {
+  const preset = state.templatePresets.find((p) => p.key === key);
+  if (!preset) return;
+  const action = nextPresetSubmitAction(preset, presetMetaForKey(key));
+  if (!action) {
+    toast(t("templates.presetAlreadySubmitted"), "info");
+    return;
+  }
+  const btn = $("tplDraftCreateBtn");
+  const prevLabel = btn ? btn.textContent : "";
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = t("templates.submittingMeta");
+  }
+  const res = await post(`/api/templates/presets/${encodeURIComponent(key)}/submit`, {
+    includeFlow: action.variant === "flow",
+  });
+  if (btn) {
+    btn.disabled = false;
+    btn.textContent = prevLabel || t("modals.draftModal.requestMeta");
+  }
+  if (!res.ok) {
+    toast(res.error || t("templates.submitMetaFailed"), "error");
+    return;
+  }
+  closeModals();
+  toast(t("templates.submitMetaOk", { name: res.name }), "ok");
+  await refreshTemplatesScreen({ highlightName: res.name });
+}
+
 async function openTplDraftModal(key) {
   state.activeTemplatePreset = key || state.activeTemplatePreset;
   const preset = state.templatePresets.find((p) => p.key === key);
@@ -2186,7 +2308,8 @@ async function updatePayAuthPreview() {
 }
 
 async function initTemplateStudio() {
-  await refreshTemplatesScreen();
+  await Promise.all([loadTemplates(), loadTemplatePresets(), loadTplVariableCatalog()]);
+  renderTemplatesScreen();
 }
 
 async function refreshTemplatesScreen(opts = {}) {
@@ -6698,8 +6821,8 @@ function bindEvents() {
   if (tplDraftCreateBtn) {
     tplDraftCreateBtn.addEventListener("click", () => {
       const key = state.activeTemplatePreset;
-      closeModals();
-      initTemplateModal(key).then(() => showModal("modalTemplate"));
+      if (!key) return;
+      submitPresetToMeta(key);
     });
   }
   ["tplPreviewName", "tplPreviewAmount", "tplPreviewMerchant", "tplPreviewCard4"].forEach((id) => {

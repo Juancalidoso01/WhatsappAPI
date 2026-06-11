@@ -201,6 +201,12 @@ app.post('/webhook', webhookJson, (req, res) => {
         }
 
         if (change.field === 'message_template_status_update') {
+          Promise.resolve(Store.updateTemplateStatusFromWebhook({
+            name: value.message_template_name,
+            language: value.message_template_language,
+            status: value.event,
+            reason: value.reason || (value.rejection_info && value.rejection_info.reason) || null,
+          })).catch(err => console.error('template_status webhook meta error:', err));
           Promise.resolve(PortalEvents.pushTemplateStatus({
             name: value.message_template_name,
             language: value.message_template_language,
@@ -2073,18 +2079,30 @@ app.post('/api/templates/presets/:key/submit', apiJson, async (req, res) => {
   }
 
   const includeFlow = req.body && req.body.includeFlow !== false;
-  const built = templateBuilder.buildComponents({
-    headerText: preset.headerText || '',
-    bodyText: preset.bodyText,
-    footerText: preset.footerText || '',
-    variables: preset.variables || [],
-  });
+  const tplCategory = String(preset.category || 'UTILITY').toUpperCase();
+  const isAuth = tplCategory === 'AUTHENTICATION';
+
+  let built;
+  if (isAuth) {
+    built = templateBuilder.buildAuthenticationComponents({
+      addSecurityRecommendation: true,
+      codeExpirationMinutes: 10,
+      otpButtonText: 'Copiar código',
+    });
+  } else {
+    built = templateBuilder.buildComponents({
+      headerText: preset.headerText || '',
+      bodyText: preset.bodyText,
+      footerText: preset.footerText || '',
+      variables: preset.variables || [],
+    });
+  }
   if (!built.ok) {
     return res.status(400).json({ ok: false, error: built.errors.join(' ') });
   }
 
   let flowId = null;
-  if (includeFlow && preset.flowCta) {
+  if (!isAuth && includeFlow && preset.flowCta) {
     try {
       const sampleKey = preset.flowSampleKey || 'payment_auth';
       const cacheKey = preset.flowCacheKey
@@ -2113,7 +2131,6 @@ app.post('/api/templates/presets/:key/submit', apiJson, async (req, res) => {
   const tplName = includeFlow && preset.templateFlowName
     ? String(preset.templateFlowName).toLowerCase().replace(/[^a-z0-9_]/g, '_')
     : String(preset.name).toLowerCase().replace(/[^a-z0-9_]/g, '_');
-  const tplCategory = String(preset.category || 'UTILITY').toUpperCase();
 
   try {
     const result = await GraphApi.createTemplate(config.wabaId, {
@@ -2190,6 +2207,22 @@ app.post('/api/templates', apiJson, async (req, res) => {
     });
   } catch (err) {
     console.error('createTemplate error:', err.message);
+    res.status(200).json({ ok: false, error: String(err.message || err) });
+  }
+});
+
+// Delete a message template from Meta (name must match exactly)
+app.delete('/api/templates/:name', async (req, res) => {
+  if (!config.accessToken || !config.wabaId) {
+    return res.status(400).json({ ok: false, error: 'Falta ACCESS_TOKEN o WABA_ID.' });
+  }
+  const name = String(req.params.name || '').toLowerCase().replace(/[^a-z0-9_]/g, '_');
+  if (!name) return res.status(400).json({ ok: false, error: 'Nombre de plantilla inválido.' });
+  try {
+    const result = await GraphApi.deleteTemplate(config.wabaId, name);
+    res.json({ ok: true, result, name });
+  } catch (err) {
+    console.error('deleteTemplate error:', err.message);
     res.status(200).json({ ok: false, error: String(err.message || err) });
   }
 });

@@ -687,6 +687,19 @@ input, textarea, select { font-family: inherit; }
   display: inline-block; margin-top: 8px; font-size: 10px; font-weight: 600; text-transform: capitalize;
   padding: 2px 8px; border-radius: 999px; background: var(--surface-2); color: var(--muted);
 }
+.tpl-quality {
+  font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 999px; text-transform: uppercase;
+}
+.tpl-quality.quality-green { background: #e6f4ea; color: #137333; }
+.tpl-quality.quality-yellow { background: #fff6e0; color: #8a6300; }
+.tpl-quality.quality-red { background: #fce8e6; color: #c5221f; }
+.tpl-reject-reason {
+  display: block; margin-top: 4px; font-size: 11px; line-height: 1.35; color: var(--red); max-width: 280px;
+}
+.tpl-var-catalog-section { margin-top: 12px; }
+.tpl-var-catalog-section summary { cursor: pointer; font-size: 13px; font-weight: 600; padding: 8px 0; }
+.tpl-var-catalog-intro { margin: 0 0 8px; }
+.tpl-var-catalog-body .tpl-var-catalog-group { margin-bottom: 12px; }
 .tpl-flow-link-tag { font-size: 10px; font-weight: 600; color: var(--brand-600); }
 .tpl-other-section { margin-top: 8px; }
 .tpl-other-section summary { cursor: pointer; font-size: 13px; font-weight: 600; padding: 8px 0; list-style: disclosure-closed; }
