@@ -11,7 +11,26 @@ const FIELD_TYPES = [
   { id: "select", label: "Lista de opciones", inputType: null },
   { id: "yesno", label: "Sí / No", inputType: null },
   { id: "rating", label: "Calificación 1–5", inputType: null },
+  { id: "date", label: "Fecha (DatePicker)", inputType: null, meta: "DatePicker" },
+  { id: "calendar", label: "Calendario (reservas)", inputType: null, meta: "CalendarPicker" },
+  { id: "optin", label: "Casilla de aceptación", inputType: null, meta: "OptIn" },
+  { id: "checkbox", label: "Varias opciones", inputType: null, meta: "CheckboxGroup" },
 ];
+
+const META_CAPABILITIES = {
+  layout: "SingleColumnLayout — columna vertical fija. Meta no permite canvas libre ni CSS.",
+  textAlign: false,
+  backgroundColor: false,
+  textStyles: ["normal", "bold", "italic", "bold_italic"],
+  image: { maxKb: 100, scaleTypes: ["contain", "cover"], formats: ["PNG", "JPG"] },
+  dynamicBooking: "CalendarPicker/DatePicker con horarios dinámicos requieren Flow endpoint (data_exchange).",
+  components: [
+    "TextHeading", "TextSubheading", "TextBody", "TextCaption", "RichText",
+    "Image", "ImageCarousel", "EmbeddedLink", "Footer", "Form",
+    "TextInput", "TextArea", "Dropdown", "RadioButtonsGroup", "CheckboxGroup",
+    "DatePicker", "CalendarPicker", "OptIn", "Switch", "If",
+  ],
+};
 
 const CATEGORIES = [
   { id: "OTHER", label: "Otro" },
@@ -69,7 +88,7 @@ function validateDefinition(def) {
           return { ok: false, error: `Nombre de campo duplicado: "${fname}". Cambia una etiqueta.` };
         }
         usedNames.add(fname);
-        if (f.type === "select") {
+        if (f.type === "select" || f.type === "checkbox") {
           const opts = (f.options || []).map((o) => String(o).trim()).filter(Boolean);
           if (opts.length < 2) {
             return { ok: false, error: `"${f.label}" necesita al menos 2 opciones.` };
@@ -77,8 +96,12 @@ function validateDefinition(def) {
         }
       }
     }
-    if (scr.type === "message" && !String(scr.body || scr.heading || "").trim()) {
-      return { ok: false, error: `La pantalla "${scr.title}" necesita un mensaje o título.` };
+    if (scr.type === "message") {
+      const hasBlocks = Array.isArray(scr.blocks) && scr.blocks.some((b) => String(b.text || b.src || "").trim());
+      const hasLegacy = String(scr.body || scr.heading || "").trim() || (scr.image && scr.image.src);
+      if (!hasBlocks && !hasLegacy) {
+        return { ok: false, error: `La pantalla "${scr.title}" necesita contenido (texto o imagen).` };
+      }
     }
   }
 
@@ -132,6 +155,46 @@ function buildFieldComponent(field, fieldName) {
     };
   }
 
+  if (field.type === "date") {
+    return {
+      type: "DatePicker",
+      name: fieldName,
+      label,
+      required,
+    };
+  }
+
+  if (field.type === "calendar") {
+    return {
+      type: "CalendarPicker",
+      name: fieldName,
+      label,
+      required,
+      mode: field.calendarMode === "range" ? "range" : "single",
+    };
+  }
+
+  if (field.type === "optin") {
+    return {
+      type: "OptIn",
+      name: fieldName,
+      label,
+      required,
+    };
+  }
+
+  if (field.type === "checkbox") {
+    const opts = (field.options || []).map((o) => String(o).trim()).filter(Boolean);
+    const titles = opts.length >= 2 ? opts : ["Opción A", "Opción B"];
+    return {
+      type: "CheckboxGroup",
+      name: fieldName,
+      label,
+      required,
+      "data-source": titles.map((o, i) => ({ id: slugify(o, `chk_${i}`), title: o })),
+    };
+  }
+
   if (field.type === "textarea") {
     return {
       type: "TextArea",
@@ -149,6 +212,64 @@ function buildFieldComponent(field, fieldName) {
     required,
     "input-type": meta.inputType || "text",
   };
+}
+
+function textBodyComponent(text, emphasis) {
+  const body = { type: "TextBody", text: String(text).trim() };
+  if (emphasis && emphasis !== "normal") body["font-weight"] = emphasis;
+  return body;
+}
+
+function imageComponent(image) {
+  if (!image || !image.src) return null;
+  const block = {
+    type: "Image",
+    src: String(image.src).trim(),
+    "alt-text": String(image.altText || "Imagen").trim(),
+    "scale-type": image.scaleType === "cover" ? "cover" : "contain",
+  };
+  if (image.width) block.width = Number(image.width);
+  if (image.height) block.height = Number(image.height);
+  return block;
+}
+
+function layoutContentFromScreen(scr) {
+  const children = [];
+  const blocks = Array.isArray(scr.blocks) && scr.blocks.length ? scr.blocks : null;
+
+  if (blocks) {
+    blocks.forEach((b) => {
+      if (b.type === "heading" && b.text) {
+        children.push({ type: "TextHeading", text: String(b.text).trim() });
+      } else if (b.type === "subheading" && b.text) {
+        children.push({ type: "TextSubheading", text: String(b.text).trim() });
+      } else if (b.type === "body" && b.text) {
+        children.push(textBodyComponent(b.text, b.emphasis));
+      } else if (b.type === "caption" && b.text) {
+        const cap = { type: "TextCaption", text: String(b.text).trim() };
+        if (b.emphasis && b.emphasis !== "normal") cap["font-weight"] = b.emphasis;
+        children.push(cap);
+      } else if (b.type === "image") {
+        const img = imageComponent(b);
+        if (img) children.push(img);
+      }
+    });
+  } else {
+    const heading = scr.heading || scr.introHeading;
+    const body = scr.body || scr.introBody;
+    if (heading) children.push({ type: "TextHeading", text: String(heading).trim() });
+    if (body) children.push({ type: "TextBody", text: String(body).trim() });
+    const img = imageComponent(scr.image);
+    if (img) children.push(img);
+  }
+
+  if (scr.linkUrl) {
+    children.push({
+      type: "TextBody",
+      text: `${scr.linkLabel || "Abrir enlace"}: ${String(scr.linkUrl).trim()}`,
+    });
+  }
+  return children;
 }
 
 function navigateNext(nextScreenId) {
@@ -196,17 +317,16 @@ function buildFlowJson(definition) {
     const layoutChildren = [];
 
     if (scr.type === "message") {
-      if (scr.heading) layoutChildren.push({ type: "TextHeading", text: String(scr.heading).trim() });
-      if (scr.body) layoutChildren.push({ type: "TextBody", text: String(scr.body).trim() });
-      if (scr.linkUrl) {
-        layoutChildren.push({
-          type: "TextBody",
-          text: `${scr.linkLabel || "Abrir enlace"}: ${String(scr.linkUrl).trim()}`,
-        });
-      }
+      layoutChildren.push(...layoutContentFromScreen(scr));
     } else if (scr.type === "form") {
-      if (scr.introHeading) layoutChildren.push({ type: "TextHeading", text: String(scr.introHeading).trim() });
-      if (scr.introBody) layoutChildren.push({ type: "TextBody", text: String(scr.introBody).trim() });
+      layoutChildren.push(...layoutContentFromScreen({
+        blocks: scr.blocks,
+        heading: scr.introHeading,
+        body: scr.introBody,
+        image: scr.image,
+        linkUrl: scr.linkUrl,
+        linkLabel: scr.linkLabel,
+      }));
 
       const formFields = [];
       (scr.fields || []).forEach((f, fi) => {
@@ -259,8 +379,7 @@ function buildFlowJson(definition) {
     fieldRefs.forEach((f) => { payload[f.key] = f.ref; });
 
     const children = [];
-    if (confirmDef.heading) children.push({ type: "TextHeading", text: String(confirmDef.heading).trim() });
-    if (confirmDef.body) children.push({ type: "TextBody", text: String(confirmDef.body).trim() });
+    children.push(...layoutContentFromScreen(confirmDef));
     children.push({
       type: "Footer",
       label: String(confirmDef.footerLabel || "Cerrar").trim(),
@@ -303,12 +422,20 @@ function getSchema() {
     version: FLOW_VERSION,
     fieldTypes: FIELD_TYPES,
     categories: CATEGORIES,
+    metaCapabilities: META_CAPABILITIES,
+    blockTypes: [
+      { id: "heading", label: "Título grande" },
+      { id: "subheading", label: "Subtítulo" },
+      { id: "body", label: "Párrafo" },
+      { id: "caption", label: "Texto pequeño" },
+      { id: "image", label: "Imagen" },
+    ],
     screenTypes: [
       { id: "form", label: "Formulario", description: "Campos que el usuario completa." },
       { id: "message", label: "Mensaje", description: "Texto informativo o CTA antes de continuar." },
       { id: "confirm", label: "Confirmación", description: "Pantalla final de agradecimiento." },
     ],
-    limits: { maxScreens: 8, maxFieldsPerScreen: 12 },
+    limits: { maxScreens: 8, maxFieldsPerScreen: 12, maxBlocksPerScreen: 10, imageMaxKb: 100 },
   };
 }
 

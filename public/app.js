@@ -3923,8 +3923,10 @@ function defaultFsScreens() {
     {
       layout: "message",
       title: t("flows.defaults.step1Title"),
-      heading: t("flows.defaults.step1Heading"),
-      body: t("flows.defaults.step1Body"),
+      blocks: [
+        { type: "heading", text: t("flows.defaults.step1Heading") },
+        { type: "body", text: t("flows.defaults.step1Body"), emphasis: "normal" },
+      ],
       buttonLabel: t("flows.studio.continue"),
       buttonAction: "next",
       fields: [],
@@ -3932,8 +3934,10 @@ function defaultFsScreens() {
     {
       layout: "message",
       title: t("flows.defaults.step2Title"),
-      heading: t("flows.defaults.step2Heading"),
-      body: t("flows.defaults.step2Body"),
+      blocks: [
+        { type: "heading", text: t("flows.defaults.step2Heading") },
+        { type: "body", text: t("flows.defaults.step2Body"), emphasis: "normal" },
+      ],
       buttonLabel: t("flows.studio.continue"),
       buttonAction: "next",
       fields: [],
@@ -3941,13 +3945,55 @@ function defaultFsScreens() {
     {
       layout: "confirm",
       title: t("flows.defaults.thanksTitle"),
-      heading: t("flows.defaults.thanksHeading"),
-      body: t("flows.defaults.thanksBody"),
+      blocks: [
+        { type: "heading", text: t("flows.defaults.thanksHeading") },
+        { type: "body", text: t("flows.defaults.thanksBody"), emphasis: "normal" },
+      ],
       buttonLabel: t("flows.studio.close"),
       buttonAction: "complete",
       fields: [],
     },
   ];
+}
+
+function ensureScreenBlocks(scr) {
+  if (!scr) return;
+  if (Array.isArray(scr.blocks) && scr.blocks.length) return;
+  scr.blocks = [];
+  if (scr.heading) scr.blocks.push({ type: "heading", text: scr.heading });
+  if (scr.body) scr.blocks.push({ type: "body", text: scr.body, emphasis: "normal" });
+  if (scr.image && (scr.image.previewUrl || scr.image.src)) {
+    scr.blocks.push({ type: "image", ...scr.image });
+  }
+  if (!scr.blocks.length) {
+    scr.blocks.push({ type: "heading", text: t("flows.studio.newScreenHeading") });
+    scr.blocks.push({ type: "body", text: t("flows.studio.newScreenBody"), emphasis: "normal" });
+  }
+}
+
+function syncScreenLegacyFromBlocks(scr) {
+  if (!scr || !Array.isArray(scr.blocks)) return;
+  const heading = scr.blocks.find((b) => b.type === "heading");
+  const body = scr.blocks.find((b) => b.type === "body");
+  const image = scr.blocks.find((b) => b.type === "image");
+  scr.heading = heading?.text || "";
+  scr.body = body?.text || "";
+  if (image) scr.image = { ...image };
+  else delete scr.image;
+  scr.title = (scr.heading || scr.title || t("flows.studio.step", { n: 1 })).slice(0, 40);
+}
+
+function fsBlockLabel(type) {
+  const bt = (fsState.schema?.blockTypes || []).find((b) => b.id === type);
+  if (bt) return bt.label;
+  const map = {
+    heading: t("flows.studio.blockHeading"),
+    subheading: t("flows.studio.blockSubheading"),
+    body: t("flows.studio.blockBody"),
+    caption: t("flows.studio.blockCaption"),
+    image: t("flows.studio.blockImage"),
+  };
+  return map[type] || type;
 }
 
 async function initFlowStudio() {
@@ -3971,7 +4017,26 @@ async function initFlowStudio() {
   if ($("fsChatBody") && !$("fsChatBody").value.trim()) {
     $("fsChatBody").value = t("flows.studio.defaultChatBody");
   }
+  fsState.screens.forEach(ensureScreenBlocks);
+  renderFsMetaCaps();
   renderFlowStudio();
+}
+
+function renderFsMetaCaps() {
+  const box = $("fsMetaCapsBody");
+  const caps = fsState.schema?.metaCapabilities;
+  if (!box || !caps) return;
+  const noAlign = t("flows.studio.metaNoAlign");
+  const noBg = t("flows.studio.metaNoBg");
+  const comps = (caps.components || []).map((c) => `<span class="fs-meta-tag">${escapeHtml(c)}</span>`).join("");
+  box.innerHTML = `
+    <p><strong>${escapeHtml(t("flows.studio.metaLayout"))}</strong> ${escapeHtml(caps.layout)}</p>
+    <p><strong>${escapeHtml(t("flows.studio.metaText"))}</strong> ${escapeHtml(noAlign)} ${escapeHtml(t("flows.studio.metaTextStyles"))}: ${(caps.textStyles || []).join(", ")}.</p>
+    <p><strong>${escapeHtml(t("flows.studio.metaColors"))}</strong> ${escapeHtml(noBg)}</p>
+    <p><strong>${escapeHtml(t("flows.studio.metaImages"))}</strong> PNG/JPG · máx. ${caps.image?.maxKb || 100} KB · escala: ${(caps.image?.scaleTypes || []).join(" / ")}.</p>
+    <p><strong>${escapeHtml(t("flows.studio.metaBooking"))}</strong> ${escapeHtml(caps.dynamicBooking)}</p>
+    <p><strong>${escapeHtml(t("flows.studio.metaComponents"))}</strong></p>
+    <div>${comps}</div>`;
 }
 
 function fsActiveScreen() {
@@ -3981,19 +4046,19 @@ function fsActiveScreen() {
 function syncFsFromSidebar() {
   const scr = fsActiveScreen();
   if (!scr) return;
-  if ($("fsHeading")) scr.heading = $("fsHeading").value;
-  if ($("fsBody")) scr.body = $("fsBody").value;
+  syncFsBlocksFromDom();
+  syncFsFieldsFromDom();
   if ($("fsButton")) scr.buttonLabel = $("fsButton").value;
   const action = document.querySelector('input[name="fsAction"]:checked');
   if (action) scr.buttonAction = action.value;
+  syncScreenLegacyFromBlocks(scr);
   scr.title = scr.heading.slice(0, 40) || scr.title || t("flows.studio.step", { n: fsState.activeIndex + 1 });
 }
 
 function loadFsSidebarFromScreen() {
   const scr = fsActiveScreen();
   if (!scr) return;
-  if ($("fsHeading")) $("fsHeading").value = scr.heading || "";
-  if ($("fsBody")) $("fsBody").value = scr.body || "";
+  ensureScreenBlocks(scr);
   if ($("fsButton")) $("fsButton").value = scr.buttonLabel || t("flows.studio.continue");
   document.querySelectorAll('input[name="fsAction"]').forEach((r) => {
     r.checked = r.value === (scr.buttonAction || "next");
@@ -4003,6 +4068,8 @@ function loadFsSidebarFromScreen() {
   );
   const fieldsBox = $("fsFieldsBox");
   if (fieldsBox) fieldsBox.classList.toggle("hidden", scr.layout !== "form");
+  renderFsBlocksList();
+  renderFsBlockAddRow();
   renderFsFieldsList();
 }
 
@@ -4034,6 +4101,189 @@ function renderFsLayoutGrid() {
   );
 }
 
+function renderFsBlockAddRow() {
+  const row = $("fsBlockAddRow");
+  if (!row) return;
+  const types = fsState.schema?.blockTypes || [
+    { id: "heading", label: "Título" },
+    { id: "body", label: "Párrafo" },
+    { id: "image", label: "Imagen" },
+  ];
+  row.innerHTML = types.map((bt) =>
+    `<button type="button" class="btn-ghost sm fs-block-add-btn" data-block-type="${escapeHtml(bt.id)}">+ ${escapeHtml(bt.label)}</button>`
+  ).join("");
+  row.querySelectorAll(".fs-block-add-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      syncFsFromSidebar();
+      const scr = fsActiveScreen();
+      if (!scr) return;
+      ensureScreenBlocks(scr);
+      const max = fsState.schema?.limits?.maxBlocksPerScreen || 10;
+      if (scr.blocks.length >= max) {
+        toast(t("toast.maxBlocks", { max }), "error");
+        return;
+      }
+      const type = btn.dataset.blockType;
+      const block = { type };
+      if (type === "body" || type === "caption") block.emphasis = "normal";
+      if (type === "image") {
+        block.altText = t("flows.studio.imageAltDefault");
+        block.scaleType = "contain";
+      } else {
+        block.text = "";
+      }
+      scr.blocks.push(block);
+      renderFsBlocksList();
+      renderFlowStudio();
+    });
+  });
+}
+
+function renderFsBlocksList() {
+  const box = $("fsBlocksBox");
+  const scr = fsActiveScreen();
+  if (!box || !scr) return;
+  ensureScreenBlocks(scr);
+  box.innerHTML = scr.blocks.map((b, bi) => {
+    const upDisabled = bi === 0 ? " disabled" : "";
+    const downDisabled = bi === scr.blocks.length - 1 ? " disabled" : "";
+    let inner = "";
+    if (b.type === "image") {
+      const preview = b.previewUrl || (b.src ? `data:image/png;base64,${b.src}` : "");
+      inner = `
+        ${preview ? `<img class="fs-block-img-preview" src="${escapeHtml(preview)}" alt="" />` : `<p class="muted sm">${escapeHtml(t("flows.studio.noImageYet"))}</p>`}
+        <label class="flows-upload-label sm"><span>${escapeHtml(t("flows.studio.uploadImage"))}</span>
+          <input type="file" accept="image/png,image/jpeg" class="fs-block-file" data-bi="${bi}" />
+        </label>
+        <input type="text" class="fs-b-alt" data-bi="${bi}" placeholder="${escapeHtml(t("flows.studio.imageAlt"))}" value="${escapeHtml(b.altText || "")}" />
+        <select class="fs-b-scale" data-bi="${bi}">
+          <option value="contain"${b.scaleType !== "cover" ? " selected" : ""}>${escapeHtml(t("flows.studio.scaleContain"))}</option>
+          <option value="cover"${b.scaleType === "cover" ? " selected" : ""}>${escapeHtml(t("flows.studio.scaleCover"))}</option>
+        </select>`;
+    } else {
+      const emphasisRow = (b.type === "body" || b.type === "caption") ? `
+        <select class="fs-b-emphasis" data-bi="${bi}">
+          <option value="normal"${(!b.emphasis || b.emphasis === "normal") ? " selected" : ""}>${escapeHtml(t("flows.studio.emphasisNormal"))}</option>
+          <option value="bold"${b.emphasis === "bold" ? " selected" : ""}>${escapeHtml(t("flows.studio.emphasisBold"))}</option>
+          <option value="italic"${b.emphasis === "italic" ? " selected" : ""}>${escapeHtml(t("flows.studio.emphasisItalic"))}</option>
+          <option value="bold_italic"${b.emphasis === "bold_italic" ? " selected" : ""}>${escapeHtml(t("flows.studio.emphasisBoldItalic"))}</option>
+        </select>` : "";
+      inner = `
+        <textarea class="fs-b-text" data-bi="${bi}" rows="${b.type === "caption" ? 2 : 3}" placeholder="${escapeHtml(t("flows.studio.blockTextPh"))}">${escapeHtml(b.text || "")}</textarea>
+        ${emphasisRow}`;
+    }
+    return `
+      <div class="fs-block-card" data-bi="${bi}">
+        <div class="fs-block-card-head">
+          <span class="fs-block-type">${escapeHtml(fsBlockLabel(b.type))}</span>
+          <div class="fs-block-actions">
+            <button type="button" class="btn-ghost sm fs-b-up"${upDisabled} title="↑">↑</button>
+            <button type="button" class="btn-ghost sm fs-b-down"${downDisabled} title="↓">↓</button>
+            <button type="button" class="btn-ghost sm fs-b-remove" title="×">×</button>
+          </div>
+        </div>
+        ${inner}
+      </div>`;
+  }).join("");
+
+  box.querySelectorAll(".fs-b-text, .fs-b-alt, .fs-b-scale, .fs-b-emphasis").forEach((el) =>
+    el.addEventListener("input", syncFsBlocksFromDom)
+  );
+  box.querySelectorAll(".fs-b-scale, .fs-b-emphasis").forEach((el) =>
+    el.addEventListener("change", syncFsBlocksFromDom)
+  );
+  box.querySelectorAll(".fs-block-file").forEach((input) => {
+    input.addEventListener("change", () => uploadFsBlockImage(Number(input.dataset.bi), input));
+  });
+  box.querySelectorAll(".fs-b-remove").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      syncFsBlocksFromDom();
+      const bi = Number(btn.closest(".fs-block-card").dataset.bi);
+      if (scr.blocks.length <= 1) {
+        toast(t("toast.minOneBlock"), "error");
+        return;
+      }
+      scr.blocks.splice(bi, 1);
+      renderFsBlocksList();
+      renderFlowStudio();
+    });
+  });
+  box.querySelectorAll(".fs-b-up").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      syncFsBlocksFromDom();
+      const bi = Number(btn.closest(".fs-block-card").dataset.bi);
+      if (bi <= 0) return;
+      [scr.blocks[bi - 1], scr.blocks[bi]] = [scr.blocks[bi], scr.blocks[bi - 1]];
+      renderFsBlocksList();
+      renderFlowStudio();
+    });
+  });
+  box.querySelectorAll(".fs-b-down").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      syncFsBlocksFromDom();
+      const bi = Number(btn.closest(".fs-block-card").dataset.bi);
+      if (bi >= scr.blocks.length - 1) return;
+      [scr.blocks[bi + 1], scr.blocks[bi]] = [scr.blocks[bi], scr.blocks[bi + 1]];
+      renderFsBlocksList();
+      renderFlowStudio();
+    });
+  });
+}
+
+function syncFsBlocksFromDom() {
+  const scr = fsActiveScreen();
+  const box = $("fsBlocksBox");
+  if (!scr || !box) return;
+  ensureScreenBlocks(scr);
+  box.querySelectorAll(".fs-block-card").forEach((card) => {
+    const bi = Number(card.dataset.bi);
+    const block = scr.blocks[bi];
+    if (!block) return;
+    if (block.type === "image") {
+      block.altText = (card.querySelector(".fs-b-alt") || {}).value || "";
+      block.scaleType = (card.querySelector(".fs-b-scale") || {}).value || "contain";
+    } else {
+      block.text = (card.querySelector(".fs-b-text") || {}).value || "";
+      const emph = card.querySelector(".fs-b-emphasis");
+      if (emph) block.emphasis = emph.value || "normal";
+    }
+  });
+  syncScreenLegacyFromBlocks(scr);
+}
+
+async function uploadFsBlockImage(bi, input) {
+  const file = input?.files?.[0];
+  if (!file) return;
+  if (file.size > 100 * 1024) {
+    toast(t("toast.imageTooLarge"), "error");
+    input.value = "";
+    return;
+  }
+  const scr = fsActiveScreen();
+  if (!scr || !scr.blocks[bi]) return;
+  const fd = new FormData();
+  fd.append("image", file);
+  toast(t("toast.uploadingImage"), "info");
+  const res = await postForm("/api/flows/studio/assets", fd);
+  if (!res.ok) {
+    toast(res.error || t("toast.uploadFailed"), "error");
+    input.value = "";
+    return;
+  }
+  scr.blocks[bi] = {
+    ...scr.blocks[bi],
+    type: "image",
+    assetId: res.assetId,
+    previewUrl: res.previewUrl,
+    src: res.src,
+    altText: scr.blocks[bi].altText || file.name.replace(/\.[^.]+$/, ""),
+    scaleType: scr.blocks[bi].scaleType || "contain",
+  };
+  toast(t("toast.imageUploaded"), "ok");
+  renderFsBlocksList();
+  renderFlowStudio();
+}
+
 function fsFieldTypeOptions(selected) {
   return (fsState.schema?.fieldTypes || [
     { id: "text", label: "Texto" },
@@ -4047,13 +4297,20 @@ function renderFsFieldsList() {
   const scr = fsActiveScreen();
   if (!box || !scr || scr.layout !== "form") return;
   scr.fields = scr.fields || [];
-  box.innerHTML = scr.fields.map((f, fi) => `
+  box.innerHTML = scr.fields.map((f, fi) => {
+    const needsOpts = f.type === "select" || f.type === "checkbox";
+    const optsVal = (f.options || []).join(", ");
+    return `
     <div class="fs-field-row" data-fi="${fi}">
       <input type="text" class="fs-f-label" placeholder="${escapeHtml(t("flows.studio.fieldLabel"))}" value="${escapeHtml(f.label || "")}" />
       <select class="fs-f-type">${fsFieldTypeOptions(f.type)}</select>
       <button type="button" class="btn-ghost sm fs-f-remove">×</button>
-    </div>`).join("");
-  box.querySelectorAll(".fs-f-label, .fs-f-type").forEach((el) =>
+      ${needsOpts ? `<label class="fs-field-options muted">${escapeHtml(t("flows.studio.fieldOptions"))}
+        <input type="text" class="fs-f-opts" placeholder="${escapeHtml(t("flows.studio.fieldOptionsPh"))}" value="${escapeHtml(optsVal)}" />
+      </label>` : ""}
+    </div>`;
+  }).join("");
+  box.querySelectorAll(".fs-f-label, .fs-f-type, .fs-f-opts").forEach((el) =>
     el.addEventListener("input", syncFsFieldsFromDom)
   );
   box.querySelectorAll(".fs-f-type").forEach((el) =>
@@ -4076,21 +4333,60 @@ function syncFsFieldsFromDom() {
   if (!scr || !box || scr.layout !== "form") return;
   scr.fields = [];
   box.querySelectorAll(".fs-field-row").forEach((row) => {
-    scr.fields.push({
-      type: (row.querySelector(".fs-f-type") || {}).value || "text",
+    const type = (row.querySelector(".fs-f-type") || {}).value || "text";
+    const field = {
+      type,
       label: (row.querySelector(".fs-f-label") || {}).value || "",
       required: true,
-    });
+    };
+    const optsRaw = (row.querySelector(".fs-f-opts") || {}).value || "";
+    if (type === "select" || type === "checkbox") {
+      field.options = optsRaw.split(",").map((s) => s.trim()).filter(Boolean);
+    }
+    scr.fields.push(field);
   });
 }
 
+function fsPreviewBlockHtml(b) {
+  if (!b) return "";
+  if (b.type === "image") {
+    const src = b.previewUrl || (b.src ? `data:image/png;base64,${b.src}` : "");
+    if (!src) return `<div class="fs-preview-img muted sm" style="padding:24px;text-align:center">${escapeHtml(t("flows.studio.noImageYet"))}</div>`;
+    return `<img class="fs-preview-img" src="${escapeHtml(src)}" alt="${escapeHtml(b.altText || "")}" />`;
+  }
+  const text = escapeHtml(b.text || "");
+  if (b.type === "heading") return `<h3>${text || escapeHtml(t("flows.studio.screenTitle"))}</h3>`;
+  if (b.type === "subheading") return `<p class="fs-preview-sub">${text}</p>`;
+  if (b.type === "caption") {
+    const style = b.emphasis && b.emphasis !== "normal" ? ` style="font-style:${b.emphasis.includes("italic") ? "italic" : "normal"};font-weight:${b.emphasis.includes("bold") ? "700" : "400"}"` : "";
+    return `<p class="fs-preview-caption"${style}>${text}</p>`;
+  }
+  const style = b.emphasis && b.emphasis !== "normal" ? ` style="font-style:${b.emphasis.includes("italic") ? "italic" : "normal"};font-weight:${b.emphasis.includes("bold") ? "700" : "400"}"` : "";
+  return `<p${style}>${text || escapeHtml(t("flows.studio.screenBody"))}</p>`;
+}
+
+function fsFieldPreviewLabel(f) {
+  const icons = {
+    date: "📅",
+    calendar: "🗓",
+    optin: "☑",
+    checkbox: "☑",
+    select: "▾",
+    yesno: "○",
+    rating: "★",
+  };
+  const prefix = icons[f.type] ? `${icons[f.type]} ` : "";
+  return prefix + (f.label || t("flows.studio.fieldDefault"));
+}
+
 function renderFsPhonePreview(scr, index, editing) {
+  ensureScreenBlocks(scr);
   const isLast = index === fsState.screens.length - 1;
   const btnLabel = scr.buttonLabel || (isLast ? t("flows.studio.close") : t("flows.studio.continue"));
-  let bodyHtml = "";
+  let bodyHtml = (scr.blocks || []).map((b) => fsPreviewBlockHtml(b)).join("");
   if (scr.layout === "form" && (scr.fields || []).length) {
-    bodyHtml = (scr.fields || []).map((f) =>
-      `<p style="margin:8px 0;padding:10px;border:1px solid #e9edef;border-radius:8px;font-size:12px;color:#667781">${escapeHtml(f.label || t("flows.studio.fieldDefault"))}</p>`
+    bodyHtml += (scr.fields || []).map((f) =>
+      `<p style="margin:8px 0;padding:10px;border:1px solid #e9edef;border-radius:8px;font-size:12px;color:#667781">${escapeHtml(fsFieldPreviewLabel(f))}</p>`
     ).join("");
   }
   const stepTitle = scr.title || t("flows.studio.step", { n: index + 1 });
@@ -4103,9 +4399,7 @@ function renderFsPhonePreview(scr, index, editing) {
           <span class="flow-phone-menu">⋯</span>
         </div>
         <div class="flow-phone-body">
-          <h3>${escapeHtml(scr.heading || t("flows.studio.screenTitle"))}</h3>
-          <p>${escapeHtml(scr.body || t("flows.studio.screenBody"))}</p>
-          ${bodyHtml}
+          ${bodyHtml || `<h3>${escapeHtml(t("flows.studio.screenTitle"))}</h3><p>${escapeHtml(t("flows.studio.screenBody"))}</p>`}
         </div>
         <div class="flow-phone-footer">
           <button type="button">${escapeHtml(btnLabel)}</button>
@@ -4115,6 +4409,13 @@ function renderFsPhonePreview(scr, index, editing) {
         `<span class="${i === index ? "on" : ""}"></span>`
       ).join("")}</div>
     </div>`;
+}
+
+function fsThumbLabel(scr) {
+  ensureScreenBlocks(scr);
+  const heading = scr.blocks.find((b) => b.type === "heading");
+  const text = heading?.text || scr.title || t("flows.studio.screenDefault");
+  return String(text).slice(0, 24);
 }
 
 function renderFlowStudio() {
@@ -4128,7 +4429,7 @@ function renderFlowStudio() {
   const max = fsState.schema?.limits?.maxScreens || 8;
   strip.innerHTML = fsState.screens.map((scr, i) =>
     `<button type="button" class="fs-thumb${i === fsState.activeIndex ? " active" : ""}" data-fs-i="${i}" title="${escapeHtml(scr.title || "")}">
-      <div class="fs-thumb-inner">${escapeHtml((scr.heading || scr.title || t("flows.studio.screenDefault")).slice(0, 24))}</div>
+      <div class="fs-thumb-inner">${escapeHtml(fsThumbLabel(scr))}</div>
     </button>`
   ).join("")
     + (fsState.screens.length < max
@@ -4189,8 +4490,10 @@ function fsAddScreen() {
   fsState.screens.splice(insertAt, 0, {
     layout: "message",
     title: t("flows.studio.step", { n: insertAt + 1 }),
-    heading: t("flows.studio.newScreenHeading"),
-    body: t("flows.studio.newScreenBody"),
+    blocks: [
+      { type: "heading", text: t("flows.studio.newScreenHeading") },
+      { type: "body", text: t("flows.studio.newScreenBody"), emphasis: "normal" },
+    ],
     buttonLabel: t("flows.studio.continue"),
     buttonAction: "next",
     fields: [],
@@ -4211,40 +4514,55 @@ function fsRemoveScreen(index) {
   renderFlowStudio();
 }
 
+function mapFsScreenToDef(s, i, fsStateScreens) {
+  ensureScreenBlocks(s);
+  syncScreenLegacyFromBlocks(s);
+  const isLast = i === fsStateScreens.length - 1;
+  const blocks = (s.blocks || []).map((b) => {
+    const copy = { ...b };
+    if (copy.type === "image") {
+      copy.src = copy.src || undefined;
+    }
+    return copy;
+  });
+  const base = {
+    title: s.title || t("flows.studio.step", { n: i + 1 }),
+    blocks,
+    footerLabel: s.buttonLabel || (isLast ? t("flows.studio.close") : t("flows.studio.continue")),
+  };
+  if (s.layout === "form") {
+    return {
+      type: "form",
+      ...base,
+      introHeading: s.heading,
+      introBody: s.body,
+      footerLabel: s.buttonLabel || t("flows.studio.submit"),
+      fields: (s.fields && s.fields.length)
+        ? s.fields.map((f) => ({ ...f }))
+        : [{ type: "text", label: t("flows.studio.response"), required: true }],
+    };
+  }
+  if (s.layout === "confirm" || (isLast && s.buttonAction === "complete")) {
+    return {
+      type: "confirm",
+      ...base,
+      heading: s.heading,
+      body: s.body,
+      footerLabel: s.buttonLabel || t("flows.studio.close"),
+    };
+  }
+  return {
+    type: "message",
+    ...base,
+    heading: s.heading,
+    body: s.body,
+  };
+}
+
 function collectFsDefinition() {
   syncFsFromSidebar();
   syncFsFieldsFromDom();
-  const screens = fsState.screens.map((s, i) => {
-    const isLast = i === fsState.screens.length - 1;
-    if (s.layout === "form") {
-      return {
-        type: "form",
-        title: s.title || t("flows.studio.step", { n: i + 1 }),
-        introHeading: s.heading,
-        introBody: s.body,
-        footerLabel: s.buttonLabel || t("flows.studio.submit"),
-        fields: (s.fields && s.fields.length)
-          ? s.fields.map((f) => ({ ...f }))
-          : [{ type: "text", label: t("flows.studio.response"), required: true }],
-      };
-    }
-    if (s.layout === "confirm" || (isLast && s.buttonAction === "complete")) {
-      return {
-        type: "confirm",
-        title: s.title || t("flows.studio.thanks"),
-        heading: s.heading,
-        body: s.body,
-        footerLabel: s.buttonLabel || t("flows.studio.close"),
-      };
-    }
-    return {
-      type: "message",
-      title: s.title || t("flows.studio.step", { n: i + 1 }),
-      heading: s.heading,
-      body: s.body,
-      footerLabel: s.buttonLabel || (isLast ? t("flows.studio.close") : t("flows.studio.continue")),
-    };
-  });
+  const screens = fsState.screens.map((s, i) => mapFsScreenToDef(s, i, fsState.screens));
   const hasConfirm = screens.some((s) => s.type === "confirm");
   if (!hasConfirm && screens.length) {
     const last = screens[screens.length - 1];
@@ -5180,7 +5498,7 @@ function bindEvents() {
       renderFlowStudio();
     });
   });
-  ["fsHeading", "fsBody", "fsButton"].forEach((id) => {
+  ["fsButton"].forEach((id) => {
     const el = $(id);
     if (el) el.addEventListener("input", () => { syncFsFromSidebar(); renderFlowStudio(); });
   });

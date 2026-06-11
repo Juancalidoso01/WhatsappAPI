@@ -669,14 +669,15 @@
 
                 <h3 class="fs-sidebar-title" data-i18n="flows.studio.thisScreen">Esta pantalla</h3>
                 <div class="fs-layout-grid" id="fsLayoutGrid"></div>
-                <label><span data-i18n="flows.studio.heading">Título</span>
-                  <input id="fsHeading" type="text" data-i18n-placeholder="flows.studio.headingPh" placeholder="Título claro y breve" />
-                </label>
-                <label><span data-i18n="flows.studio.body">Texto</span>
-                  <textarea id="fsBody" rows="4" data-i18n-placeholder="flows.studio.bodyPh" placeholder="Explica en pocas líneas qué debe hacer la persona."></textarea>
-                </label>
+
+                <h3 class="fs-sidebar-title" data-i18n="flows.studio.contentLayers">Capas de contenido</h3>
+                <p class="muted sm fs-blocks-hint" data-i18n="flows.studio.contentLayersHint">Ordena bloques como en Meta: título, párrafo, imagen. El preview es aproximado; WhatsApp aplica su propio diseño.</p>
+                <div id="fsBlocksBox" class="fs-blocks-box"></div>
+                <div class="fs-block-add-row" id="fsBlockAddRow"></div>
+
                 <div id="fsFieldsBox" class="fs-fields-box hidden">
                   <span class="fs-sidebar-title" data-i18n="flows.studio.formFields">Campos del formulario</span>
+                  <p class="muted sm" data-i18n="flows.studio.formFieldsHint">Incluye fecha, calendario (reservas) y casillas de aceptación soportadas por Meta.</p>
                   <div id="fsFieldsList"></div>
                   <button type="button" id="fsAddField" class="btn-ghost sm" data-i18n="flows.studio.addField">+ Agregar campo</button>
                 </div>
@@ -688,6 +689,11 @@
                   <label class="fs-radio"><input type="radio" name="fsAction" value="next" checked /> <span data-i18n="flows.studio.actionNext">Ir a la siguiente pantalla</span></label>
                   <label class="fs-radio"><input type="radio" name="fsAction" value="complete" /> <span data-i18n="flows.studio.actionComplete">Terminar (última pantalla)</span></label>
                 </fieldset>
+
+                <details class="fs-meta-caps" id="fsMetaCaps">
+                  <summary data-i18n="flows.studio.metaLimitsTitle">¿Qué permite Meta?</summary>
+                  <div id="fsMetaCapsBody" class="fs-meta-caps-body muted sm"></div>
+                </details>
               </aside>
 
               <div class="flow-studio-canvas">

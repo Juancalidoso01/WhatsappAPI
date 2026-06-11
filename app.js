@@ -44,6 +44,7 @@ const templatePresets = require('./services/template-presets');
 const variableSchema = require('./services/variable-schema');
 const flowPerformance = require('./services/flow-performance');
 const CardImageStore = require('./services/card-image-store');
+const FlowStudioAssets = require('./services/flow-studio-assets');
 const flowUseCases = require('./services/flow-use-cases');
 const flowActivity = require('./services/flow-activity');
 const { curateFlowList } = require('./services/flow-list-curate');
@@ -660,17 +661,84 @@ app.get('/api/flows/builder/schema', (req, res) => {
   res.json({ ok: true, schema: flowBuilder.getSchema() });
 });
 
+app.post('/api/flows/studio/assets', (req, res, next) => {
+  cardImageUpload.single('image')(req, res, (err) => {
+    if (err) return res.status(400).json({ ok: false, error: err.message || 'Archivo inválido.' });
+    next();
+  });
+}, async (req, res) => {
+  if (!req.file || !req.file.buffer) {
+    return res.status(400).json({ ok: false, error: 'Se requiere una imagen.' });
+  }
+  const mime = req.file.mimetype || 'image/png';
+  if (!/^image\//.test(mime)) {
+    return res.status(400).json({ ok: false, error: 'Solo se permiten imágenes PNG o JPG.' });
+  }
+  if (req.file.size > 100 * 1024) {
+    return res.status(400).json({ ok: false, error: 'La imagen no puede superar 100 KB (límite de Meta).' });
+  }
+  const row = await FlowStudioAssets.save({ buffer: req.file.buffer, mimeType: mime });
+  const base = config.publicBaseUrl ? config.publicBaseUrl.replace(/\/$/, "") : "";
+  const previewUrl = base ? `${base}/api/flows/studio/assets/${row.id}` : null;
+  res.json({
+    ok: true,
+    assetId: row.id,
+    previewUrl,
+    src: row.data,
+    mimeType: row.mimeType,
+  });
+});
+
+app.get('/api/flows/studio/assets/:id', async (req, res) => {
+  const stored = await FlowStudioAssets.get(req.params.id);
+  if (!stored || !stored.data) {
+    return res.status(404).json({ ok: false, error: 'Imagen no encontrada.' });
+  }
+  const buf = Buffer.from(stored.data, 'base64');
+  res.setHeader('Content-Type', stored.mimeType || 'image/png');
+  res.setHeader('Cache-Control', 'public, max-age=86400');
+  return res.send(buf);
+});
+
+async function enrichFlowScreensWithAssets(screens) {
+  if (!Array.isArray(screens)) return screens;
+  const resolveImage = async (img) => {
+    if (!img || typeof img !== 'object') return img;
+    if (img.src) return img;
+    if (!img.assetId) return img;
+    const row = await FlowStudioAssets.get(img.assetId);
+    if (row && row.data) return { ...img, src: row.data };
+    return img;
+  };
+  const resolveBlock = async (block) => {
+    if (!block || block.type !== 'image') return block;
+    const img = await resolveImage(block);
+    return img.src ? img : block;
+  };
+  const out = [];
+  for (const scr of screens) {
+    const copy = { ...scr };
+    if (copy.image) copy.image = await resolveImage(copy.image);
+    if (Array.isArray(copy.blocks)) {
+      copy.blocks = await Promise.all(copy.blocks.map(resolveBlock));
+    }
+    out.push(copy);
+  }
+  return out;
+}
+
 app.post('/api/flows/build', apiJson, async (req, res) => {
   if (!config.accessToken || !config.wabaId) {
     return res.status(400).json({ ok: false, error: 'Falta ACCESS_TOKEN o WABA_ID.' });
   }
 
   const { name, category, publish, cta, screens } = req.body || {};
+  const enrichedScreens = await enrichFlowScreensWithAssets(screens);
   const built = flowBuilder.buildFlowJson({
     name,
     category,
     cta,
-    screens,
+    screens: enrichedScreens,
   });
   if (!built.ok) {
     return res.status(400).json({ ok: false, error: built.error });
