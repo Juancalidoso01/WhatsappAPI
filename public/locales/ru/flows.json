@@ -246,6 +246,10 @@
     "editOnPreview": "Редактируйте каждый экран в карусели. Выделите текст для меню форматирования.",
     "formatBarAria": "Форматирование текста",
     "fmtCaption": "Мелкий текст",
+    "insertBlock": "Добавить блок здесь",
+    "insertField": "Добавить поле здесь",
+    "fieldDate": "Дата",
+    "fieldSelect": "Список",
     "removeScreenBtn": "Удалить экран",
     "screenRemoved": "Экран удалён"
   },

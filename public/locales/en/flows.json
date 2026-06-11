@@ -266,6 +266,10 @@
     "editOnPreview": "Edit each screen in the carousel. Select text to open the format menu.",
     "formatBarAria": "Text formatting",
     "fmtCaption": "Small text",
+    "insertBlock": "Add block here",
+    "insertField": "Add field here",
+    "fieldDate": "Date",
+    "fieldSelect": "Dropdown",
     "removeScreenBtn": "Remove screen",
     "screenRemoved": "Screen removed"
   },

@@ -1481,7 +1481,7 @@ input, textarea, select { font-family: inherit; }
   font-size: 10px; font-weight: 600; cursor: pointer; color: var(--muted);
 }
 .fs-ed-layout.active { border-color: var(--brand); background: var(--brand-50); color: var(--brand-700); }
-.fs-ed-body { min-height: 200px; }
+.fs-ed-body { min-height: 200px; padding-left: 18px !important; padding-right: 14px !important; }
 .fs-ed-block {
   margin-bottom: 10px; padding: 6px 4px; border: 1px solid transparent; border-radius: 8px; background: transparent;
   transition: border-color .15s, background .15s;
@@ -1515,9 +1515,45 @@ input, textarea, select { font-family: inherit; }
 .fs-fmt-btn i { font-style: italic; font-weight: 600; }
 .fs-fmt-sep { width: 1px; height: 18px; background: #e2e8f0; margin: 0 4px; }
 .fs-carousel-wrap {
-  margin: 0 -8px; padding: 4px 0 8px;
-  background: linear-gradient(180deg, #f8fafc 0%, transparent 100%);
-  border-radius: 16px;
+  display: flex; justify-content: center; width: 100%;
+  padding: 8px 0 16px;
+  background: #f8fafc; border-radius: 20px; border: 1px solid #eef2f6;
+}
+.fs-insert-line {
+  position: relative; display: flex; align-items: center; gap: 0;
+  height: 24px; margin: 2px 0; opacity: 0; transition: opacity .18s ease;
+}
+.fs-ed-body:hover .fs-insert-line,
+.fs-ed-fields:hover .fs-insert-line,
+.fs-insert-line:hover,
+.fs-insert-line.is-open { opacity: 1; }
+.fs-insert-btn {
+  width: 30px; height: 30px; margin-left: -15px; flex-shrink: 0;
+  border: 1px solid #dbeafe; border-radius: 8px; background: #fff;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, .1); font-size: 20px; font-weight: 400;
+  line-height: 1; color: #475569; cursor: pointer; padding: 0; z-index: 2;
+}
+.fs-insert-btn:hover { border-color: #93c5fd; color: #1d4ed8; background: #f8fafc; }
+.fs-insert-rule {
+  flex: 1; height: 0; border-top: 2px dashed #93c5fd; margin-left: 6px; margin-right: 4px;
+}
+.fs-insert-menu {
+  position: fixed; z-index: 75; min-width: 148px; padding: 6px;
+  background: #fff; border: 1px solid #e2e8f0; border-radius: 10px;
+  box-shadow: 0 10px 28px rgba(15, 23, 42, .16);
+}
+.fs-insert-menu.hidden { display: none; }
+.fs-insert-menu-item {
+  display: block; width: 100%; text-align: left; border: none; background: transparent;
+  padding: 8px 10px; border-radius: 6px; font-size: 12px; font-weight: 500;
+  color: #334155; cursor: pointer;
+}
+.fs-insert-menu-item:hover { background: #f1f5f9; color: #0f172a; }
+.fs-phone-device {
+  width: 100%; max-width: 300px; margin: 0 auto; padding: 10px;
+  background: linear-gradient(180deg, #f1f5f9 0%, #e8edf3 100%);
+  border-radius: 26px; border: 1px solid #d8dee8;
+  box-shadow: 0 1px 0 rgba(255,255,255,.8) inset;
 }
 .fs-ed-block-type { font-size: 10px; font-weight: 700; text-transform: uppercase; color: var(--brand-700); }
 .fs-ed-block-actions { display: flex; gap: 2px; }
@@ -1528,7 +1564,6 @@ input, textarea, select { font-family: inherit; }
 .fs-ed-text:empty:before { content: attr(data-placeholder); color: #94a3b8; }
 .fs-ed-title { outline: none; min-width: 0; }
 .fs-ed-title:focus { background: rgba(0,165,244,.08); border-radius: 4px; }
-.fs-ed-add-blocks { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; padding-top: 8px; border-top: 1px dashed #e2e8f0; }
 .fs-ed-fields { margin-top: 12px; padding-top: 10px; border-top: 1px solid #e9edef; }
 .fs-ed-fields-label { display: block; font-size: 10px; font-weight: 700; text-transform: uppercase; color: var(--muted); margin-bottom: 8px; }
 .fs-ed-field {
@@ -1574,7 +1609,10 @@ input, textarea, select { font-family: inherit; }
 }
 .fs-view-btn.active { background: var(--text); color: #fff; border-color: var(--text); }
 .fs-strip-hint { margin: 0 0 10px; line-height: 1.45; max-width: 52rem; }
-.fs-screen-strip { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; align-items: flex-start; }
+.fs-screen-strip {
+  display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; align-items: flex-start;
+  justify-content: center;
+}
 .fs-thumb-slot {
   position: relative; flex-shrink: 0;
 }
@@ -1602,15 +1640,27 @@ input, textarea, select { font-family: inherit; }
 }
 .fs-thumb-add:hover { border-color: var(--brand); color: var(--brand); }
 .fs-preview-row {
-  display: flex; gap: 28px; overflow-x: auto; padding: 20px 32px 28px; align-items: flex-start;
+  display: flex; gap: 32px; overflow-x: auto; padding: 24px 40px 32px; align-items: flex-start;
   scroll-snap-type: x mandatory; scroll-behavior: smooth; -webkit-overflow-scrolling: touch;
+  width: 100%; max-width: 100%;
 }
+.fs-preview-row.fs-preview-centered { justify-content: center; }
 .fs-preview-row.single { justify-content: center; overflow: visible; }
 .fs-phone-wrap {
-  flex-shrink: 0; width: 280px; scroll-snap-align: center;
-  transition: transform .2s ease, opacity .2s ease;
+  flex-shrink: 0; width: 300px; scroll-snap-align: center;
+  transition: opacity .2s ease;
 }
-.fs-phone-wrap.editing { transform: scale(1.02); }
+.fs-phone-wrap.editing .fs-phone-device {
+  box-shadow: 0 0 0 2px var(--brand-50), 0 1px 0 rgba(255,255,255,.8) inset;
+}
+.flow-studio .flow-phone.fs-phone-mini {
+  width: 100%; max-width: none; margin: 0;
+  border-radius: 14px; border: 1px solid #dde3ea;
+  box-shadow: 0 4px 14px rgba(15, 23, 42, .07);
+  overflow: hidden; background: #fff;
+}
+.flow-studio .fs-phone-mini .flow-phone-nav { border-bottom: 1px solid #e9edef; }
+.flow-studio .fs-phone-mini .flow-phone-footer { border-top: 1px solid #e9edef; background: #fff; }
 .fs-preview-meta {
   display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px;
 }
@@ -1622,7 +1672,6 @@ input, textarea, select { font-family: inherit; }
 .fs-preview-foot { margin: 8px 0 0; line-height: 1.35; font-size: 11px; text-align: center; }
 .fs-preview-nav { grid-template-columns: 64px 1fr 28px; }
 .fs-preview-decor { opacity: .85; pointer-events: none; user-select: none; }
-.fs-phone-wrap.editing { outline: 2px solid var(--brand); outline-offset: 4px; border-radius: 20px; }
 .fs-phone-dots { display: flex; justify-content: center; gap: 4px; margin-top: 8px; }
 .fs-phone-dots span { width: 6px; height: 6px; border-radius: 50%; background: #cbd5e1; }
 .fs-phone-dots span.on { background: var(--brand); }

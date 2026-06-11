@@ -266,6 +266,10 @@
     "editOnPreview": "Edita en cada pantalla del carrusel. Selecciona texto para abrir el menú de formato.",
     "formatBarAria": "Formato de texto",
     "fmtCaption": "Texto pequeño",
+    "insertBlock": "Agregar bloque aquí",
+    "insertField": "Agregar campo aquí",
+    "fieldDate": "Fecha",
+    "fieldSelect": "Lista",
     "removeScreenBtn": "Eliminar pantalla",
     "screenRemoved": "Pantalla eliminada"
   },

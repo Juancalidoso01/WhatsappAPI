@@ -4358,6 +4358,11 @@ function initFsFormatBar() {
   const bar = $("fsFormatBar");
   if (!bar) return;
   fsFormatBarBound = true;
+  document.addEventListener("mousedown", (e) => {
+    if (!e.target.closest("#fsInsertMenu") && !e.target.closest(".fs-insert-btn")) {
+      hideFsInsertMenu();
+    }
+  });
   bar.querySelectorAll(".fs-fmt-btn").forEach((btn) => {
     btn.addEventListener("mousedown", (e) => e.preventDefault());
     btn.addEventListener("click", (e) => {
@@ -4395,6 +4400,120 @@ function fsFieldTypeOptions(selected) {
   return types.map((ft) =>
     `<option value="${escapeHtml(ft.id)}"${ft.id === selected ? " selected" : ""}>${escapeHtml(ft.label)}</option>`
   ).join("");
+}
+
+function fsInsertLineHtml(at, kind) {
+  const label = kind === "field"
+    ? t("flows.studio.insertField")
+    : t("flows.studio.insertBlock");
+  return `
+    <div class="fs-insert-line" data-insert-at="${at}" data-insert-kind="${kind}">
+      <button type="button" class="fs-insert-btn" title="${escapeHtml(label)}" aria-label="${escapeHtml(label)}">+</button>
+      <span class="fs-insert-rule" aria-hidden="true"></span>
+    </div>`;
+}
+
+function fsBlockTypeMenuItems() {
+  const types = fsState.schema?.blockTypes || [
+    { id: "heading", label: t("flows.studio.blockHeading") },
+    { id: "body", label: t("flows.studio.blockBody") },
+    { id: "subheading", label: t("flows.studio.blockSubheading") },
+    { id: "caption", label: t("flows.studio.blockCaption") },
+    { id: "image", label: t("flows.studio.blockImage") },
+  ];
+  return types;
+}
+
+function hideFsInsertMenu() {
+  const menu = $("fsInsertMenu");
+  if (!menu) return;
+  menu.classList.add("hidden");
+  document.querySelectorAll(".fs-insert-line.is-open").forEach((el) => el.classList.remove("is-open"));
+}
+
+function showFsInsertMenu(anchorBtn, kind, screenIndex, insertAt) {
+  const menu = $("fsInsertMenu");
+  if (!menu || !anchorBtn) return;
+  hideFsInsertMenu();
+  anchorBtn.closest(".fs-insert-line")?.classList.add("is-open");
+  const items = kind === "field"
+    ? (fsState.schema?.fieldTypes || [
+      { id: "text", label: t("flows.studio.defaultFieldName") },
+      { id: "email", label: "Email" },
+      { id: "date", label: t("flows.studio.fieldDate") },
+      { id: "select", label: t("flows.studio.fieldSelect") },
+    ])
+    : fsBlockTypeMenuItems();
+  menu.innerHTML = items.map((item) =>
+    `<button type="button" class="fs-insert-menu-item" role="menuitem" data-insert-type="${escapeHtml(item.id)}">${escapeHtml(item.label)}</button>`
+  ).join("");
+  menu.dataset.screen = String(screenIndex);
+  menu.dataset.at = String(insertAt);
+  menu.dataset.kind = kind;
+  menu.classList.remove("hidden");
+  const rect = anchorBtn.getBoundingClientRect();
+  const mw = menu.offsetWidth || 160;
+  let left = rect.left;
+  let top = rect.bottom + 6;
+  left = Math.max(12, Math.min(left, window.innerWidth - mw - 12));
+  menu.style.left = `${left}px`;
+  menu.style.top = `${top}px`;
+  menu.querySelectorAll(".fs-insert-menu-item").forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const type = btn.dataset.insertType;
+      const i = Number(menu.dataset.screen);
+      const at = Number(menu.dataset.at);
+      if (menu.dataset.kind === "field") fsInsertFieldAt(i, at, type);
+      else fsInsertBlockAt(i, at, type);
+      hideFsInsertMenu();
+    });
+  });
+}
+
+function fsInsertBlockAt(screenIndex, insertAt, type) {
+  syncFsFromAllPreviews();
+  const scr = fsState.screens[screenIndex];
+  if (!scr) return;
+  ensureScreenBlocks(scr);
+  const max = fsState.schema?.limits?.maxBlocksPerScreen || 10;
+  if (scr.blocks.length >= max) {
+    toast(t("toast.maxBlocks", { max }), "error");
+    return;
+  }
+  const block = { type };
+  if (type === "body" || type === "caption") block.emphasis = "normal";
+  if (type === "image") {
+    block.altText = t("flows.studio.imageAltDefault");
+    block.scaleType = "contain";
+  } else {
+    block.text = "";
+  }
+  const at = Math.max(0, Math.min(insertAt, scr.blocks.length));
+  scr.blocks.splice(at, 0, block);
+  fsState.activeIndex = screenIndex;
+  renderFlowStudio();
+}
+
+function fsInsertFieldAt(screenIndex, insertAt, type) {
+  syncFsFromAllPreviews();
+  const scr = fsState.screens[screenIndex];
+  if (!scr || scr.layout !== "form") return;
+  scr.fields = scr.fields || [];
+  const at = Math.max(0, Math.min(insertAt, scr.fields.length));
+  scr.fields.splice(at, 0, { type: type || "text", label: "", required: true });
+  fsState.activeIndex = screenIndex;
+  renderFlowStudio();
+}
+
+function fsBlocksWithInsertsHtml(scr) {
+  const blocks = scr.blocks || [];
+  let html = fsInsertLineHtml(0, "block");
+  blocks.forEach((b, bi) => {
+    html += fsEditableBlockHtml(b, bi, blocks.length);
+    html += fsInsertLineHtml(bi + 1, "block");
+  });
+  return html;
 }
 
 function fsEditableBlockHtml(b, bi, scrLen) {
@@ -4448,22 +4567,23 @@ function fsEditableBlockHtml(b, bi, scrLen) {
 function fsEditableFieldsHtml(scr) {
   if (scr.layout !== "form") return "";
   const fields = scr.fields || [];
-  const rows = fields.map((f, fi) => {
+  let rows = fsInsertLineHtml(0, "field");
+  fields.forEach((f, fi) => {
     const needsOpts = f.type === "select" || f.type === "checkbox";
     const optsVal = (f.options || []).join(", ");
-    return `
+    rows += `
       <div class="fs-ed-field" data-fi="${fi}">
         <input type="text" class="fs-f-label" placeholder="${escapeHtml(t("flows.studio.fieldLabel"))}" value="${escapeHtml(f.label || "")}" />
         <select class="fs-f-type">${fsFieldTypeOptions(f.type)}</select>
         <button type="button" class="btn-ghost sm fs-f-remove" title="×">×</button>
         ${needsOpts ? `<input type="text" class="fs-f-opts sm" placeholder="${escapeHtml(t("flows.studio.fieldOptionsPh"))}" value="${escapeHtml(optsVal)}" />` : ""}
       </div>`;
-  }).join("");
+    rows += fsInsertLineHtml(fi + 1, "field");
+  });
   return `
     <div class="fs-ed-fields">
       <span class="fs-ed-fields-label">${escapeHtml(t("flows.studio.formFields"))}</span>
       ${rows}
-      <button type="button" class="btn-ghost sm fs-add-field">+ ${escapeHtml(t("flows.studio.addField"))}</button>
     </div>`;
 }
 
@@ -4473,20 +4593,15 @@ function renderFsPhoneEditor(scr, index) {
   const canDelete = fsState.screens.length > 1;
   const btnLabel = scr.buttonLabel || (isLast ? t("flows.studio.close") : t("flows.studio.continue"));
   const stepOf = t("flows.studio.previewStepOf", { n: index + 1, total: fsState.screens.length });
-  const blocksHtml = (scr.blocks || []).map((b, bi) => fsEditableBlockHtml(b, bi, scr.blocks.length)).join("");
+  const blocksHtml = fsBlocksWithInsertsHtml(scr);
   const layoutBtns = FS_LAYOUTS.map((id) =>
     `<button type="button" class="fs-ed-layout${scr.layout === id ? " active" : ""}" data-layout="${id}">${escapeHtml(fsLayoutLabel(id))}</button>`
   ).join("");
-  const blockTypes = fsState.schema?.blockTypes || [
-    { id: "heading", label: t("flows.studio.blockHeading") },
-    { id: "body", label: t("flows.studio.blockBody") },
-    { id: "image", label: t("flows.studio.blockImage") },
-  ];
-  const addBlockBtns = blockTypes.map((bt) =>
-    `<button type="button" class="btn-ghost sm fs-block-add-btn" data-block-type="${escapeHtml(bt.id)}">+ ${escapeHtml(bt.label)}</button>`
-  ).join("");
   const actionNext = isLast ? "" : `<option value="next"${scr.buttonAction !== "complete" ? " selected" : ""}>${escapeHtml(t("flows.studio.actionNext"))}</option>`;
   const actionComplete = `<option value="complete"${scr.buttonAction === "complete" || isLast ? " selected" : ""}>${escapeHtml(t("flows.studio.actionComplete"))}</option>`;
+  const dotsHtml = fsState.screens.map((_, i) =>
+    `<span class="${i === index ? "on" : ""}"></span>`
+  ).join("");
 
   return `
     <div class="fs-phone-wrap${fsState.activeIndex === index ? " editing" : ""}" data-fs-i="${index}" id="fsPhone${index}">
@@ -4495,26 +4610,28 @@ function renderFsPhoneEditor(scr, index) {
         <span class="fs-preview-step muted sm">${escapeHtml(stepOf)}</span>
         ${canDelete ? `<button type="button" class="fs-screen-del" data-fs-del="${index}">${escapeHtml(t("flows.studio.removeScreenBtn"))}</button>` : ""}
       </div>
-      <div class="flow-phone fs-phone-mini">
-        <div class="flow-phone-nav fs-preview-nav">
-          <span class="flow-phone-cancel fs-preview-decor" aria-hidden="true">${escapeHtml(t("flows.studio.previewCancelLabel"))}</span>
-          <span class="flow-phone-title fs-ed-title" contenteditable="true" data-placeholder="${escapeHtml(t("flows.studio.screenTitle"))}">${escapeHtml(scr.title || t("flows.studio.step", { n: index + 1 }))}</span>
-          <span class="flow-phone-menu fs-preview-decor" aria-hidden="true">⋯</span>
-        </div>
-        <div class="fs-ed-layouts">${layoutBtns}</div>
-        <div class="flow-phone-body fs-ed-body">
-          ${blocksHtml}
-          ${fsEditableFieldsHtml(scr)}
-          <div class="fs-ed-add-blocks">${addBlockBtns}</div>
-        </div>
-        <div class="flow-phone-footer fs-ed-footer">
-          <input type="text" class="fs-ed-footer-btn" value="${escapeHtml(btnLabel)}" placeholder="${escapeHtml(t("flows.studio.screenButton"))}" />
-          <label class="fs-ed-action-wrap muted sm">
-            <span>${escapeHtml(t("flows.studio.onButtonTap"))}</span>
-            <select class="fs-ed-action">${actionNext}${actionComplete}</select>
-          </label>
+      <div class="fs-phone-device">
+        <div class="flow-phone fs-phone-mini">
+          <div class="flow-phone-nav fs-preview-nav">
+            <span class="flow-phone-cancel fs-preview-decor" aria-hidden="true">${escapeHtml(t("flows.studio.previewCancelLabel"))}</span>
+            <span class="flow-phone-title fs-ed-title" contenteditable="true" data-placeholder="${escapeHtml(t("flows.studio.screenTitle"))}">${escapeHtml(scr.title || t("flows.studio.step", { n: index + 1 }))}</span>
+            <span class="flow-phone-menu fs-preview-decor" aria-hidden="true">⋯</span>
+          </div>
+          <div class="fs-ed-layouts">${layoutBtns}</div>
+          <div class="flow-phone-body fs-ed-body">
+            ${blocksHtml}
+            ${fsEditableFieldsHtml(scr)}
+          </div>
+          <div class="flow-phone-footer fs-ed-footer">
+            <input type="text" class="fs-ed-footer-btn" value="${escapeHtml(btnLabel)}" placeholder="${escapeHtml(t("flows.studio.screenButton"))}" />
+            <label class="fs-ed-action-wrap muted sm">
+              <span>${escapeHtml(t("flows.studio.onButtonTap"))}</span>
+              <select class="fs-ed-action">${actionNext}${actionComplete}</select>
+            </label>
+          </div>
         </div>
       </div>
+      <div class="fs-phone-dots">${dotsHtml}</div>
     </div>`;
 }
 
@@ -4545,31 +4662,13 @@ function bindFsPreviewRow(row) {
       renderFlowStudio();
     });
   });
-  row.querySelectorAll(".fs-block-add-btn").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      syncFsFromAllPreviews();
+  row.querySelectorAll(".fs-insert-btn").forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const line = btn.closest(".fs-insert-line");
       const wrap = btn.closest(".fs-phone-wrap");
-      const i = Number(wrap.dataset.fsI);
-      const scr = fsState.screens[i];
-      if (!scr) return;
-      ensureScreenBlocks(scr);
-      const max = fsState.schema?.limits?.maxBlocksPerScreen || 10;
-      if (scr.blocks.length >= max) {
-        toast(t("toast.maxBlocks", { max }), "error");
-        return;
-      }
-      const type = btn.dataset.blockType;
-      const block = { type };
-      if (type === "body" || type === "caption") block.emphasis = "normal";
-      if (type === "image") {
-        block.altText = t("flows.studio.imageAltDefault");
-        block.scaleType = "contain";
-      } else {
-        block.text = "";
-      }
-      scr.blocks.push(block);
-      fsState.activeIndex = i;
-      renderFlowStudio();
+      if (!line || !wrap) return;
+      showFsInsertMenu(btn, line.dataset.insertKind, Number(wrap.dataset.fsI), Number(line.dataset.insertAt));
     });
   });
   row.querySelectorAll(".fs-b-remove").forEach((btn) => {
@@ -4623,19 +4722,6 @@ function bindFsPreviewRow(row) {
       uploadFsBlockImage(Number(input.dataset.bi), input);
     });
   });
-  row.querySelectorAll(".fs-add-field").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      syncFsFromAllPreviews();
-      const wrap = btn.closest(".fs-phone-wrap");
-      const i = Number(wrap.dataset.fsI);
-      const scr = fsState.screens[i];
-      if (!scr || scr.layout !== "form") return;
-      scr.fields = scr.fields || [];
-      scr.fields.push({ type: "text", label: "", required: true });
-      fsState.activeIndex = i;
-      renderFlowStudio();
-    });
-  });
   row.querySelectorAll(".fs-f-remove").forEach((btn) => {
     btn.addEventListener("click", () => {
       syncFsFromAllPreviews();
@@ -4675,6 +4761,7 @@ function fsThumbLabel(scr) {
 
 function renderFlowStudio() {
   hideFsFormatBar();
+  hideFsInsertMenu();
   initFsFormatBar();
   const strip = $("fsScreenStrip");
   const row = $("fsPreviewRow");
@@ -4704,11 +4791,14 @@ function renderFlowStudio() {
   const addBtn = $("fsAddScreen");
   if (addBtn) addBtn.addEventListener("click", fsAddScreen);
 
+  row.className = "fs-preview-row"
+    + (fsState.screens.length <= 2 ? " fs-preview-centered" : "");
   row.innerHTML = fsState.screens.map((scr, i) => renderFsPhoneEditor(scr, i)).join("")
     + (fsState.screens.length < max
       ? `<button type="button" class="fs-thumb-add fs-add-screen-card" id="fsAddScreenRow" title="${escapeHtml(t("flows.studio.addScreen"))}">+</button>`
       : "");
   bindFsPreviewRow(row);
+  hideFsInsertMenu();
   const addRow = $("fsAddScreenRow");
   if (addRow) addRow.addEventListener("click", fsAddScreen);
 }
