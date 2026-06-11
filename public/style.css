@@ -1483,6 +1483,14 @@ input, textarea, select { font-family: inherit; }
   border: none; border-radius: 6px; background: transparent;
 }
 .fs-ed-block[data-block-type="image"] { cursor: pointer; }
+.fs-ed-block[data-block-type="link"] .fs-b-link-text,
+.fs-ed-block[data-block-type="link"] .fs-b-link-url {
+  display: block; width: 100%; margin: 4px 0; padding: 8px 10px;
+  border: 1px solid var(--border); border-radius: 8px; font-size: 13px;
+}
+.fs-ed-block[data-block-type="link"] .fs-b-link-text { color: #008069; font-weight: 600; }
+.btn-ghost.danger-text { color: var(--red); }
+.btn-ghost.danger-text:hover { background: #fef2f2; }
 .fs-block-remove {
   position: absolute; top: 2px; right: 0; z-index: 2;
   width: 22px; height: 22px; border: none; border-radius: 6px;

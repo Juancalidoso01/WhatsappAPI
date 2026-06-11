@@ -63,6 +63,14 @@ function parseContentBlock(comp) {
       previewUrl: comp.src && String(comp.src).startsWith("data:") ? comp.src : "",
     };
   }
+  if (comp.type === "EmbeddedLink") {
+    const action = comp["on-click-action"] || {};
+    return {
+      type: "link",
+      text: comp.text || "",
+      url: action.url || "",
+    };
+  }
   return null;
 }
 

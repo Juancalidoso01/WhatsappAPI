@@ -50,6 +50,13 @@
   "flowSent": "Flow sent (mode {mode}).",
   "publishFailed": "Could not publish.",
   "flowPublished": "Flow published.",
+  "flowDeleted": "Flow deleted in Meta.",
+  "flowDeleteFailed": "Could not delete the Flow.",
+  "flowDeprecated": "Flow deprecated in Meta.",
+  "flowDeprecateFailed": "Could not deprecate the Flow.",
+  "maxFields": "Maximum {max} fields per screen.",
+  "flowTemplateSubmitted": "Template «{name}» submitted to Meta. Await approval.",
+  "templateCreateFailed": "Could not create the template.",
   "templateSubmittedMeta": "Template submitted to Meta.{vars} Wait for approval.",
   "templateSubmittedVars": " API variables: {keys}."
 }

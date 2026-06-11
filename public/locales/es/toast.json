@@ -49,6 +49,13 @@
   "flowSent": "Flow enviado (modo {mode}).",
   "publishFailed": "No se pudo publicar.",
   "flowPublished": "Flow publicado.",
+  "flowDeleted": "Flow eliminado en Meta.",
+  "flowDeleteFailed": "No se pudo eliminar el Flow.",
+  "flowDeprecated": "Flow deprecado en Meta.",
+  "flowDeprecateFailed": "No se pudo deprecar el Flow.",
+  "maxFields": "Máximo {max} campos por pantalla.",
+  "flowTemplateSubmitted": "Plantilla «{name}» enviada a Meta. Espera la aprobación.",
+  "templateCreateFailed": "No se pudo crear la plantilla.",
   "templateSubmittedMeta": "Plantilla enviada a Meta.{vars} Espera la aprobación.",
   "templateSubmittedVars": " Variables API: {keys}."
 }

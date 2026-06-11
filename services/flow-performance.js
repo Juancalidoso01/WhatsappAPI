@@ -8,6 +8,11 @@ function isPaymentAuthFlow(flow) {
   return name.includes("autorizacion_pago") || name.includes("payment_auth") || name.includes("3ds");
 }
 
+function isBookingFlow(flow) {
+  const name = String((flow && flow.name) || "").toLowerCase();
+  return name.includes("reserva_cita") || name.includes("booking");
+}
+
 async function getFlowPerformance(flowId, flowMeta) {
   const id = String(flowId);
   const sends = (await FlowStore.listSends({ limit: 500 })).filter((s) => String(s.flowId) === id);
@@ -38,6 +43,7 @@ async function getFlowPerformance(flowId, flowMeta) {
   return {
     flowId: id,
     isPaymentAuth: isPaymentAuthFlow(flowMeta),
+    isBooking: isBookingFlow(flowMeta),
     stats: {
       sent,
       opened,
@@ -54,4 +60,4 @@ async function getFlowPerformance(flowId, flowMeta) {
   };
 }
 
-module.exports = { getFlowPerformance, isPaymentAuthFlow };
+module.exports = { getFlowPerformance, isPaymentAuthFlow, isBookingFlow };

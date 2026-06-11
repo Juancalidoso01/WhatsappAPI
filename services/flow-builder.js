@@ -38,7 +38,10 @@ const CATEGORIES = [
   { id: "SURVEY", label: "Encuesta" },
   { id: "SIGN_UP", label: "Registro" },
   { id: "CUSTOMER_SUPPORT", label: "Soporte" },
+  { id: "APPOINTMENT_BOOKING", label: "Reserva de citas" },
 ];
+
+const LIMITS = { maxScreens: 8, maxFieldsPerScreen: 12, maxBlocksPerScreen: 10, imageMaxKb: 100 };
 
 function slugify(text, fallback) {
   const s = String(text || "")
@@ -73,10 +76,35 @@ function validateDefinition(def) {
     if (!String(scr.title || "").trim()) {
       return { ok: false, error: `La pantalla ${si + 1} necesita un título.` };
     }
+    const blocks = Array.isArray(scr.blocks) ? scr.blocks : [];
+    if (blocks.length > LIMITS.maxBlocksPerScreen) {
+      return {
+        ok: false,
+        error: `"${scr.title}": máximo ${LIMITS.maxBlocksPerScreen} bloques por pantalla.`,
+      };
+    }
+    for (let bi = 0; bi < blocks.length; bi++) {
+      const b = blocks[bi];
+      if (b.type === "link") {
+        if (!String(b.text || "").trim()) {
+          return { ok: false, error: `"${scr.title}": el enlace ${bi + 1} necesita texto.` };
+        }
+        const url = String(b.url || "").trim();
+        if (!url || !/^https?:\/\//i.test(url)) {
+          return { ok: false, error: `"${scr.title}": el enlace "${b.text}" necesita URL https:// válida.` };
+        }
+      }
+    }
     if (scr.type === "form") {
       const fields = scr.fields || [];
       if (!fields.length) {
         return { ok: false, error: `La pantalla "${scr.title}" no tiene campos.` };
+      }
+      if (fields.length > LIMITS.maxFieldsPerScreen) {
+        return {
+          ok: false,
+          error: `"${scr.title}": máximo ${LIMITS.maxFieldsPerScreen} campos por pantalla.`,
+        };
       }
       for (let fi = 0; fi < fields.length; fi++) {
         const f = fields[fi];
@@ -252,6 +280,16 @@ function layoutContentFromScreen(scr) {
       } else if (b.type === "image") {
         const img = imageComponent(b);
         if (img) children.push(img);
+      } else if (b.type === "link") {
+        const url = String(b.url || "").trim();
+        const text = String(b.text || "Abrir enlace").trim();
+        if (url) {
+          children.push({
+            type: "EmbeddedLink",
+            text,
+            "on-click-action": { name: "open_url", url },
+          });
+        }
       }
     });
   } else {
@@ -324,8 +362,6 @@ function buildFlowJson(definition) {
         heading: scr.introHeading,
         body: scr.introBody,
         image: scr.image,
-        linkUrl: scr.linkUrl,
-        linkLabel: scr.linkLabel,
       }));
 
       const formFields = [];
@@ -429,13 +465,14 @@ function getSchema() {
       { id: "body", label: "Párrafo" },
       { id: "caption", label: "Texto pequeño" },
       { id: "image", label: "Imagen" },
+      { id: "link", label: "Enlace" },
     ],
     screenTypes: [
       { id: "form", label: "Formulario", description: "Campos que el usuario completa." },
       { id: "message", label: "Mensaje", description: "Texto informativo o CTA antes de continuar." },
       { id: "confirm", label: "Confirmación", description: "Pantalla final de agradecimiento." },
     ],
-    limits: { maxScreens: 8, maxFieldsPerScreen: 12, maxBlocksPerScreen: 10, imageMaxKb: 100 },
+    limits: LIMITS,
   };
 }
 

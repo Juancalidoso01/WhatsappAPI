@@ -1399,6 +1399,116 @@ app.post('/api/flows/:id/publish', async (req, res) => {
   }
 });
 
+app.delete('/api/flows/:id', async (req, res) => {
+  if (!config.accessToken) return res.status(400).json({ ok: false, error: 'Falta ACCESS_TOKEN.' });
+  try {
+    const flow = await GraphApi.getFlow(req.params.id, 'id,name,status');
+    const st = String(flow.status || '').toUpperCase();
+    if (st !== 'DRAFT') {
+      return res.status(400).json({
+        ok: false,
+        error: 'Solo se pueden eliminar Flows en borrador (DRAFT). Para publicados usa deprecar.',
+      });
+    }
+    await GraphApi.deleteFlow(req.params.id);
+    res.json({ ok: true, deleted: req.params.id });
+  } catch (err) {
+    res.status(200).json({ ok: false, error: String(err.message || err) });
+  }
+});
+
+app.post('/api/flows/:id/deprecate', async (req, res) => {
+  if (!config.accessToken) return res.status(400).json({ ok: false, error: 'Falta ACCESS_TOKEN.' });
+  try {
+    const flow = await GraphApi.getFlow(req.params.id, 'id,name,status');
+    const st = String(flow.status || '').toUpperCase();
+    if (st !== 'PUBLISHED') {
+      return res.status(400).json({
+        ok: false,
+        error: 'Solo se pueden deprecar Flows publicados (PUBLISHED).',
+      });
+    }
+    const result = await GraphApi.deprecateFlow(req.params.id);
+    res.json({ ok: true, result });
+  } catch (err) {
+    res.status(200).json({ ok: false, error: String(err.message || err) });
+  }
+});
+
+app.post('/api/flows/:id/template', apiJson, async (req, res) => {
+  const { name, bodyText, cta, screen, category, language, footerText } = req.body || {};
+  if (!config.accessToken || !config.wabaId) {
+    return res.status(400).json({ ok: false, error: 'Falta ACCESS_TOKEN o WABA_ID.' });
+  }
+  if (!bodyText || !cta) {
+    return res.status(400).json({ ok: false, error: 'Se requieren bodyText y cta.' });
+  }
+
+  let flowMeta;
+  try {
+    flowMeta = await GraphApi.getFlow(req.params.id, 'id,name,status');
+  } catch (err) {
+    return res.json({ ok: false, error: String(err.message || err) });
+  }
+
+  const stored = await FlowStudioStore.getDefinition(req.params.id);
+  const screenId = screen || 'SCREEN_A';
+  const tplName = String(name || `${flowMeta.name || 'flow'}_mensaje`)
+    .toLowerCase()
+    .replace(/[^a-z0-9_]/g, '_')
+    .slice(0, 512);
+  const tplCategory = String(category || stored?.category || 'UTILITY').toUpperCase();
+  const tplLang = language || 'es';
+  const ctaText = String(cta).slice(0, 25);
+
+  const built = templateBuilder.buildComponents({
+    bodyText,
+    footerText: footerText || 'Punto Pago',
+    variables: [],
+  });
+  if (!built.ok) {
+    return res.status(400).json({ ok: false, error: built.errors.join(' ') });
+  }
+  built.components.push({
+    type: 'BUTTONS',
+    buttons: [{
+      type: 'FLOW',
+      text: ctaText,
+      flow_id: String(req.params.id),
+      flow_action: 'navigate',
+      navigate_screen: screenId,
+    }],
+  });
+
+  try {
+    const result = await GraphApi.createTemplate(config.wabaId, {
+      name: tplName,
+      category: tplCategory,
+      language: tplLang,
+      components: built.components,
+    });
+    await Store.setTemplateRequestedCategory(tplName, tplLang, tplCategory, {
+      syncedFrom: 'flow_studio',
+      flowId: req.params.id,
+      createdAt: Date.now(),
+      eventVariableKeys: built.eventVariableKeys,
+      placeholderCount: built.placeholderCount,
+    });
+    res.json({
+      ok: true,
+      result,
+      name: tplName,
+      flowId: req.params.id,
+      screen: screenId,
+      requestedCategory: tplCategory,
+      note: 'Plantilla enviada a revisión de Meta. Cuando esté APPROVED podrás usarla fuera de la ventana de 24 h.',
+    });
+  } catch (err) {
+    console.error('flow template error:', err.message);
+    res.status(200).json({ ok: false, error: String(err.message || err) });
+  }
+});
+
 app.post('/api/flows/:id/send', apiJson, async (req, res) => {
   const { phone, bodyText, cta, screen, flowToken, mode, flowAction, headerText, footerText } = req.body || {};
   if (!phone) return res.status(400).json({ ok: false, error: 'Se requiere "phone".' });

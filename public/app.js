@@ -152,6 +152,7 @@ const patch = (url, body) =>
   api(url, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
 const put = (url, body) =>
   api(url, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+const del = (url) => api(url, { method: "DELETE" });
 const postForm = (url, formData) => api(url, { method: "POST", body: formData });
 
 function postCsv(url, formData) {
@@ -2248,6 +2249,19 @@ async function checkBookingAvailability() {
     <div>${res.slots.map((s) => `<span class="booking-avail-slot">${escapeHtml(s.title)}</span>`).join("")}</div>`;
 }
 
+function openFlowDetailProbar() {
+  const perf = state.activeFlowPerformance || {};
+  if (perf.isPaymentAuth) {
+    openFlowProbar("payment");
+    return;
+  }
+  if (perf.isBooking) {
+    openFlowProbar("booking");
+    return;
+  }
+  openFlowSendModal();
+}
+
 function closeFlowProbar() {
   setFlowsTab("mis");
 }
@@ -4110,6 +4124,80 @@ function syncFlowEditButton(status) {
   btn.classList.toggle("hidden", !isDraft || isDynamic);
 }
 
+function syncFlowLifecycleButtons(status) {
+  const st = String(status || "").toUpperCase();
+  $("flowDeleteBtn")?.classList.toggle("hidden", st !== "DRAFT");
+  $("flowDeprecateBtn")?.classList.toggle("hidden", st !== "PUBLISHED");
+}
+
+async function deleteActiveFlow() {
+  const id = state.activeFlowId;
+  if (!id) return;
+  const name = ($("flowsDetailName") || {}).textContent || id;
+  if (!window.confirm(t("flows.deleteConfirm", { name }))) return;
+  const res = await del(`/api/flows/${encodeURIComponent(id)}`);
+  if (!res.ok) {
+    toast(res.error || t("toast.flowDeleteFailed"), "error");
+    return;
+  }
+  toast(t("toast.flowDeleted"), "ok");
+  state.activeFlowId = null;
+  state.activeFlowDetail = null;
+  $("flowsDetailPanel")?.classList.add("hidden");
+  $("flowsEmptyDetail")?.classList.remove("hidden");
+  await loadFlows();
+}
+
+async function deprecateActiveFlow() {
+  const id = state.activeFlowId;
+  if (!id) return;
+  const name = ($("flowsDetailName") || {}).textContent || id;
+  if (!window.confirm(t("flows.deprecateConfirm", { name }))) return;
+  const res = await post(`/api/flows/${encodeURIComponent(id)}/deprecate`, {});
+  if (!res.ok) {
+    toast(res.error || t("toast.flowDeprecateFailed"), "error");
+    return;
+  }
+  toast(t("toast.flowDeprecated"), "ok");
+  await loadFlows();
+  if (state.activeFlowId === id) {
+    const detail = await api(`/api/flows/${encodeURIComponent(id)}`);
+    state.activeFlowDetail = detail.ok ? detail.flow : null;
+    await loadFlowDetail(id);
+  }
+}
+
+async function createFlowTemplate(opts = {}) {
+  const id = opts.flowId || state.activeFlowId;
+  if (!id) {
+    toast(t("toast.selectFlow"), "error");
+    return;
+  }
+  const def = opts.def || {};
+  const profile = state.flowSendProfile || {};
+  const defaults = profile.sendDefaults || {};
+  const slug = String(def.name || state.activeFlowDetail?.name || "flow")
+    .replace(/[^a-z0-9_]/gi, "_")
+    .slice(0, 40);
+  const bodyText = opts.bodyText || def.chatBody || defaults.bodyText || t("flows.studio.defaultChatBody");
+  const cta = opts.cta || def.cta || defaults.cta || profile.defaultCta || t("flows.studio.defaultCta");
+  const screen = opts.screen || defaults.screen || profile.defaultScreen || "SCREEN_A";
+  const res = await post(`/api/flows/${encodeURIComponent(id)}/template`, {
+    name: opts.name || `${slug}_mensaje`,
+    bodyText,
+    cta: String(cta).slice(0, 25),
+    screen,
+    category: def.category || "UTILITY",
+    footerText: opts.footerText || "Punto Pago",
+  });
+  if (!res.ok) {
+    toast(res.error || t("toast.templateCreateFailed"), "error");
+    return;
+  }
+  toast(t("toast.flowTemplateSubmitted", { name: res.name }), "ok");
+  return res;
+}
+
 async function loadFlowDetail(id) {
   const perfRes = await api(`/api/flows/${encodeURIComponent(id)}/performance`);
   if (!perfRes.ok) return;
@@ -4124,6 +4212,7 @@ async function loadFlowDetail(id) {
   }
   syncFlowPublishButton(st);
   syncFlowEditButton(st);
+  syncFlowLifecycleButtons(st);
   renderFlowHealthPanel(state.activeFlowDetail);
   renderFlowValidationPanel(state.activeFlowDetail);
   renderFlowStatsCards(perfRes.stats, perfRes.isPaymentAuth);
@@ -4137,7 +4226,7 @@ async function loadFlowDetail(id) {
   );
   await renderFlowDetailPreview(perfRes);
   const probarBtn = $("flowDetailProbarBtn");
-  if (probarBtn) probarBtn.classList.toggle("hidden", !perfRes.isPaymentAuth);
+  if (probarBtn) probarBtn.classList.remove("hidden");
   setFlowsDetailTab(state.flowsDetailTab || "preview");
   $("flowsDetailPanel").classList.remove("hidden");
   $("flowsEmptyDetail").classList.add("hidden");
@@ -4215,6 +4304,7 @@ function fsBlockLabel(type) {
     body: t("flows.studio.blockBody"),
     caption: t("flows.studio.blockCaption"),
     image: t("flows.studio.blockImage"),
+    link: t("flows.studio.blockLink"),
   };
   return map[type] || type;
 }
@@ -4260,6 +4350,9 @@ function syncFsPreviewScreen(index, wrap) {
     if (block.type === "image") {
       block.altText = (blockEl.querySelector(".fs-b-alt") || {}).value || "";
       block.scaleType = (blockEl.querySelector(".fs-b-scale") || {}).value || "contain";
+    } else if (block.type === "link") {
+      block.text = (blockEl.querySelector(".fs-b-link-text") || {}).value || "";
+      block.url = (blockEl.querySelector(".fs-b-link-url") || {}).value || "";
     } else {
       const textEl = blockEl.querySelector(".fs-ed-text");
       if (textEl) block.text = textEl.textContent.trim();
@@ -4647,6 +4740,9 @@ function fsInsertBlockAt(screenIndex, insertAt, type) {
   if (type === "image") {
     block.altText = t("flows.studio.imageAltDefault");
     block.scaleType = "contain";
+  } else if (type === "link") {
+    block.text = t("flows.studio.linkTextDefault");
+    block.url = "";
   } else {
     block.text = "";
   }
@@ -4670,6 +4766,11 @@ function fsInsertFieldAt(screenIndex, insertAt, type) {
     return;
   }
   scr.fields = scr.fields || [];
+  const maxFields = fsState.schema?.limits?.maxFieldsPerScreen || 12;
+  if (scr.fields.length >= maxFields) {
+    toast(t("toast.maxFields", { max: maxFields }), "error");
+    return;
+  }
   const at = Math.max(0, Math.min(insertAt, scr.fields.length));
   scr.fields.splice(at, 0, { type: type || "text", label: "", required: true });
   fsState.activeIndex = screenIndex;
@@ -4721,6 +4822,14 @@ function fsEditableBlockHtml(b, bi, screenIndex) {
           <option value="contain"${b.scaleType !== "cover" ? " selected" : ""}>${escapeHtml(t("flows.studio.scaleContain"))}</option>
           <option value="cover"${b.scaleType === "cover" ? " selected" : ""}>${escapeHtml(t("flows.studio.scaleCover"))}</option>
         </select>
+      </div>`;
+  }
+  if (b.type === "link") {
+    return `
+      <div class="fs-ed-block" data-bi="${bi}" data-block-type="link">
+        ${removeBtn}
+        <input type="text" class="fs-b-link-text" placeholder="${escapeHtml(t("flows.studio.linkTextPh"))}" value="${escapeHtml(b.text || "")}" />
+        <input type="url" class="fs-b-link-url sm" placeholder="${escapeHtml(t("flows.studio.linkUrlPh"))}" value="${escapeHtml(b.url || "")}" />
       </div>`;
   }
   const ph = escapeHtml(t("flows.studio.blockTextPh"));
@@ -5243,12 +5352,25 @@ async function createFlowFromStudio() {
   closeFlowCreate();
   if (res.flow && res.flow.id) {
     selectFlow(res.flow.id);
-    openTemplateFromFlow(def);
+    openTemplateFromFlow(def, res.flow.id, res.defaultScreen || "SCREEN_A");
   }
 }
 
-function openTemplateFromFlow(def) {
+function openTemplateFromFlow(def, flowId, defaultScreen) {
   const slug = def.name.replace(/[^a-z0-9_]/gi, "_").slice(0, 40);
+  const bodyText = def.chatBody || t("flows.studio.defaultChatBody");
+  const cta = def.cta || t("flows.studio.defaultCta");
+  if (window.confirm(t("flows.createFlowTemplateConfirm"))) {
+    createFlowTemplate({
+      flowId,
+      def,
+      bodyText,
+      cta,
+      screen: defaultScreen || "SCREEN_A",
+      name: `${slug}_mensaje`,
+    });
+    return;
+  }
   initTemplateModal().then(() => {
     if ($("tpName")) $("tpName").value = `${slug}_mensaje`;
     if ($("tpBody")) $("tpBody").value = def.chatBody || "Completa el formulario para continuar.";
@@ -5622,13 +5744,9 @@ async function renderFlowTemplateLink(perfRes) {
   }
   const ctx = buildFlowLaunchContext(perfRes);
   state.flowLaunchContext = ctx;
-  if (!ctx.preset) {
-    panel.classList.add("hidden");
-    panel.innerHTML = "";
-    return;
-  }
-  panel.classList.remove("hidden");
-  panel.innerHTML = `
+  if (ctx.preset) {
+    panel.classList.remove("hidden");
+    panel.innerHTML = `
     <div class="flow-template-link-head">
       <span class="flow-template-link-label">${escapeHtml(t("flows.linkedTemplates"))}</span>
       ${presetVariantRowsHtml(ctx.preset, ctx.meta)}
@@ -5637,11 +5755,23 @@ async function renderFlowTemplateLink(perfRes) {
       <button type="button" class="btn-primary sm" id="flowLaunchOpenBtn" ${ctx.canSend ? "" : "disabled"}>${escapeHtml(t("flows.launch.sendPrimary"))}</button>
       <button type="button" class="btn-ghost sm" id="flowGoTemplatesBtn">${escapeHtml(t("flows.goTemplates"))}</button>
     </div>`;
-  $("flowLaunchOpenBtn")?.addEventListener("click", openFlowLaunchFromPanel);
-  $("flowGoTemplatesBtn")?.addEventListener("click", () => {
-    switchScreen("templates");
-    if (ctx.preset) openTplDraftModal(ctx.preset.key);
-  });
+    $("flowLaunchOpenBtn")?.addEventListener("click", openFlowLaunchFromPanel);
+    $("flowGoTemplatesBtn")?.addEventListener("click", () => {
+      switchScreen("templates");
+      if (ctx.preset) openTplDraftModal(ctx.preset.key);
+    });
+    return;
+  }
+  panel.classList.remove("hidden");
+  panel.innerHTML = `
+    <div class="flow-template-link-head">
+      <span class="flow-template-link-label">${escapeHtml(t("flows.studioTemplateTitle"))}</span>
+      <p class="muted sm">${escapeHtml(t("flows.studioTemplateHint"))}</p>
+    </div>
+    <div class="flow-template-link-actions">
+      <button type="button" class="btn-primary sm" id="flowCreateTemplateBtn">${escapeHtml(t("flows.createFlowTemplate"))}</button>
+    </div>`;
+  $("flowCreateTemplateBtn")?.addEventListener("click", () => createFlowTemplate());
 }
 
 function openFlowLaunchFromPanel() {
@@ -6187,7 +6317,7 @@ function bindEvents() {
   const flowProbarBack = $("flowProbarBack");
   if (flowProbarBack) flowProbarBack.addEventListener("click", closeFlowProbar);
   const flowDetailProbarBtn = $("flowDetailProbarBtn");
-  if (flowDetailProbarBtn) flowDetailProbarBtn.addEventListener("click", () => openFlowProbar("payment"));
+  if (flowDetailProbarBtn) flowDetailProbarBtn.addEventListener("click", openFlowDetailProbar);
   const bookingSendBtn = $("bookingSendBtn");
   if (bookingSendBtn) bookingSendBtn.addEventListener("click", sendBookingTest);
   const bookingOpenTplBtn = $("bookingOpenTplBtn");
@@ -6205,6 +6335,8 @@ function bindEvents() {
     if (el) el.addEventListener("input", updateTpPreview);
   });
   $("flowPublishBtn")?.addEventListener("click", publishActiveFlow);
+  $("flowDeleteBtn")?.addEventListener("click", deleteActiveFlow);
+  $("flowDeprecateBtn")?.addEventListener("click", deprecateActiveFlow);
   $("flowEditDraftBtn")?.addEventListener("click", openFlowEditDraft);
   $("flowSendBtn")?.addEventListener("click", openFlowSendModal);
   $("flowSendConfirmBtn")?.addEventListener("click", confirmFlowSend);

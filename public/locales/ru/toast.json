@@ -43,6 +43,13 @@
   "flowSent": "Flow отправлен (режим {mode}).",
   "publishFailed": "Не удалось опубликовать.",
   "flowPublished": "Flow опубликован.",
+  "flowDeleted": "Flow удалён в Meta.",
+  "flowDeleteFailed": "Не удалось удалить Flow.",
+  "flowDeprecated": "Flow помечен как устаревший в Meta.",
+  "flowDeprecateFailed": "Не удалось пометить Flow как устаревший.",
+  "maxFields": "Максимум {max} полей на экран.",
+  "flowTemplateSubmitted": "Шаблон «{name}» отправлен в Meta. Ожидайте одобрения.",
+  "templateCreateFailed": "Не удалось создать шаблон.",
   "templateSubmittedMeta": "Шаблон отправлен в Meta.{vars} Дождитесь одобрения.",
   "templateSubmittedVars": " Переменные API: {keys}."
 }

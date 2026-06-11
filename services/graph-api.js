@@ -326,6 +326,16 @@ module.exports = class GraphApi {
     return json;
   }
 
+  static async deprecateFlow(flowId) {
+    const url = `https://graph.facebook.com/v21.0/${flowId}/deprecate?access_token=${config.accessToken}`;
+    const res = await fetch(url, { method: "POST" });
+    const json = await res.json();
+    if (json.error) {
+      throw new Error(json.error.error_user_msg || json.error.message || "Error al deprecar Flow.");
+    }
+    return json;
+  }
+
   static async getFlowJsonAsset(flowId) {
     const url = `https://graph.facebook.com/v21.0/${flowId}/assets?access_token=${config.accessToken}`;
     const res = await fetch(url);
