@@ -37,6 +37,8 @@
   "draftsCleaned": "{count} тестовых черновик(ов) удалено в Meta.",
   "flowInvalid": "Недопустимый Flow.",
   "flowCreated": "Flow создан в Meta.",
+  "flowUpdated": "Flow обновлён в Meta.",
+  "flowEditFailed": "Не удалось отредактировать Flow.",
   "selectFlow": "Выберите Flow.",
   "flowSent": "Flow отправлен (режим {mode}).",
   "publishFailed": "Не удалось опубликовать.",

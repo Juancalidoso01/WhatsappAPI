@@ -32,6 +32,8 @@ Si Meta responde `139000 Blocked by Integrity`, completa la verificación del ne
 | GET | `/api/flows/capability` | Compatibilidad y notas |
 | GET | `/api/flows` | Listar Flows del WABA |
 | POST | `/api/flows/build` | **Constructor:** crear Flow desde pantallas y campos |
+| GET | `/api/flows/:id/studio` | Definición editable para el Flow Studio |
+| PUT | `/api/flows/:id` | Actualizar borrador (solo `DRAFT`, sin endpoint) |
 | GET | `/api/flows/builder/schema` | Tipos de campo y categorías del constructor |
 | POST | `/api/flows/:id/send` | Enviar a un teléfono |
 | POST | `/api/flows/:id/publish` | Publicar borrador |

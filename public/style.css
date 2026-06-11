@@ -1547,6 +1547,19 @@ input, textarea, select { font-family: inherit; }
   color: var(--brand); cursor: pointer;
 }
 .fs-field-add-link:hover { text-decoration: underline; }
+.flows-health-panel {
+  margin-bottom: 12px; padding: 10px 12px; border-radius: 10px;
+  background: #f8fafc; border: 1px solid #e2e8f0;
+}
+.flows-health-label { font-size: 11px; font-weight: 700; text-transform: uppercase; color: var(--muted); }
+.flows-health-row { display: flex; justify-content: space-between; gap: 12px; font-size: 12px; margin-top: 6px; }
+.flows-health-uri { margin-top: 6px; word-break: break-all; }
+.flows-validation-panel {
+  margin-bottom: 12px; padding: 10px 12px; border-radius: 10px;
+  background: #fef2f2; border: 1px solid #fecaca; font-size: 12px;
+}
+.flows-validation-title { display: block; margin-bottom: 6px; color: #b91c1c; }
+.flows-validation-list { margin: 0; padding-left: 18px; color: #7f1d1d; }
 .fs-carousel-wrap {
   display: flex; justify-content: center; width: 100%;
   padding: 8px 0 16px;

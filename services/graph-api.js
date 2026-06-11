@@ -326,6 +326,31 @@ module.exports = class GraphApi {
     return json;
   }
 
+  static async getFlowJsonAsset(flowId) {
+    const url = `https://graph.facebook.com/v21.0/${flowId}/assets?access_token=${config.accessToken}`;
+    const res = await fetch(url);
+    const json = await res.json();
+    if (json.error) {
+      throw new Error(json.error.error_user_msg || json.error.message || "Error al listar assets del Flow.");
+    }
+    const assets = json.data || [];
+    const flowAsset = assets.find((a) =>
+      a.asset_type === "FLOW_JSON" || a.name === "flow.json" || a.mime_type === "application/json"
+    );
+    if (!flowAsset) {
+      throw new Error("No se encontró flow.json en Meta.");
+    }
+    const downloadUrl = flowAsset.download_url
+      || (flowAsset.id ? `https://graph.facebook.com/v21.0/${flowAsset.id}?access_token=${config.accessToken}` : null);
+    if (!downloadUrl) throw new Error("Meta no devolvió URL de descarga para flow.json.");
+    const dl = await fetch(downloadUrl);
+    const flowJson = await dl.json();
+    if (flowJson.error) {
+      throw new Error(flowJson.error.error_user_msg || flowJson.error.message || "Error al descargar flow.json.");
+    }
+    return flowJson;
+  }
+
   static async updateFlowJson(flowId, flowJson) {
     const jsonStr = typeof flowJson === "string" ? flowJson : JSON.stringify(flowJson);
     const form = new FormData();

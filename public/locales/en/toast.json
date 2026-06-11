@@ -44,6 +44,8 @@
   "draftsCleaned": "{count} test draft(s) deleted on Meta.",
   "flowInvalid": "Invalid Flow.",
   "flowCreated": "Flow created on Meta.",
+  "flowUpdated": "Flow updated on Meta.",
+  "flowEditFailed": "Could not edit this Flow.",
   "selectFlow": "Select a Flow.",
   "flowSent": "Flow sent (mode {mode}).",
   "publishFailed": "Could not publish.",

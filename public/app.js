@@ -150,6 +150,8 @@ const post = (url, body) =>
   api(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
 const patch = (url, body) =>
   api(url, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+const put = (url, body) =>
+  api(url, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
 const postForm = (url, formData) => api(url, { method: "POST", body: formData });
 
 function postCsv(url, formData) {
@@ -2102,18 +2104,24 @@ function setFlowsTab(tab) {
   }
 }
 
-async function openFlowCreate() {
+async function showFlowCreatePanel() {
   state.activeUseCaseId = null;
   ["flowsPanelMis", "flowsPanelActividad", "flowsPanelProbar"].forEach((id) => {
     $(id)?.classList.add("hidden");
   });
   $("flowsPanelCrear")?.classList.remove("hidden");
   $("flowCreatePicker")?.classList.add("hidden");
-  fsState.screens = [];
-  fsState.activeIndex = 0;
   if (window.I18n) await I18n.ensureScreen("flows");
   await initFlowStudio();
   if (window.I18n) I18n.applyDom($("flowStudioPanel"));
+}
+
+async function openFlowCreate() {
+  fsState.editingFlowId = null;
+  fsState.screens = [];
+  fsState.activeIndex = 0;
+  syncFsStudioEditUi();
+  await showFlowCreatePanel();
 }
 
 function closeFlowCreate() {
@@ -4053,6 +4061,55 @@ async function renderFlowDetailPreview(performance) {
   box.innerHTML = `<p class="muted sm center-msg">${escapeHtml(t("flows.noPreview"))}</p>`;
 }
 
+function renderFlowHealthPanel(flow) {
+  const panel = $("flowsHealthPanel");
+  if (!panel) return;
+  if (!flow) {
+    panel.classList.add("hidden");
+    panel.innerHTML = "";
+    return;
+  }
+  const hs = flow.health_status || {};
+  const canSend = hs.can_send_message;
+  let canSendLabel = t("flows.healthUnknown");
+  if (canSend === "AVAILABLE" || canSend === true) canSendLabel = t("flows.healthAvailable");
+  else if (canSend) canSendLabel = String(canSend);
+  const endpointLabel = flow.endpoint_uri ? t("flows.healthYes") : t("flows.healthNo");
+  panel.classList.remove("hidden");
+  panel.innerHTML = `
+    <div class="flows-health-grid">
+      <div><span class="flows-health-label">${escapeHtml(t("flows.healthTitle"))}</span></div>
+      <div class="flows-health-row"><span>${escapeHtml(t("flows.healthCanSend"))}</span><strong>${escapeHtml(canSendLabel)}</strong></div>
+      <div class="flows-health-row"><span>${escapeHtml(t("flows.healthEndpoint"))}</span><strong>${escapeHtml(endpointLabel)}</strong></div>
+      ${flow.endpoint_uri ? `<div class="flows-health-uri muted sm">${escapeHtml(flow.endpoint_uri)}</div>` : ""}
+    </div>`;
+}
+
+function renderFlowValidationPanel(flow) {
+  const panel = $("flowsValidationPanel");
+  if (!panel) return;
+  const errs = flow && flow.validation_errors;
+  if (!errs || !errs.length) {
+    panel.classList.add("hidden");
+    panel.innerHTML = "";
+    return;
+  }
+  panel.classList.remove("hidden");
+  panel.innerHTML = `
+    <strong class="flows-validation-title">${escapeHtml(t("flows.validationErrors"))}</strong>
+    <ul class="flows-validation-list">${errs.map((e) =>
+      `<li>${escapeHtml(e.message || e.error || JSON.stringify(e))}</li>`
+    ).join("")}</ul>`;
+}
+
+function syncFlowEditButton(status) {
+  const btn = $("flowEditDraftBtn");
+  if (!btn) return;
+  const isDraft = String(status || "").toUpperCase() === "DRAFT";
+  const isDynamic = Boolean(state.activeFlowDetail?.endpoint_uri);
+  btn.classList.toggle("hidden", !isDraft || isDynamic);
+}
+
 async function loadFlowDetail(id) {
   const perfRes = await api(`/api/flows/${encodeURIComponent(id)}/performance`);
   if (!perfRes.ok) return;
@@ -4066,6 +4123,9 @@ async function loadFlowDetail(id) {
     stEl.className = "flow-status " + st;
   }
   syncFlowPublishButton(st);
+  syncFlowEditButton(st);
+  renderFlowHealthPanel(state.activeFlowDetail);
+  renderFlowValidationPanel(state.activeFlowDetail);
   renderFlowStatsCards(perfRes.stats, perfRes.isPaymentAuth);
   $("flowsDetailSends").innerHTML = renderFlowActivityList(perfRes.recentSends, t("flows.emptySends"));
   const respRows = perfRes.isPaymentAuth && perfRes.recentPayAuth.length
@@ -4088,6 +4148,7 @@ const fsState = {
   schema: null,
   activeIndex: 0,
   screens: [],
+  editingFlowId: null,
 };
 let fsFormatCtx = null;
 let fsPersistedCtx = null;
@@ -4172,8 +4233,9 @@ async function initFlowStudio() {
         .join("");
     }
   }
-  if (!fsState.screens.length) fsState.screens = defaultFsScreens();
+  if (!fsState.screens.length && !fsState.editingFlowId) fsState.screens = defaultFsScreens();
   fsState.activeIndex = 0;
+  syncFsStudioEditUi();
   if ($("fsName") && !$("fsName").value) $("fsName").value = "";
   repairFlowStudioTranslations();
   syncFlowStudioFormDefaults();
@@ -5045,11 +5107,133 @@ function collectFsDefinition() {
   };
 }
 
+function loadStudioDefinition(def) {
+  fsState.screens = (def.screens || []).map((s) => ({
+    layout: s.layout || s.type || "message",
+    title: s.title || "",
+    blocks: Array.isArray(s.blocks) ? s.blocks.map((b) => ({ ...b })) : [],
+    fields: Array.isArray(s.fields) ? s.fields.map((f) => ({ ...f })) : [],
+    buttonLabel: s.buttonLabel || "",
+    buttonAction: s.buttonAction || "next",
+  }));
+  fsState.activeIndex = 0;
+  if ($("fsName")) $("fsName").value = def.name || "";
+  if ($("fsCategory")) $("fsCategory").value = def.category || "OTHER";
+  if ($("fsChatBody")) $("fsChatBody").value = def.chatBody || "";
+  if ($("fsCta")) $("fsCta").value = def.cta || "";
+  fsState.screens.forEach(ensureScreenBlocks);
+}
+
+function syncFsStudioEditUi() {
+  const editing = Boolean(fsState.editingFlowId);
+  const createBtn = $("fsCreateBtn");
+  const cancelBtn = $("fsCancelEditBtn");
+  if (createBtn) {
+    createBtn.textContent = editing ? t("flows.studio.saveDraft") : t("flows.studio.createDraft");
+  }
+  cancelBtn?.classList.toggle("hidden", !editing);
+  if ($("fsName") && editing) $("fsName").readOnly = true;
+  else if ($("fsName")) $("fsName").readOnly = false;
+}
+
+function cancelFlowStudioEdit() {
+  fsState.editingFlowId = null;
+  syncFsStudioEditUi();
+  if (state.activeFlowId) {
+    closeFlowCreate();
+    selectFlow(state.activeFlowId);
+  } else {
+    fsState.screens = defaultFsScreens();
+    renderFlowStudio();
+  }
+}
+
+async function openFlowEditDraft() {
+  const id = state.activeFlowId;
+  if (!id) return;
+  const res = await api(`/api/flows/${encodeURIComponent(id)}/studio`);
+  if (!res.ok || !res.editable) {
+    toast(res.error || t("toast.flowEditFailed"), "error");
+    return;
+  }
+  fsState.editingFlowId = id;
+  await initFlowStudio();
+  loadStudioDefinition(res.definition);
+  syncFsStudioEditUi();
+  openFlowCreate();
+  renderFlowStudio();
+  toast(t("flows.studio.editingFlow"), "info");
+}
+
+function openFlowSendModal() {
+  if (!state.activeFlowId) {
+    toast(t("toast.selectFlow"), "error");
+    return;
+  }
+  const profile = state.flowSendProfile || {};
+  const defaults = profile.sendDefaults || {};
+  const st = String((state.activeFlowDetail && state.activeFlowDetail.status) || "").toUpperCase();
+  if ($("flowSendPhone")) $("flowSendPhone").value = "";
+  if ($("flowSendBody")) {
+    $("flowSendBody").value = defaults.bodyText || "Completa este formulario para continuar.";
+  }
+  if ($("flowSendCta")) {
+    $("flowSendCta").value = defaults.cta || profile.defaultCta || t("flows.studio.defaultCta");
+  }
+  if ($("flowSendScreen")) {
+    $("flowSendScreen").value = defaults.screen || profile.defaultScreen || "SCREEN_A";
+  }
+  const hint = $("flowSendModeHint");
+  if (hint) {
+    hint.textContent = st === "DRAFT" ? t("flows.sendModal.draftMode") : t("flows.sendModal.publishedMode");
+  }
+  showModal("modalFlowSend");
+}
+
+async function confirmFlowSend() {
+  const id = state.activeFlowId;
+  const phone = ($("flowSendPhone") || {}).value.trim();
+  if (!id || !phone) {
+    toast(t("toast.phoneRequired"), "error");
+    return;
+  }
+  const bodyText = ($("flowSendBody") || {}).value.trim();
+  const cta = ($("flowSendCta") || {}).value.trim();
+  const screen = ($("flowSendScreen") || {}).value.trim();
+  const profile = state.flowSendProfile || {};
+  const res = await post(`/api/flows/${encodeURIComponent(id)}/send`, {
+    phone,
+    bodyText,
+    cta,
+    screen,
+    flowAction: profile.flowAction,
+  });
+  if (!res.ok) {
+    toast(res.error || res.hint || t("toast.sendFailedGeneric"), "error");
+    return;
+  }
+  toast(t("toast.flowSent", { mode: res.mode || "published" }), "ok");
+  closeModals();
+  await loadFlowDetail(id);
+}
+
 async function createFlowFromStudio() {
   const def = collectFsDefinition();
   if (!def.name) {
     toast(t("toast.flowNameRequired"), "error");
     $("fsName")?.focus();
+    return;
+  }
+  if (fsState.editingFlowId) {
+    const res = await put(`/api/flows/${encodeURIComponent(fsState.editingFlowId)}`, def);
+    if (!res.ok) { toast(res.error || t("toast.flowEditFailed"), "error"); return; }
+    toast(t("toast.flowUpdated"), "ok");
+    const flowId = fsState.editingFlowId;
+    fsState.editingFlowId = null;
+    syncFsStudioEditUi();
+    await loadFlows();
+    closeFlowCreate();
+    if (flowId) selectFlow(flowId);
     return;
   }
   const res = await post("/api/flows/build", def);
@@ -5535,7 +5719,11 @@ async function publishActiveFlow() {
   if (!res.ok) { toast(res.error || t("toast.publishFailed"), "error"); return; }
   toast(t("toast.flowPublished"), "ok");
   await loadFlows();
-  if (state.activeFlowId === id) await loadFlowDetail(id);
+  if (state.activeFlowId === id) {
+    const detail = await api(`/api/flows/${encodeURIComponent(id)}`);
+    state.activeFlowDetail = detail.ok ? detail.flow : null;
+    await loadFlowDetail(id);
+  }
 }
 
 function renderFlowActivityDetail(row) {
@@ -6017,6 +6205,10 @@ function bindEvents() {
     if (el) el.addEventListener("input", updateTpPreview);
   });
   $("flowPublishBtn")?.addEventListener("click", publishActiveFlow);
+  $("flowEditDraftBtn")?.addEventListener("click", openFlowEditDraft);
+  $("flowSendBtn")?.addEventListener("click", openFlowSendModal);
+  $("flowSendConfirmBtn")?.addEventListener("click", confirmFlowSend);
+  $("fsCancelEditBtn")?.addEventListener("click", cancelFlowStudioEdit);
   $("flowRefreshResponses")?.addEventListener("click", loadFlowActivity);
   if ($("flowEndpointSetupBtn")) $("flowEndpointSetupBtn").addEventListener("click", setupFlowEndpoint);
   if ($("payAuthSendBtn")) $("payAuthSendBtn").addEventListener("click", sendPaymentAuthTest);

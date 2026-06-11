@@ -634,11 +634,16 @@
                   <span id="flowsDetailStatus" class="flow-status">—</span>
                 </div>
                 <div class="flows-detail-actions">
+                  <button type="button" id="flowSendBtn" class="btn-primary sm" data-i18n="flows.sendToPhone">Enviar a teléfono</button>
+                  <button type="button" id="flowEditDraftBtn" class="btn-ghost sm hidden" data-i18n="flows.editDraft">Editar borrador</button>
                   <button type="button" id="flowDetailProbarBtn" class="btn-ghost sm hidden" data-i18n="flows.tryWhatsapp">Probar en WhatsApp</button>
                   <button type="button" id="flowPublishBtn" class="btn-ghost sm hidden" data-i18n="flows.publishDraft">Publicar borrador</button>
                   <a id="flowPreviewLink" class="btn-ghost sm hidden" href="#" target="_blank" rel="noopener" data-i18n="flows.openMeta">Abrir en Meta</a>
                 </div>
               </div>
+
+              <div id="flowsHealthPanel" class="flows-health-panel hidden"></div>
+              <div id="flowsValidationPanel" class="flows-validation-panel hidden"></div>
 
               <div id="flowsStatsCards" class="flows-stats-grid"></div>
 
@@ -676,6 +681,7 @@
               <div class="flow-studio-top-actions">
                 <button type="button" id="fsPickerToggle" class="btn-ghost sm" data-i18n="flows.studio.presetsBtn">Plantillas Punto Pago</button>
                 <button type="button" id="fsCreateBtn" class="btn-primary sm" data-i18n="flows.studio.createDraft">Crear borrador en Meta</button>
+                <button type="button" id="fsCancelEditBtn" class="btn-ghost sm hidden" data-i18n="flows.studio.cancelEdit">Cancelar edición</button>
               </div>
             </header>
 
@@ -995,6 +1001,32 @@
       <div id="flowViewFlowPreview" class="flow-view-phone-wrap"></div>
       <div class="modal-actions flow-send-modal-actions">
         <button type="button" class="btn-ghost" data-close data-i18n="common.close">Cerrar</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="modalFlowSend" class="modal hidden">
+    <div class="modal-card">
+      <h3 data-i18n="flows.sendModal.title">Enviar Flow a teléfono</h3>
+      <p class="muted sm" data-i18n="flows.sendModal.intro">El contacto debe tener conversación activa (ventana 24 h) o usa una plantilla con botón FLOW.</p>
+      <label><span data-i18n="flows.sendModal.phone">Teléfono (con código de país)</span>
+        <input id="flowSendPhone" type="tel" placeholder="50760000000" inputmode="tel" />
+      </label>
+      <label><span data-i18n="flows.sendModal.body">Texto del mensaje</span>
+        <textarea id="flowSendBody" rows="3" placeholder="Completa este formulario para continuar."></textarea>
+      </label>
+      <div class="row">
+        <label><span data-i18n="flows.sendModal.cta">Texto del botón</span>
+          <input id="flowSendCta" type="text" placeholder="Abrir formulario" />
+        </label>
+        <label><span data-i18n="flows.sendModal.screen">Pantalla inicial</span>
+          <input id="flowSendScreen" type="text" placeholder="SCREEN_A" />
+        </label>
+      </div>
+      <p id="flowSendModeHint" class="muted sm"></p>
+      <div class="modal-actions">
+        <button class="btn-ghost" data-close data-i18n="common.close">Cerrar</button>
+        <button type="button" id="flowSendConfirmBtn" class="btn-primary" data-i18n="flows.sendModal.send">Enviar</button>
       </div>
     </div>
   </div>

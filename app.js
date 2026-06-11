@@ -37,7 +37,9 @@ const FlowStore = require('./services/flow-store');
 const flowSamples = require('./services/flow-samples');
 const flowBuilder = require('./services/flow-builder');
 const FlowKeys = require('./services/flow-keys');
-const { decryptRequest, encryptResponse, FlowEndpointException } = require('./services/flow-encryption');
+const { decryptRequest, encryptResponse, FlowEndpointException, isFlowSignatureValid } = require('./services/flow-encryption');
+const FlowStudioStore = require('./services/flow-studio-store');
+const flowJsonImport = require('./services/flow-json-import');
 const { handleFlowRequest, cardImageUrl, resolveCardImageUrl, buildPaymentAuthScreenData } = require('./services/flow-endpoint-handler');
 const PaymentAuthStore = require('./services/payment-auth-store');
 const templatePresets = require('./services/template-presets');
@@ -563,6 +565,9 @@ async function getOrCreateBookingFlow() {
 
 app.post('/api/flows/endpoint', apiJson, async (req, res) => {
   try {
+    if (!isFlowSignatureValid(req, config.appSecret)) {
+      return res.sendStatus(401);
+    }
     const { privateKey } = await FlowKeys.getKeyPair();
     const { decryptedBody, aesKeyBuffer, initialVectorBuffer } = decryptRequest(req.body, privateKey);
     const responseBody = await handleFlowRequest(decryptedBody);
@@ -770,6 +775,14 @@ app.post('/api/flows/build', apiJson, async (req, res) => {
         flow: result,
       });
     }
+    await FlowStudioStore.saveDefinition(result.id, {
+      name: String(name).trim().toLowerCase(),
+      category: cat,
+      cta: cta || built.defaultCta,
+      chatBody: (req.body && req.body.chatBody) || '',
+      screens: enrichedScreens,
+      source: 'studio',
+    });
     res.status(201).json({
       ok: true,
       flow: result,
@@ -780,6 +793,111 @@ app.post('/api/flows/build', apiJson, async (req, res) => {
     });
   } catch (err) {
     console.error('buildFlow error:', err.message);
+    res.status(200).json({ ok: false, error: String(err.message || err) });
+  }
+});
+
+app.get('/api/flows/:id/studio', async (req, res) => {
+  if (!config.accessToken) return res.status(400).json({ ok: false, error: 'Falta ACCESS_TOKEN.' });
+  try {
+    const flow = await GraphApi.getFlow(req.params.id, 'id,name,status,categories,endpoint_uri');
+    if (flow.endpoint_uri) {
+      return res.json({
+        ok: false,
+        editable: false,
+        error: 'Los Flows dinámicos con endpoint se editan recreando el sample o en Meta.',
+        flowStatus: flow.status,
+      });
+    }
+    const stored = await FlowStudioStore.getDefinition(req.params.id);
+    if (stored && stored.screens && stored.screens.length) {
+      return res.json({
+        ok: true,
+        editable: true,
+        source: 'store',
+        definition: stored,
+        flowStatus: flow.status,
+        flowName: flow.name,
+      });
+    }
+    const flowJson = await GraphApi.getFlowJsonAsset(req.params.id);
+    const imported = flowJsonImport.importFlowJson(flowJson);
+    if (!imported.ok) {
+      return res.json({
+        ok: false,
+        editable: false,
+        error: imported.error,
+        flowStatus: flow.status,
+      });
+    }
+    const category = (flow.categories && flow.categories[0]) || 'OTHER';
+    const definition = {
+      name: flow.name || '',
+      category,
+      cta: '',
+      chatBody: '',
+      screens: imported.screens,
+      source: 'import',
+    };
+    await FlowStudioStore.saveDefinition(req.params.id, definition);
+    res.json({
+      ok: true,
+      editable: true,
+      source: 'import',
+      definition,
+      flowStatus: flow.status,
+      flowName: flow.name,
+    });
+  } catch (err) {
+    res.status(200).json({ ok: false, editable: false, error: String(err.message || err) });
+  }
+});
+
+app.put('/api/flows/:id', apiJson, async (req, res) => {
+  if (!config.accessToken) return res.status(400).json({ ok: false, error: 'Falta ACCESS_TOKEN.' });
+  const { name, category, cta, screens, chatBody } = req.body || {};
+  try {
+    const flow = await GraphApi.getFlow(req.params.id, 'id,name,status,endpoint_uri');
+    if (String(flow.status || '').toUpperCase() !== 'DRAFT') {
+      return res.status(400).json({ ok: false, error: 'Solo se pueden editar Flows en borrador (DRAFT).' });
+    }
+    if (flow.endpoint_uri) {
+      return res.status(400).json({ ok: false, error: 'No se puede editar un Flow dinámico con endpoint desde el Studio.' });
+    }
+    const enrichedScreens = await enrichFlowScreensWithAssets(screens);
+    const built = flowBuilder.buildFlowJson({
+      name: name || flow.name,
+      category: category || (flow.categories && flow.categories[0]) || 'OTHER',
+      cta,
+      screens: enrichedScreens,
+    });
+    if (!built.ok) return res.status(400).json({ ok: false, error: built.error });
+    const result = await GraphApi.updateFlowJson(req.params.id, built.flowJson);
+    const validationErrors = result.validation_errors || [];
+    if (validationErrors.length) {
+      const first = validationErrors[0];
+      return res.status(200).json({
+        ok: false,
+        error: first.message || first.error || 'Flow JSON inválido.',
+        validation_errors: validationErrors,
+      });
+    }
+    await FlowStudioStore.saveDefinition(req.params.id, {
+      name: String(name || flow.name).trim().toLowerCase(),
+      category: category || 'OTHER',
+      cta: cta || built.defaultCta,
+      chatBody: chatBody || '',
+      screens: enrichedScreens,
+      source: 'studio',
+    });
+    res.json({
+      ok: true,
+      flowId: req.params.id,
+      defaultScreen: built.firstScreenId,
+      defaultCta: built.defaultCta,
+    });
+  } catch (err) {
+    console.error('updateFlow error:', err.message);
     res.status(200).json({ ok: false, error: String(err.message || err) });
   }
 });
@@ -1214,7 +1332,7 @@ app.post('/api/flows', apiJson, async (req, res) => {
     return res.status(400).json({ ok: false, error: 'Falta ACCESS_TOKEN o WABA_ID.' });
   }
   const tpl = flowSamples.getSample(sample || 'hello');
-  if (!tpl) return res.status(400).json({ ok: false, error: 'Sample no válido (hello | lead | quote).' });
+  if (!tpl) return res.status(400).json({ ok: false, error: 'Sample no válido.' });
 
   let endpointUri;
   if (tpl.dynamic) {
@@ -1242,6 +1360,19 @@ app.post('/api/flows', apiJson, async (req, res) => {
         validation_errors: validationErrors,
         flow: result,
       });
+    }
+    if (result.id && !tpl.dynamic) {
+      const imported = flowJsonImport.importFlowJson(tpl.flow_json);
+      if (imported.ok) {
+        await FlowStudioStore.saveDefinition(result.id, {
+          name: name || tpl.name,
+          category: (tpl.categories && tpl.categories[0]) || 'OTHER',
+          cta: tpl.defaultCta || '',
+          chatBody: (tpl.sendDefaults && tpl.sendDefaults.bodyText) || '',
+          screens: imported.screens,
+          source: 'sample',
+        });
+      }
     }
     res.status(201).json({
       ok: true,

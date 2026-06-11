@@ -43,6 +43,8 @@
   "draftsCleaned": "{count} borrador(es) de prueba eliminado(s) en Meta.",
   "flowInvalid": "Flow inválido.",
   "flowCreated": "Flow creado en Meta.",
+  "flowUpdated": "Flow actualizado en Meta.",
+  "flowEditFailed": "No se pudo editar este Flow.",
   "selectFlow": "Selecciona un Flow.",
   "flowSent": "Flow enviado (modo {mode}).",
   "publishFailed": "No se pudo publicar.",
