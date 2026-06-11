@@ -37,6 +37,9 @@ Si Meta responde `139000 Blocked by Integrity`, completa la verificación del ne
 | GET | `/api/flows/builder/schema` | Tipos de campo y categorías del constructor |
 | POST | `/api/flows/:id/send` | Enviar a un teléfono |
 | POST | `/api/flows/:id/publish` | Publicar borrador |
+| GET | `/api/flows/:id/export-json` | Descargar flow.json desde Meta |
+| POST | `/api/flows/studio/preview-json` | Generar JSON desde definición del Studio |
+| POST | `/api/flows/studio/import-json` | Importar JSON a definición del Studio |
 | GET | `/api/flows/responses` | Respuestas del webhook |
 | POST | `/api/flows/endpoint` | Endpoint cifrado para Meta (`data_exchange`) |
 | GET | `/api/flows/endpoint/setup` | Estado del endpoint y claves |

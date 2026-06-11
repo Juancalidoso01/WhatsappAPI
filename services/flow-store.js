@@ -155,4 +155,5 @@ module.exports = {
   listResponses,
   listSends,
   listEndpointEvents,
+  resolveTokenMeta,
 };

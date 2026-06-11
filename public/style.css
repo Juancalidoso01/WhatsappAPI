@@ -1489,6 +1489,19 @@ input, textarea, select { font-family: inherit; }
   border: 1px solid var(--border); border-radius: 8px; font-size: 13px;
 }
 .fs-ed-block[data-block-type="link"] .fs-b-link-text { color: #008069; font-weight: 600; }
+.fs-ed-block[data-block-type="richtext"] .fs-b-richtext {
+  display: block; width: 100%; min-height: 88px; margin: 4px 0; padding: 8px 10px;
+  border: 1px solid var(--border); border-radius: 8px; font-size: 13px; font-family: inherit;
+}
+.fs-carousel-images { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0; }
+.fs-carousel-thumb { width: 72px; height: 48px; object-fit: cover; border-radius: 6px; border: 1px solid var(--border); }
+.fs-next-target { display: block; margin-top: 8px; font-size: 12px; }
+.fs-next-target select { width: 100%; margin-top: 4px; padding: 6px 8px; border-radius: 8px; border: 1px solid var(--border); }
+.flow-json-editor {
+  width: 100%; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px; padding: 10px; border: 1px solid var(--border); border-radius: 8px;
+  resize: vertical; min-height: 280px;
+}
 .btn-ghost.danger-text { color: var(--red); }
 .btn-ghost.danger-text:hover { background: #fef2f2; }
 .fs-block-remove {

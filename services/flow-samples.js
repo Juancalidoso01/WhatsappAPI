@@ -608,6 +608,156 @@ const TARJETA_CREDITO_FLOW = {
   ],
 };
 
+const KYC_FLOW = {
+  version: "7.3",
+  screens: [
+    {
+      id: "KYC",
+      title: "Verificación de identidad",
+      terminal: true,
+      success: true,
+      data: {},
+      layout: {
+        type: "SingleColumnLayout",
+        children: [
+          { type: "TextHeading", text: "Completa tu registro" },
+          { type: "TextBody", text: "Necesitamos algunos datos para validar tu identidad en Punto Pago." },
+          {
+            type: "Form",
+            name: "form",
+            children: [
+              { type: "TextInput", name: "nombre", label: "Nombre completo", "input-type": "text", required: true },
+              { type: "TextInput", name: "documento", label: "Número de documento", "input-type": "text", required: true },
+              { type: "TextInput", name: "email", label: "Correo electrónico", "input-type": "email", required: true },
+              { type: "OptIn", name: "terminos", label: "Acepto los términos y la política de privacidad", required: true },
+            ],
+          },
+          {
+            type: "Footer",
+            label: "Enviar datos",
+            "on-click-action": {
+              name: "complete",
+              payload: {
+                nombre: "${screen.KYC.form.nombre}",
+                documento: "${screen.KYC.form.documento}",
+                email: "${screen.KYC.form.email}",
+                terminos: "${screen.KYC.form.terminos}",
+              },
+            },
+          },
+        ],
+      },
+    },
+  ],
+};
+
+const MARKETING_FLOW = {
+  version: "7.3",
+  routing_model: { PROMO: ["SIGNUP"], SIGNUP: [] },
+  screens: [
+    {
+      id: "PROMO",
+      title: "Promoción exclusiva",
+      data: {},
+      layout: {
+        type: "SingleColumnLayout",
+        children: [
+          { type: "TextHeading", text: "20% de descuento" },
+          { type: "TextBody", text: "Regístrate para recibir tu código promocional de Punto Pago." },
+          {
+            type: "Footer",
+            label: "Quiero el descuento",
+            "on-click-action": { name: "navigate", next: { type: "screen", name: "SIGNUP" } },
+          },
+        ],
+      },
+    },
+    {
+      id: "SIGNUP",
+      title: "Registro promo",
+      terminal: true,
+      success: true,
+      data: {},
+      layout: {
+        type: "SingleColumnLayout",
+        children: [
+          {
+            type: "Form",
+            name: "form",
+            children: [
+              { type: "TextInput", name: "nombre", label: "Nombre", "input-type": "text", required: true },
+              { type: "TextInput", name: "email", label: "Correo", "input-type": "email", required: true },
+            ],
+          },
+          {
+            type: "Footer",
+            label: "Recibir código",
+            "on-click-action": {
+              name: "complete",
+              payload: {
+                nombre: "${screen.SIGNUP.form.nombre}",
+                email: "${screen.SIGNUP.form.email}",
+                campana: "promo_20",
+              },
+            },
+          },
+        ],
+      },
+    },
+  ],
+};
+
+const LOGISTICS_FLOW = {
+  version: "7.3",
+  screens: [
+    {
+      id: "DELIVERY",
+      title: "Confirmar entrega",
+      terminal: true,
+      success: true,
+      data: {},
+      layout: {
+        type: "SingleColumnLayout",
+        children: [
+          { type: "TextHeading", text: "Datos de entrega" },
+          { type: "TextBody", text: "Confirma la dirección y la ventana horaria para tu pedido Punto Pago." },
+          {
+            type: "Form",
+            name: "form",
+            children: [
+              { type: "TextInput", name: "direccion", label: "Dirección completa", "input-type": "text", required: true },
+              { type: "TextInput", name: "referencia", label: "Referencia / edificio", "input-type": "text", required: false },
+              {
+                type: "Dropdown",
+                name: "ventana",
+                label: "Ventana de entrega",
+                required: true,
+                "data-source": [
+                  { id: "manana", title: "Mañana (8:00–12:00)" },
+                  { id: "tarde", title: "Tarde (14:00–18:00)" },
+                  { id: "noche", title: "Noche (18:00–21:00)" },
+                ],
+              },
+            ],
+          },
+          {
+            type: "Footer",
+            label: "Confirmar entrega",
+            "on-click-action": {
+              name: "complete",
+              payload: {
+                direccion: "${screen.DELIVERY.form.direccion}",
+                referencia: "${screen.DELIVERY.form.referencia}",
+                ventana: "${screen.DELIVERY.form.ventana}",
+              },
+            },
+          },
+        ],
+      },
+    },
+  ],
+};
+
 const SAMPLES = {
   hello: {
     name: "punto_pago_hello",
@@ -705,6 +855,48 @@ const SAMPLES = {
     },
     flow_json: TARJETA_CREDITO_FLOW,
   },
+  kyc: {
+    name: "punto_pago_kyc",
+    categories: ["SIGN_UP"],
+    publish: false,
+    description: "Registro KYC: nombre, documento, correo y aceptación de términos.",
+    defaultScreen: "KYC",
+    defaultCta: "Completar registro",
+    sendDefaults: {
+      bodyText: "Hola, completa tu verificación de identidad en Punto Pago.",
+      cta: "Completar registro",
+      screen: "KYC",
+    },
+    flow_json: KYC_FLOW,
+  },
+  marketing: {
+    name: "punto_pago_promo",
+    categories: ["OTHER"],
+    publish: false,
+    description: "Promoción con pantalla intro y registro de email (routing ramificado).",
+    defaultScreen: "PROMO",
+    defaultCta: "Ver promoción",
+    sendDefaults: {
+      bodyText: "Tienes un descuento exclusivo en Punto Pago. Toca para registrarte.",
+      cta: "Ver promoción",
+      screen: "PROMO",
+    },
+    flow_json: MARKETING_FLOW,
+  },
+  logistics: {
+    name: "punto_pago_entrega",
+    categories: ["OTHER"],
+    publish: false,
+    description: "Confirmación de dirección y ventana horaria de entrega.",
+    defaultScreen: "DELIVERY",
+    defaultCta: "Confirmar entrega",
+    sendDefaults: {
+      bodyText: "Confirma los datos de entrega de tu pedido Punto Pago.",
+      cta: "Confirmar entrega",
+      screen: "DELIVERY",
+    },
+    flow_json: LOGISTICS_FLOW,
+  },
 };
 
 function extractScreenPreview(flowJson, screenId) {
@@ -715,6 +907,7 @@ function extractScreenPreview(flowJson, screenId) {
   const bodies = children.filter((c) => c.type === "TextBody").map((c) => c.text);
   const captions = children.filter((c) => c.type === "TextCaption").map((c) => c.text);
   const links = children.filter((c) => c.type === "EmbeddedLink").map((c) => c.text);
+  const richTexts = children.filter((c) => c.type === "RichText").map((c) => c.text);
   const footer = children.find((c) => c.type === "Footer");
   const hasImage = children.some((c) => c.type === "Image");
   const imageUrl = hasImage
@@ -728,6 +921,7 @@ function extractScreenPreview(flowJson, screenId) {
     bodies,
     captions,
     links,
+    richTexts,
     footerLabel: footer && footer.label ? footer.label : "",
     hasImage,
     imageUrl,

@@ -640,6 +640,7 @@
                   <button type="button" id="flowPublishBtn" class="btn-ghost sm hidden" data-i18n="flows.publishDraft">Publicar borrador</button>
                   <button type="button" id="flowDeleteBtn" class="btn-ghost sm hidden danger-text" data-i18n="flows.deleteDraft">Eliminar borrador</button>
                   <button type="button" id="flowDeprecateBtn" class="btn-ghost sm hidden" data-i18n="flows.deprecateFlow">Deprecar</button>
+                  <button type="button" id="flowExportJsonBtn" class="btn-ghost sm" data-i18n="flows.json.exportBtn">Exportar JSON</button>
                   <a id="flowPreviewLink" class="btn-ghost sm hidden" href="#" target="_blank" rel="noopener" data-i18n="flows.openMeta">Abrir en Meta</a>
                 </div>
               </div>
@@ -682,6 +683,7 @@
               </div>
               <div class="flow-studio-top-actions">
                 <button type="button" id="fsPickerToggle" class="btn-ghost sm" data-i18n="flows.studio.presetsBtn">Plantillas Punto Pago</button>
+                <button type="button" id="fsJsonBtn" class="btn-ghost sm" data-i18n="flows.json.studioBtn">JSON</button>
                 <button type="button" id="fsCreateBtn" class="btn-primary sm" data-i18n="flows.studio.createDraft">Crear borrador en Meta</button>
                 <button type="button" id="fsCancelEditBtn" class="btn-ghost sm hidden" data-i18n="flows.studio.cancelEdit">Cancelar edición</button>
               </div>
@@ -1003,6 +1005,19 @@
       <div id="flowViewFlowPreview" class="flow-view-phone-wrap"></div>
       <div class="modal-actions flow-send-modal-actions">
         <button type="button" class="btn-ghost" data-close data-i18n="common.close">Cerrar</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="modalFlowJson" class="modal hidden">
+    <div class="modal-card modal-card-wide">
+      <h3 id="flowJsonModalTitle" data-i18n="flows.json.modalTitle">Flow JSON</h3>
+      <p class="muted sm" data-i18n="flows.json.modalHint">Importa o exporta el JSON de Meta. Los flows dinámicos con endpoint se pueden ver pero no editar en el Studio.</p>
+      <textarea id="flowJsonEditor" class="flow-json-editor" rows="18" spellcheck="false"></textarea>
+      <div class="modal-actions">
+        <button type="button" class="btn-ghost" data-close data-i18n="common.close">Cerrar</button>
+        <button type="button" id="flowJsonDownloadBtn" class="btn-ghost" data-i18n="flows.json.download">Descargar</button>
+        <button type="button" id="flowJsonImportBtn" class="btn-primary" data-i18n="flows.json.importToStudio">Importar al Studio</button>
       </div>
     </div>
   </div>

@@ -57,6 +57,12 @@
   "maxFields": "Maximum {max} fields per screen.",
   "flowTemplateSubmitted": "Template «{name}» submitted to Meta. Await approval.",
   "templateCreateFailed": "Could not create the template.",
+  "jsonInvalid": "Invalid JSON.",
+  "jsonImported": "JSON imported to Studio.",
+  "jsonImportFailed": "Could not import JSON.",
+  "jsonExportFailed": "Could not export JSON.",
+  "jsonPreviewFailed": "Could not generate JSON preview.",
+  "carouselMaxImages": "Maximum {max} carousel images.",
   "templateSubmittedMeta": "Template submitted to Meta.{vars} Wait for approval.",
   "templateSubmittedVars": " API variables: {keys}."
 }

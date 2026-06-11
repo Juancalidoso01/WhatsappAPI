@@ -41,7 +41,14 @@ const CATEGORIES = [
   { id: "APPOINTMENT_BOOKING", label: "Reserva de citas" },
 ];
 
-const LIMITS = { maxScreens: 8, maxFieldsPerScreen: 12, maxBlocksPerScreen: 10, imageMaxKb: 100 };
+const LIMITS = {
+  maxScreens: 8,
+  maxFieldsPerScreen: 12,
+  maxBlocksPerScreen: 10,
+  imageMaxKb: 100,
+  carouselMinImages: 2,
+  carouselMaxImages: 5,
+};
 
 function slugify(text, fallback) {
   const s = String(text || "")
@@ -94,6 +101,21 @@ function validateDefinition(def) {
           return { ok: false, error: `"${scr.title}": el enlace "${b.text}" necesita URL https:// válida.` };
         }
       }
+      if (b.type === "carousel") {
+        const imgs = (b.images || []).filter((img) => img && (img.src || img.previewUrl));
+        if (imgs.length > 0 && imgs.length < LIMITS.carouselMinImages) {
+          return {
+            ok: false,
+            error: `"${scr.title}": el carrusel necesita al menos ${LIMITS.carouselMinImages} imágenes.`,
+          };
+        }
+        if (imgs.length > LIMITS.carouselMaxImages) {
+          return {
+            ok: false,
+            error: `"${scr.title}": máximo ${LIMITS.carouselMaxImages} imágenes en carrusel.`,
+          };
+        }
+      }
     }
     if (scr.type === "form") {
       const fields = scr.fields || [];
@@ -125,7 +147,12 @@ function validateDefinition(def) {
       }
     }
     if (scr.type === "message") {
-      const hasBlocks = Array.isArray(scr.blocks) && scr.blocks.some((b) => String(b.text || b.src || "").trim());
+      const hasBlocks = Array.isArray(scr.blocks) && scr.blocks.some((b) => {
+        if (b.type === "richtext") return String(b.markdown || b.text || "").trim();
+        if (b.type === "carousel") return (b.images || []).some((img) => img && (img.src || img.previewUrl));
+        if (b.type === "link") return String(b.text || "").trim() && String(b.url || "").trim();
+        return String(b.text || b.src || "").trim();
+      });
       const hasLegacy = String(scr.body || scr.heading || "").trim() || (scr.image && scr.image.src);
       if (!hasBlocks && !hasLegacy) {
         return { ok: false, error: `La pantalla "${scr.title}" necesita contenido (texto o imagen).` };
@@ -290,6 +317,19 @@ function layoutContentFromScreen(scr) {
             "on-click-action": { name: "open_url", url },
           });
         }
+      } else if (b.type === "richtext" && String(b.markdown || b.text || "").trim()) {
+        children.push({ type: "RichText", text: String(b.markdown || b.text).trim() });
+      } else if (b.type === "carousel") {
+        const imgs = (b.images || []).map((img) => imageComponent(img)).filter(Boolean);
+        if (imgs.length >= LIMITS.carouselMinImages) {
+          children.push({
+            type: "ImageCarousel",
+            images: imgs,
+            "scale-type": b.scaleType === "cover" ? "cover" : "contain",
+          });
+        } else if (imgs.length === 1) {
+          children.push(imgs[0]);
+        }
       }
     });
   } else {
@@ -326,6 +366,20 @@ function screenIdAt(index) {
   return `SCREEN_${letter}`;
 }
 
+function resolveNextScreenId(scr, index, bodyScreens, screenIds, confirmId) {
+  const target = scr.nextTarget;
+  if (target === "complete") return null;
+  if (target === "confirm" && confirmId) return confirmId;
+  if (target != null && target !== "next" && target !== "") {
+    const idx = Number(target);
+    if (!Number.isNaN(idx) && idx >= 0 && idx < bodyScreens.length) {
+      return screenIds[idx];
+    }
+  }
+  const isLastBody = index === bodyScreens.length - 1;
+  return isLastBody ? confirmId : screenIds[index + 1];
+}
+
 function buildFlowJson(definition) {
   const check = validateDefinition(definition);
   if (!check.ok) return check;
@@ -348,9 +402,8 @@ function buildFlowJson(definition) {
 
   bodyScreens.forEach((scr, i) => {
     const screenId = screenIds[i];
-    const isLastBody = i === bodyScreens.length - 1;
-    const nextId = isLastBody ? confirmId : screenIds[i + 1];
-    const footerLabel = String(scr.footerLabel || (isLastBody && !confirmId ? "Enviar" : "Continuar")).trim();
+    const nextId = resolveNextScreenId(scr, i, bodyScreens, screenIds, confirmId);
+    const footerLabel = String(scr.footerLabel || (nextId ? "Continuar" : "Enviar")).trim();
 
     const layoutChildren = [];
 
@@ -466,6 +519,8 @@ function getSchema() {
       { id: "caption", label: "Texto pequeño" },
       { id: "image", label: "Imagen" },
       { id: "link", label: "Enlace" },
+      { id: "richtext", label: "Texto enriquecido (Markdown)" },
+      { id: "carousel", label: "Carrusel de imágenes" },
     ],
     screenTypes: [
       { id: "form", label: "Formulario", description: "Campos que el usuario completa." },

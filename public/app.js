@@ -4305,6 +4305,8 @@ function fsBlockLabel(type) {
     caption: t("flows.studio.blockCaption"),
     image: t("flows.studio.blockImage"),
     link: t("flows.studio.blockLink"),
+    richtext: t("flows.studio.blockRichText"),
+    carousel: t("flows.studio.blockCarousel"),
   };
   return map[type] || type;
 }
@@ -4353,6 +4355,8 @@ function syncFsPreviewScreen(index, wrap) {
     } else if (block.type === "link") {
       block.text = (blockEl.querySelector(".fs-b-link-text") || {}).value || "";
       block.url = (blockEl.querySelector(".fs-b-link-url") || {}).value || "";
+    } else if (block.type === "richtext") {
+      block.markdown = (blockEl.querySelector(".fs-b-richtext") || {}).value || "";
     } else {
       const textEl = blockEl.querySelector(".fs-ed-text");
       if (textEl) block.text = textEl.textContent.trim();
@@ -4384,6 +4388,8 @@ function syncFsPreviewScreen(index, wrap) {
   }
   const footer = wrap.querySelector(".fs-ed-footer-btn");
   if (footer) scr.buttonLabel = footer.value.trim();
+  const nextSel = wrap.querySelector(".fs-next-target-sel");
+  if (nextSel) scr.nextTarget = nextSel.value;
   const screenIndex = Number(wrap.dataset.fsI);
   const isLast = screenIndex === fsState.screens.length - 1;
   scr.buttonAction = (scr.layout === "confirm" || isLast) ? "complete" : "next";
@@ -4743,6 +4749,11 @@ function fsInsertBlockAt(screenIndex, insertAt, type) {
   } else if (type === "link") {
     block.text = t("flows.studio.linkTextDefault");
     block.url = "";
+  } else if (type === "richtext") {
+    block.markdown = t("flows.studio.richtextDefault");
+  } else if (type === "carousel") {
+    block.scaleType = "contain";
+    block.images = [];
   } else {
     block.text = "";
   }
@@ -4832,6 +4843,30 @@ function fsEditableBlockHtml(b, bi, screenIndex) {
         <input type="url" class="fs-b-link-url sm" placeholder="${escapeHtml(t("flows.studio.linkUrlPh"))}" value="${escapeHtml(b.url || "")}" />
       </div>`;
   }
+  if (b.type === "richtext") {
+    return `
+      <div class="fs-ed-block" data-bi="${bi}" data-block-type="richtext">
+        ${removeBtn}
+        <textarea class="fs-b-richtext sm" placeholder="${escapeHtml(t("flows.studio.richtextPh"))}">${escapeHtml(b.markdown || b.text || "")}</textarea>
+      </div>`;
+  }
+  if (b.type === "carousel") {
+    const imgs = b.images || [];
+    const thumbs = imgs.map((img) => {
+      const preview = img.previewUrl || (img.src ? `data:image/png;base64,${img.src}` : "");
+      return preview ? `<img class="fs-carousel-thumb" src="${escapeHtml(preview)}" alt="" />` : "";
+    }).join("");
+    const max = fsState.schema?.limits?.carouselMaxImages || 5;
+    return `
+      <div class="fs-ed-block" data-bi="${bi}" data-block-type="carousel">
+        ${removeBtn}
+        <p class="muted sm">${escapeHtml(t("flows.studio.carouselHint", { min: 2, max }))}</p>
+        <div class="fs-carousel-images">${thumbs || `<span class="muted sm">${escapeHtml(t("flows.studio.noImageYet"))}</span>`}</div>
+        <label class="flows-upload-label sm fs-ed-upload"><span>${escapeHtml(t("flows.studio.carouselAdd"))}</span>
+          <input type="file" accept="image/png,image/jpeg" class="fs-carousel-file" data-bi="${bi}" ${imgs.length >= max ? "disabled" : ""} />
+        </label>
+      </div>`;
+  }
   const ph = escapeHtml(t("flows.studio.blockTextPh"));
   const textContent = escapeHtml(b.text || "");
   const emphCls = (b.type === "body" || b.type === "caption") ? fsEmphasisClass(b.emphasis) : "";
@@ -4876,6 +4911,23 @@ function fsEditableFieldsHtml(scr) {
     </div>`;
 }
 
+function fsNextTargetOptions(scr, screenIndex) {
+  const confirmIdx = fsState.screens.findIndex((s) => s.layout === "confirm");
+  const hasConfirm = confirmIdx >= 0;
+  const value = scr.nextTarget || (scr.layout === "confirm" ? "complete" : "next");
+  let html = `<option value="next"${value === "next" ? " selected" : ""}>${escapeHtml(t("flows.studio.nextTargetNext"))}</option>`;
+  html += `<option value="complete"${value === "complete" ? " selected" : ""}>${escapeHtml(t("flows.studio.nextTargetComplete"))}</option>`;
+  if (hasConfirm) {
+    html += `<option value="confirm"${value === "confirm" ? " selected" : ""}>${escapeHtml(t("flows.studio.nextTargetConfirm"))}</option>`;
+  }
+  fsState.screens.forEach((s, i) => {
+    if (i === screenIndex || s.layout === "confirm") return;
+    const title = (s.title || t("flows.studio.step", { n: i + 1 })).slice(0, 24);
+    html += `<option value="${i}"${value === String(i) ? " selected" : ""}>${escapeHtml(t("flows.studio.nextTargetScreen", { n: i + 1, title }))}</option>`;
+  });
+  return html;
+}
+
 function renderFsPhoneEditor(scr, index) {
   ensureScreenBlocks(scr);
   const isLast = index === fsState.screens.length - 1;
@@ -4912,6 +4964,7 @@ function renderFsPhoneEditor(scr, index) {
           <div class="flow-phone-footer fs-ed-footer">
             <input type="text" class="fs-ed-footer-btn" value="${escapeHtml(btnLabel)}" placeholder="${escapeHtml(t("flows.studio.screenButton"))}" />
           </div>
+          ${scr.layout !== "confirm" ? `<label class="fs-next-target sm"><span>${escapeHtml(t("flows.studio.nextTargetLabel"))}</span><select class="fs-next-target-sel">${fsNextTargetOptions(scr, index)}</select></label>` : ""}
         </div>
       </div>
       <div class="fs-phone-dots">${dotsHtml}</div>
@@ -4998,6 +5051,15 @@ function bindFsPreviewRow(row) {
       const i = Number(wrap.dataset.fsI);
       fsState.activeIndex = i;
       uploadFsBlockImage(Number(input.dataset.bi), input);
+    });
+  });
+  row.querySelectorAll(".fs-carousel-file").forEach((input) => {
+    input.addEventListener("change", () => {
+      syncFsFromAllPreviews();
+      const wrap = input.closest(".fs-phone-wrap");
+      const i = Number(wrap.dataset.fsI);
+      fsState.activeIndex = i;
+      uploadFsCarouselImage(Number(input.dataset.bi), input);
     });
   });
   row.querySelectorAll(".fs-f-remove").forEach((btn) => {
@@ -5113,6 +5175,44 @@ async function uploadFsBlockImage(bi, input) {
   renderFlowStudio();
 }
 
+async function uploadFsCarouselImage(bi, input) {
+  const file = input?.files?.[0];
+  if (!file) return;
+  if (file.size > 100 * 1024) {
+    toast(t("toast.imageTooLarge"), "error");
+    input.value = "";
+    return;
+  }
+  syncFsFromAllPreviews();
+  const scr = fsActiveScreen();
+  const block = scr?.blocks?.[bi];
+  if (!block || block.type !== "carousel") return;
+  const max = fsState.schema?.limits?.carouselMaxImages || 5;
+  block.images = block.images || [];
+  if (block.images.length >= max) {
+    toast(t("toast.carouselMaxImages", { max }), "error");
+    return;
+  }
+  const fd = new FormData();
+  fd.append("image", file);
+  toast(t("toast.uploadingImage"), "info");
+  const res = await postForm("/api/flows/studio/assets", fd);
+  if (!res.ok) {
+    toast(res.error || t("toast.uploadFailed"), "error");
+    return;
+  }
+  block.images.push({
+    type: "image",
+    assetId: res.assetId,
+    previewUrl: res.previewUrl,
+    src: res.src,
+    altText: file.name.replace(/\.[^.]+$/, ""),
+    scaleType: block.scaleType || "contain",
+  });
+  toast(t("toast.imageUploaded"), "ok");
+  renderFlowStudio();
+}
+
 function fsAddScreen() {
   syncFsFromAllPreviews();
   const max = fsState.schema?.limits?.maxScreens || 8;
@@ -5169,6 +5269,8 @@ function mapFsScreenToDef(s, i, fsStateScreens) {
     blocks,
     footerLabel: s.buttonLabel || (isLast ? t("flows.studio.close") : t("flows.studio.continue")),
   };
+  if (s.nextTarget && s.nextTarget !== "next") base.nextTarget = s.nextTarget;
+  else if (s.layout === "confirm") base.nextTarget = "complete";
   if (s.layout === "form") {
     return {
       type: "form",
@@ -5224,6 +5326,7 @@ function loadStudioDefinition(def) {
     fields: Array.isArray(s.fields) ? s.fields.map((f) => ({ ...f })) : [],
     buttonLabel: s.buttonLabel || "",
     buttonAction: s.buttonAction || "next",
+    nextTarget: s.nextTarget || undefined,
   }));
   fsState.activeIndex = 0;
   if ($("fsName")) $("fsName").value = def.name || "";
@@ -5297,6 +5400,91 @@ function openFlowSendModal() {
     hint.textContent = st === "DRAFT" ? t("flows.sendModal.draftMode") : t("flows.sendModal.publishedMode");
   }
   showModal("modalFlowSend");
+}
+
+function setFlowJsonModal(mode, json) {
+  state.flowJsonMode = mode;
+  const editor = $("flowJsonEditor");
+  const title = $("flowJsonModalTitle");
+  const importBtn = $("flowJsonImportBtn");
+  if (editor) editor.value = typeof json === "string" ? json : JSON.stringify(json, null, 2);
+  if (title) {
+    title.textContent = mode === "export"
+      ? t("flows.json.exportTitle")
+      : (mode === "import" ? t("flows.json.importTitle") : t("flows.json.previewTitle"));
+  }
+  if (importBtn) importBtn.classList.toggle("hidden", mode === "export");
+  showModal("modalFlowJson");
+}
+
+async function openFsJsonPreview() {
+  const def = collectFsDefinition();
+  if (!def.name) {
+    toast(t("toast.flowNameRequired"), "error");
+    return;
+  }
+  const res = await post("/api/flows/studio/preview-json", def);
+  if (!res.ok) {
+    toast(res.error || t("toast.jsonPreviewFailed"), "error");
+    return;
+  }
+  setFlowJsonModal("preview", res.flowJson);
+}
+
+async function exportActiveFlowJson() {
+  const id = state.activeFlowId;
+  if (!id) {
+    toast(t("toast.selectFlow"), "error");
+    return;
+  }
+  const res = await api(`/api/flows/${encodeURIComponent(id)}/export-json`);
+  if (!res.ok) {
+    toast(res.error || t("toast.jsonExportFailed"), "error");
+    return;
+  }
+  setFlowJsonModal("export", res.flowJson);
+}
+
+function downloadFlowJsonFromModal() {
+  const raw = ($("flowJsonEditor") || {}).value || "";
+  if (!raw.trim()) return;
+  const blob = new Blob([raw], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  const name = state.activeFlowDetail?.name || ($("fsName") || {}).value || "flow";
+  a.href = url;
+  a.download = `${String(name).replace(/[^a-z0-9_]/gi, "_")}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+async function importFlowJsonFromModal() {
+  const raw = ($("flowJsonEditor") || {}).value || "";
+  let flowJson;
+  try {
+    flowJson = JSON.parse(raw);
+  } catch (_) {
+    toast(t("toast.jsonInvalid"), "error");
+    return;
+  }
+  const res = await post("/api/flows/studio/import-json", { flowJson });
+  if (!res.ok) {
+    toast(res.error || t("toast.jsonImportFailed"), "error");
+    return;
+  }
+  if (res.dynamic) toast(t("flows.json.dynamicHint"), "info");
+  loadStudioDefinition({
+    ...res.definition,
+    name: ($("fsName") || {}).value || res.definition.name,
+    category: ($("fsCategory") || {}).value || res.definition.category,
+  });
+  renderFlowStudio();
+  closeModals();
+  toast(t("toast.jsonImported"), "ok");
+}
+
+function openFsJsonImportEmpty() {
+  setFlowJsonModal("import", "{\n  \"version\": \"7.3\",\n  \"screens\": []\n}");
 }
 
 async function confirmFlowSend() {
@@ -6274,6 +6462,15 @@ function bindEvents() {
   if (flowsConfigBtn) flowsConfigBtn.addEventListener("click", openFlowsConfigModal);
   const fsCreateBtn = $("fsCreateBtn");
   if (fsCreateBtn) fsCreateBtn.addEventListener("click", createFlowFromStudio);
+  const fsJsonBtn = $("fsJsonBtn");
+  if (fsJsonBtn) {
+    fsJsonBtn.addEventListener("click", () => {
+      if (fsState.screens.length) openFsJsonPreview();
+      else openFsJsonImportEmpty();
+    });
+  }
+  $("flowJsonDownloadBtn")?.addEventListener("click", downloadFlowJsonFromModal);
+  $("flowJsonImportBtn")?.addEventListener("click", importFlowJsonFromModal);
   const fsPickerToggle = $("fsPickerToggle");
   if (fsPickerToggle) {
     fsPickerToggle.addEventListener("click", () => $("flowCreatePicker")?.classList.toggle("hidden"));
@@ -6337,6 +6534,7 @@ function bindEvents() {
   $("flowPublishBtn")?.addEventListener("click", publishActiveFlow);
   $("flowDeleteBtn")?.addEventListener("click", deleteActiveFlow);
   $("flowDeprecateBtn")?.addEventListener("click", deprecateActiveFlow);
+  $("flowExportJsonBtn")?.addEventListener("click", exportActiveFlowJson);
   $("flowEditDraftBtn")?.addEventListener("click", openFlowEditDraft);
   $("flowSendBtn")?.addEventListener("click", openFlowSendModal);
   $("flowSendConfirmBtn")?.addEventListener("click", confirmFlowSend);

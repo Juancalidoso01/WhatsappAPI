@@ -674,6 +674,84 @@ app.get('/api/flows/builder/schema', (req, res) => {
   res.json({ ok: true, schema: flowBuilder.getSchema() });
 });
 
+app.post('/api/flows/studio/preview-json', apiJson, (req, res) => {
+  const { name, category, cta, screens } = req.body || {};
+  const built = flowBuilder.buildFlowJson({ name: name || 'preview', category, cta, screens: screens || [] });
+  if (!built.ok) return res.status(400).json({ ok: false, error: built.error });
+  res.json({ ok: true, flowJson: built.flowJson, firstScreenId: built.firstScreenId });
+});
+
+app.post('/api/flows/studio/import-json', apiJson, async (req, res) => {
+  const { flowJson, name, category, create, cta, chatBody } = req.body || {};
+  if (!flowJson) return res.status(400).json({ ok: false, error: 'Se requiere flowJson.' });
+  const imported = flowJsonImport.importFlowJson(flowJson);
+  if (!imported.ok) return res.status(400).json({ ok: false, error: imported.error });
+
+  const definition = {
+    name: name || 'flow_importado',
+    category: category || 'OTHER',
+    cta: cta || 'Abrir',
+    chatBody: chatBody || '',
+    screens: imported.screens,
+  };
+
+  if (!create) {
+    return res.json({
+      ok: true,
+      definition,
+      partial: imported.partial,
+      dynamic: imported.dynamic,
+      editable: !imported.dynamic,
+    });
+  }
+
+  if (!config.accessToken || !config.wabaId) {
+    return res.status(400).json({ ok: false, error: 'Falta ACCESS_TOKEN o WABA_ID.' });
+  }
+  if (imported.dynamic) {
+    return res.status(400).json({
+      ok: false,
+      error: 'Flows dinámicos con data_api_version no se pueden crear desde import JSON en el Studio.',
+    });
+  }
+
+  const enrichedScreens = await enrichFlowScreensWithAssets(definition.screens);
+  const built = flowBuilder.buildFlowJson({ ...definition, screens: enrichedScreens });
+  if (!built.ok) return res.status(400).json({ ok: false, error: built.error });
+
+  try {
+    const result = await GraphApi.createFlow(config.wabaId, {
+      name: String(definition.name).trim().toLowerCase(),
+      categories: [definition.category || 'OTHER'],
+      flowJson: built.flowJson,
+      publish: false,
+    });
+    await FlowStudioStore.saveDefinition(result.id, {
+      ...definition,
+      screens: enrichedScreens,
+      source: 'import',
+    });
+    res.status(201).json({
+      ok: true,
+      flow: result,
+      definition,
+      defaultScreen: built.firstScreenId,
+    });
+  } catch (err) {
+    res.status(200).json({ ok: false, error: String(err.message || err) });
+  }
+});
+
+app.get('/api/flows/:id/export-json', async (req, res) => {
+  if (!config.accessToken) return res.status(400).json({ ok: false, error: 'Falta ACCESS_TOKEN.' });
+  try {
+    const flowJson = await GraphApi.getFlowJsonAsset(req.params.id);
+    res.json({ ok: true, flowJson });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: String(err.message || err) });
+  }
+});
+
 app.post('/api/flows/studio/assets', (req, res, next) => {
   cardImageUpload.single('image')(req, res, (err) => {
     if (err) return res.status(400).json({ ok: false, error: err.message || 'Archivo inválido.' });

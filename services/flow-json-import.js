@@ -54,6 +54,9 @@ function parseContentBlock(comp) {
   if (comp.type === "TextCaption") {
     return { type: "caption", text: comp.text || "", emphasis: comp["font-weight"] || "normal" };
   }
+  if (comp.type === "RichText") {
+    return { type: "richtext", markdown: comp.text || "" };
+  }
   if (comp.type === "Image") {
     return {
       type: "image",
@@ -61,6 +64,20 @@ function parseContentBlock(comp) {
       altText: comp["alt-text"] || "",
       scaleType: comp["scale-type"] === "cover" ? "cover" : "contain",
       previewUrl: comp.src && String(comp.src).startsWith("data:") ? comp.src : "",
+    };
+  }
+  if (comp.type === "ImageCarousel") {
+    const images = (comp.images || []).map((img) => ({
+      type: "image",
+      src: img.src || "",
+      altText: img["alt-text"] || "",
+      scaleType: comp["scale-type"] === "cover" ? "cover" : "contain",
+      previewUrl: img.src && String(img.src).startsWith("data:") ? img.src : "",
+    }));
+    return {
+      type: "carousel",
+      scaleType: comp["scale-type"] === "cover" ? "cover" : "contain",
+      images,
     };
   }
   if (comp.type === "EmbeddedLink") {
@@ -74,7 +91,7 @@ function parseContentBlock(comp) {
   return null;
 }
 
-function parseScreen(screen, { isConfirm }) {
+function parseScreen(screen, { isConfirm, nextTarget }) {
   const children = (screen.layout && screen.layout.children) || [];
   const footer = children.find((c) => c.type === "Footer");
   const form = children.find((c) => c.type === "Form");
@@ -92,6 +109,7 @@ function parseScreen(screen, { isConfirm }) {
     buttonLabel: footer?.label || "",
     blocks,
     fields,
+    nextTarget: nextTarget || undefined,
   };
 
   if (isConfirm || (screen.terminal && screen.success && !form)) {
@@ -114,42 +132,40 @@ function parseScreen(screen, { isConfirm }) {
   return scr;
 }
 
+function isConfirmScreen(screen) {
+  if (!screen || !screen.terminal || !screen.success) return false;
+  if (screen.id === "CONFIRM") return true;
+  const children = (screen.layout && screen.layout.children) || [];
+  return !children.some((c) => c.type === "Form");
+}
+
+function resolveNextTarget(screenId, routing, confirmId, bodyScreens) {
+  const next = (routing[screenId] || [])[0];
+  if (!next) return "complete";
+  if (confirmId && next === confirmId) return "confirm";
+  const idx = bodyScreens.findIndex((s) => s.id === next);
+  if (idx >= 0) return String(idx);
+  return "next";
+}
+
 function importFlowJson(flowJson) {
   if (!flowJson || !Array.isArray(flowJson.screens) || !flowJson.screens.length) {
     return { ok: false, error: "Flow JSON sin pantallas." };
   }
 
-  if (flowJson.data_api_version) {
-    return { ok: false, error: "Flows dinámicos con endpoint no se pueden editar en el Studio." };
-  }
-
+  const isDynamic = Boolean(flowJson.data_api_version);
   const routing = flowJson.routing_model || {};
-  const screenIds = flowJson.screens.map((s) => s.id);
-  const confirmScreen = flowJson.screens.find((s) => s.terminal && s.success && s.id === "CONFIRM")
-    || flowJson.screens.find((s) => s.terminal && s.success && screenIds.length > 1 && s.id === screenIds[screenIds.length - 1]);
+  const confirmScreen = flowJson.screens.find((s) => isConfirmScreen(s));
+  const confirmId = confirmScreen && confirmScreen.id;
 
-  const bodyScreens = flowJson.screens.filter((s) => s.id !== (confirmScreen && confirmScreen.id));
-  const ordered = [];
-  const visited = new Set();
-  let cursor = bodyScreens[0]?.id;
+  const bodyScreens = flowJson.screens.filter((s) => s.id !== confirmId);
+  const screens = bodyScreens.map((s) => parseScreen(s, {
+    isConfirm: false,
+    nextTarget: resolveNextTarget(s.id, routing, confirmId, bodyScreens),
+  }));
 
-  while (cursor && !visited.has(cursor)) {
-    visited.add(cursor);
-    const scr = bodyScreens.find((s) => s.id === cursor);
-    if (!scr) break;
-    ordered.push(scr);
-    const next = (routing[cursor] || [])[0];
-    cursor = next && next !== (confirmScreen && confirmScreen.id) ? next : null;
-  }
-
-  const remaining = bodyScreens.filter((s) => !visited.has(s.id));
-  if (remaining.length) {
-    return { ok: false, error: "Routing no lineal: edita este Flow en Meta o recrea un sample." };
-  }
-
-  const screens = ordered.map((s) => parseScreen(s, { isConfirm: false }));
   if (confirmScreen) {
-    screens.push(parseScreen(confirmScreen, { isConfirm: true }));
+    screens.push(parseScreen(confirmScreen, { isConfirm: true, nextTarget: "complete" }));
   } else if (screens.length) {
     const last = screens[screens.length - 1];
     if (last.type === "message") last.buttonAction = "complete";
@@ -158,7 +174,9 @@ function importFlowJson(flowJson) {
   return {
     ok: true,
     screens,
-    partial: false,
+    partial: isDynamic,
+    dynamic: isDynamic,
+    version: flowJson.version || null,
   };
 }
 

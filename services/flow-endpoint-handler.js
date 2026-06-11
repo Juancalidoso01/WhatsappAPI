@@ -321,6 +321,19 @@ async function handleFlowRequest(decryptedBody) {
   if (isBookingToken(flowToken) || isBookingRequest(decryptedBody)) {
     return handleBookingFlow(decryptedBody);
   }
+
+  const tokenMeta = await FlowStore.resolveTokenMeta(flowToken);
+  const flowName = String(tokenMeta?.flowName || "").toLowerCase();
+  if (flowName.includes("autorizacion_pago") || flowName.includes("3ds") || flowName.includes("payment_auth")) {
+    return handlePaymentAuth(decryptedBody);
+  }
+  if (flowName.includes("reserva_cita") || flowName.includes("booking")) {
+    return handleBookingFlow(decryptedBody);
+  }
+  if (flowName.includes("cotizacion") || flowName.includes("quote")) {
+    return handleQuoteFlow(decryptedBody);
+  }
+
   return handleQuoteFlow(decryptedBody);
 }
 
