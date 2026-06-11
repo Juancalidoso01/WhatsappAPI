@@ -221,7 +221,7 @@ app.post('/webhook', webhookJson, (req, res) => {
         if (value.statuses) {
             value.statuses.forEach(status => {
               const phone = String(status.recipient_id);
-              Promise.resolve(Store.updateMessageStatus(phone, status.id, status.status))
+              Promise.resolve(Store.updateMessageStatus(phone, status.id, status.status, status.errors))
                 .catch(err => console.error('updateMessageStatus error:', err));
               Promise.resolve(CampaignStore.applyWebhookStatus(status.id, status.status))
                 .catch(err => console.error('campaign status error:', err));

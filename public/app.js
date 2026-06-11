@@ -1176,6 +1176,12 @@ const STATUS_LABELS = {
   failed: "Error al enviar",
 };
 
+function messageErrorLabel(m) {
+  const e = m && m.error;
+  if (!e) return "";
+  return e.title || e.message || (e.code ? `Código ${e.code}` : "");
+}
+
 function statusTick(m) {
   if (m.direction === "in") {
     let label = "Recibido";
@@ -1185,7 +1191,9 @@ function statusTick(m) {
     else if (m.type === "document") label = "Documento recibido";
     return `<span class="recv-badge" title="${escapeHtml(label)}">${escapeHtml(label)}</span>`;
   }
-  const label = STATUS_LABELS[m.status] || "";
+  let label = STATUS_LABELS[m.status] || "";
+  const err = messageErrorLabel(m);
+  if (m.status === "failed" && err) label = `${label}: ${err}`;
   const map = {
     pending: '<span class="tick"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span>',
     sent: '<span class="tick"><svg viewBox="0 0 24 24"><path d="M4 12l5 5L20 6"/></svg></span>',
@@ -2433,6 +2441,19 @@ function isFlowTemplateApproved(preset) {
   return Boolean(meta && meta.flow && meta.flow.approved && meta.flow.hasFlowButton);
 }
 
+async function phoneInServiceWindow(phone) {
+  if (!phone) return false;
+  try {
+    const detail = await api(`/api/conversations/${encodeURIComponent(phone)}/detail`);
+    if (!detail) return false;
+    if (detail.windowExpiresAt) return Date.now() < Number(detail.windowExpiresAt) * 1000;
+    if (detail.lastInbound) return Date.now() - Number(detail.lastInbound) < 24 * 60 * 60 * 1000;
+    return false;
+  } catch (_) {
+    return false;
+  }
+}
+
 function getNcPresetContext(tplName) {
   const preset = state.templatePresets.find((p) => p.name === tplName || p.templateFlowName === tplName);
   if (!preset) return null;
@@ -2536,9 +2557,8 @@ function updateNcFlowSection() {
   section.classList.add("is-ready");
   if (cb && !cb.dataset.touched) cb.checked = true;
   if (readyHint) {
-    readyHint.textContent = ctx.flowApproved
-      ? t("templates.ncFlowReadyTemplate")
-      : t("templates.ncFlowReadyInteractive");
+    if (ctx.flowApproved) readyHint.textContent = t("templates.ncFlowReadyTemplate");
+    else readyHint.textContent = t("templates.ncFlowReadyInteractive");
   }
   updateNcPreview();
 }
@@ -2623,8 +2643,14 @@ async function sendNewChat() {
   const name = overrides.nombre_cliente || overrides.var1 || $("ncName").value.trim();
   if (!phone) { toast(t("toast.phoneAndTemplateRequired"), "error"); return; }
 
+  const inWindow = await phoneInServiceWindow(phone);
+  const useInteractive = Boolean(
+    includeFlow && ctx && ctx.flowPublished && !ctx.flowApproved && ctx.publishedFlowId && inWindow
+  );
+  let sentTextOnlyFallback = false;
+
   let res;
-  if (includeFlow && ctx.flowPublished && !ctx.flowApproved && ctx.publishedFlowId) {
+  if (useInteractive) {
     const q = new URLSearchParams(overrides).toString();
     const presetRes = await api(`/api/templates/presets/${encodeURIComponent(ctx.preset.key)}${q ? `?${q}` : ""}`);
     const preview = (presetRes && presetRes.preview) || {};
@@ -2638,16 +2664,30 @@ async function sendNewChat() {
       screen,
     });
   } else {
+    if (includeFlow && ctx && !ctx.flowApproved) sentTextOnlyFallback = true;
     const tplName = getNcEffectiveTemplateName();
     if (!tplName) { toast(t("toast.phoneAndTemplateRequired"), "error"); return; }
     const tpl = tplByName(tplName) || tplByName(selTpl);
     const components = tpl ? collectComponents(tpl) : [];
+    const bodyN = tpl ? bodyVarCount(tpl) : 0;
+    if (bodyN > 0) {
+      const missing = [];
+      for (let i = 1; i <= bodyN; i++) {
+        const el = $("ncFields") && $("ncFields").querySelector(`[data-field="body${i}"], [data-fl-index="${i}"]`);
+        if (!el || !el.value.trim()) missing.push(i);
+      }
+      if (missing.length) {
+        toast(t("templates.ncMissingVars"), "error");
+        return;
+      }
+    }
     res = await post("/api/send-template", { phone, name, template: tplName, language: tpl ? tpl.language : "es", components });
   }
 
   if (res.ok) {
     closeModals();
-    toast(t("toast.templateSent"), "ok");
+    if (sentTextOnlyFallback) toast(t("templates.ncSentTextOnlyCold"), "ok");
+    else toast(t("toast.templateSent"), "ok");
     switchScreen("chats");
     await loadConversations();
     openConversation(phone, name || phone);
@@ -4658,8 +4698,10 @@ async function sendFlowLaunch() {
   if (!phone) { toast(t("toast.phoneAndTemplateRequired"), "error"); return; }
   const overrides = collectFlowLaunchOverrides();
   const name = overrides.nombre_cliente || overrides.var1 || "";
+  const inWindow = await phoneInServiceWindow(phone);
+  const useInteractive = Boolean(ctx.useInteractiveFlow && ctx.publishedFlowId && inWindow);
   let res;
-  if (ctx.useInteractiveFlow && ctx.publishedFlowId) {
+  if (useInteractive) {
     const q = new URLSearchParams(overrides).toString();
     const presetRes = await api(`/api/templates/presets/${encodeURIComponent(ctx.preset.key)}${q ? `?${q}` : ""}`);
     const preview = (presetRes && presetRes.preview) || {};

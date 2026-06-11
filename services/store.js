@@ -138,7 +138,8 @@ async function updateMessageId(phone, localId, waId) {
   }
 }
 
-async function updateMessageStatus(phone, messageId, status) {
+async function updateMessageStatus(phone, messageId, status, errors) {
+  const errObj = Array.isArray(errors) && errors.length ? errors[0] : null;
   if (redis) {
     const key = `${PREFIX}msgs:${String(phone)}`;
     const raw = await redis.lrange(key, 0, -1);
@@ -146,6 +147,7 @@ async function updateMessageStatus(phone, messageId, status) {
       const msg = typeof raw[i] === "string" ? JSON.parse(raw[i]) : raw[i];
       if (msg.id === messageId) {
         msg.status = status;
+        if (errObj) msg.error = errObj;
         await redis.lset(key, i, JSON.stringify(msg));
         emitter.emit("message", { phone, name: phone, message: msg });
         return;
@@ -159,6 +161,7 @@ async function updateMessageStatus(phone, messageId, status) {
   const message = convo.messages.find((m) => m.id === messageId);
   if (message) {
     message.status = status;
+    if (errObj) message.error = errObj;
     emitter.emit("message", { phone, name: convo.name, message });
   }
 }
