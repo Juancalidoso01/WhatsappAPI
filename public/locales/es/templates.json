@@ -4,6 +4,7 @@
   "openMetaManager": "Abrir en Meta",
   "openMetaManagerHint": "Gestiona plantillas, estados y aprobaciones en WhatsApp Manager.",
   "otherTitle": "Otras en Meta",
+  "otherLoadError": "No se pudieron cargar las plantillas adicionales. Sincroniza de nuevo.",
   "syncMeta": "Sincronizar",
   "typeText": "Solo mensaje",
   "typeTour": "Con tour",

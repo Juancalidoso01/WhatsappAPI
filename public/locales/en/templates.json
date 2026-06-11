@@ -4,6 +4,7 @@
   "openMetaManager": "Open in Meta",
   "openMetaManagerHint": "Manage templates, statuses, and approvals in WhatsApp Manager.",
   "otherTitle": "Other in Meta",
+  "otherLoadError": "Could not load additional templates. Try syncing again.",
   "syncMeta": "Sync",
   "typeText": "Text only",
   "typeTour": "With tour",
