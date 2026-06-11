@@ -1502,8 +1502,11 @@ input, textarea, select { font-family: inherit; }
 .fs-fmt-sep { width: 1px; height: 18px; background: #e2e8f0; margin: 0 4px; }
 .fs-fmt-mini { min-width: 26px; font-size: 16px; font-weight: 400; }
 .fs-format-bar-image [data-fmt],
-.fs-format-bar-image [data-fmt-type] { display: none; }
-.fs-format-bar-image .fs-fmt-sep { display: none; }
+.fs-format-bar-image [data-fmt-type],
+.fs-format-bar-field [data-fmt],
+.fs-format-bar-field [data-fmt-type] { display: none; }
+.fs-format-bar-image .fs-fmt-sep,
+.fs-format-bar-field .fs-fmt-sep { display: none; }
 .fs-ed-fields-head {
   display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px;
 }

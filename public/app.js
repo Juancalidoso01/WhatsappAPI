@@ -787,6 +787,7 @@ async function onLocaleChange() {
     if (!$("flowsPanelCrear")?.classList.contains("hidden")) {
       repairFlowStudioTranslations();
       syncFlowStudioFormDefaults();
+      syncFsFromAllPreviews();
       renderFlowStudio();
     }
     if (!$("flowsPanelActividad")?.classList.contains("hidden")) loadFlowActivity();
@@ -4089,7 +4090,14 @@ const fsState = {
   screens: [],
 };
 let fsFormatCtx = null;
+let fsPersistedCtx = null;
 let fsFormatBarBound = false;
+let fsInsertMenuBound = false;
+
+function setFsFormatCtx(ctx) {
+  fsFormatCtx = ctx;
+  if (ctx) fsPersistedCtx = { ...ctx };
+}
 
 const FS_LAYOUTS = ["message", "form", "confirm"];
 
@@ -4151,6 +4159,7 @@ function fsBlockLabel(type) {
 
 async function initFlowStudio() {
   initFsFormatBar();
+  initFsInsertMenu();
   if (window.I18n) await I18n.ensureScreen("flows");
   if (!fsState.schema) {
     const res = await api("/api/flows/builder/schema");
@@ -4197,20 +4206,25 @@ function syncFsPreviewScreen(index, wrap) {
     }
   });
   if (scr.layout === "form") {
-    scr.fields = [];
-    wrap.querySelectorAll(".fs-ed-field").forEach((row) => {
-      const type = (row.querySelector(".fs-f-type") || {}).value || "text";
-      const field = {
-        type,
-        label: (row.querySelector(".fs-f-label") || {}).value || "",
-        required: true,
-      };
-      const optsRaw = (row.querySelector(".fs-f-opts") || {}).value || "";
-      if (type === "select" || type === "checkbox") {
-        field.options = optsRaw.split(",").map((s) => s.trim()).filter(Boolean);
-      }
-      scr.fields.push(field);
-    });
+    const fieldRows = wrap.querySelectorAll(".fs-ed-field");
+    if (fieldRows.length) {
+      scr.fields = [];
+      fieldRows.forEach((row) => {
+        const type = (row.querySelector(".fs-f-type") || {}).value || "text";
+        const field = {
+          type,
+          label: (row.querySelector(".fs-f-label") || {}).value || "",
+          required: true,
+        };
+        const optsRaw = (row.querySelector(".fs-f-opts") || {}).value || "";
+        if (type === "select" || type === "checkbox") {
+          field.options = optsRaw.split(",").map((s) => s.trim()).filter(Boolean);
+        }
+        scr.fields.push(field);
+      });
+    } else {
+      scr.fields = scr.fields || [];
+    }
   }
   const footer = wrap.querySelector(".fs-ed-footer-btn");
   if (footer) scr.buttonLabel = footer.value.trim();
@@ -4244,22 +4258,26 @@ function updateFsFormatBarState() {
   const bar = $("fsFormatBar");
   if (!bar || !fsFormatCtx) return;
   const scr = fsState.screens[fsFormatCtx.screenIndex];
-  const block = scr?.blocks?.[fsFormatCtx.blockIndex];
+  const isField = fsFormatCtx.kind === "field";
+  const block = !isField ? scr?.blocks?.[fsFormatCtx.blockIndex] : null;
   const isImage = block?.type === "image";
-  const canEmphasis = block && (block.type === "body" || block.type === "caption");
-  const canRemove = scr && scr.blocks.length > 1;
-  const max = fsState.schema?.limits?.maxBlocksPerScreen || 10;
-  const canAdd = scr && scr.blocks.length < max;
+  const canEmphasis = !isField && block && (block.type === "body" || block.type === "caption");
+  const maxBlocks = fsState.schema?.limits?.maxBlocksPerScreen || 10;
+  const canAddBlock = scr && scr.blocks.length < maxBlocks;
+  const canRemoveBlock = scr && scr.blocks.length > 1;
+  const fields = scr?.fields || [];
+  const canAddField = isField && scr?.layout === "form";
+  const canRemoveField = isField && fields.length > 0;
   bar.querySelectorAll("[data-fmt]").forEach((btn) => {
     const fmt = btn.dataset.fmt;
     const emph = block?.emphasis || "normal";
     const on = fmt === "bold" ? emph.includes("bold") : emph.includes("italic");
     btn.classList.toggle("active", canEmphasis && on);
-    btn.disabled = !canEmphasis || isImage;
-    btn.classList.toggle("disabled", !canEmphasis || isImage);
+    btn.disabled = isField || !canEmphasis || isImage;
+    btn.classList.toggle("disabled", isField || !canEmphasis || isImage);
   });
   bar.querySelectorAll("[data-fmt-type]").forEach((btn) => {
-    const hidden = isImage;
+    const hidden = isField || isImage;
     btn.classList.toggle("active", !hidden && block?.type === btn.dataset.fmtType);
     btn.disabled = hidden;
     btn.classList.toggle("disabled", hidden);
@@ -4267,14 +4285,17 @@ function updateFsFormatBarState() {
   const addBtn = bar.querySelector('[data-fmt-action="add"]');
   const remBtn = bar.querySelector('[data-fmt-action="remove"]');
   if (addBtn) {
+    const canAdd = isField ? canAddField : canAddBlock;
     addBtn.disabled = !canAdd;
     addBtn.classList.toggle("disabled", !canAdd);
   }
   if (remBtn) {
+    const canRemove = isField ? canRemoveField : canRemoveBlock;
     remBtn.disabled = !canRemove;
     remBtn.classList.toggle("disabled", !canRemove);
   }
-  bar.classList.toggle("fs-format-bar-image", Boolean(isImage));
+  bar.classList.toggle("fs-format-bar-image", Boolean(!isField && isImage));
+  bar.classList.toggle("fs-format-bar-field", Boolean(isField));
 }
 
 function positionFsFormatBar(rect) {
@@ -4299,6 +4320,9 @@ function onFsTextSelection() {
   }
   const sel = window.getSelection();
   if (!sel || sel.rangeCount === 0 || sel.isCollapsed) {
+    const active = document.activeElement;
+    if (active?.closest?.("#fsFormatBar, #fsInsertMenu")) return;
+    if ($("fsInsertMenu") && !$("fsInsertMenu").classList.contains("hidden")) return;
     hideFsFormatBar();
     return;
   }
@@ -4317,11 +4341,13 @@ function onFsTextSelection() {
     hideFsFormatBar();
     return;
   }
-  fsFormatCtx = {
+  setFsFormatCtx({
+    kind: "block",
     screenIndex: Number(wrap.dataset.fsI),
     blockIndex: Number(blockEl.dataset.bi),
     editable,
-  };
+  });
+  fsState.activeIndex = fsFormatCtx.screenIndex;
   const range = sel.getRangeAt(0);
   positionFsFormatBar(range.getBoundingClientRect());
   updateFsFormatBarState();
@@ -4375,37 +4401,81 @@ function setFsBlockType(type) {
 }
 
 function removeFsBlockFromCtx() {
-  if (!fsFormatCtx) return;
   syncFsFromAllPreviews();
-  const i = fsFormatCtx.screenIndex;
-  const bi = fsFormatCtx.blockIndex;
+  const ctx = fsFormatCtx || fsPersistedCtx;
+  const i = ctx?.screenIndex ?? fsState.activeIndex;
   const scr = fsState.screens[i];
-  if (!scr || scr.blocks.length <= 1) {
+  if (!scr) return;
+  if (ctx?.kind === "field") {
+    const fi = ctx.fieldIndex ?? 0;
+    if (!(scr.fields || []).length) return;
+    scr.fields.splice(fi, 1);
+    fsState.activeIndex = i;
+    hideFsFormatBar();
+    hideFsInsertMenu();
+    renderFlowStudio();
+    return;
+  }
+  const bi = ctx?.blockIndex ?? 0;
+  if (scr.blocks.length <= 1) {
     toast(t("toast.minOneBlock"), "error");
     return;
   }
   scr.blocks.splice(bi, 1);
   fsState.activeIndex = i;
   hideFsFormatBar();
+  hideFsInsertMenu();
   renderFlowStudio();
 }
 
 function addFsBlockFromCtx(anchorBtn) {
-  if (!fsFormatCtx) return;
-  const insertAt = fsFormatCtx.blockIndex + 1;
-  showFsInsertMenu(anchorBtn || $("fsFormatBar")?.querySelector('[data-fmt-action="add"]'), "block", fsFormatCtx.screenIndex, insertAt);
+  const ctx = fsFormatCtx || fsPersistedCtx;
+  const i = ctx?.screenIndex ?? fsState.activeIndex;
+  const scr = fsState.screens[i];
+  if (!scr) return;
+  const anchor = anchorBtn || $("fsFormatBar")?.querySelector('[data-fmt-action="add"]');
+  if (ctx?.kind === "field" || (scr.layout === "form" && document.activeElement?.closest?.(".fs-ed-field"))) {
+    const fi = ctx?.fieldIndex ?? (scr.fields || []).length;
+    showFsInsertMenu(anchor, "field", i, fi + 1);
+    return;
+  }
+  const insertAt = ctx != null && ctx.blockIndex != null
+    ? ctx.blockIndex + 1
+    : (scr.blocks?.length || 0);
+  showFsInsertMenu(anchor, "block", i, insertAt);
 }
 
 function showFsFormatBarForBlock(blockEl, wrap) {
   if (!blockEl || !wrap) return;
-  fsFormatCtx = {
+  setFsFormatCtx({
+    kind: "block",
     screenIndex: Number(wrap.dataset.fsI),
     blockIndex: Number(blockEl.dataset.bi),
     editable: blockEl.querySelector(".fs-ed-text"),
-  };
+  });
+  fsState.activeIndex = fsFormatCtx.screenIndex;
   const rect = (fsFormatCtx.editable || blockEl).getBoundingClientRect();
   positionFsFormatBar(rect);
   updateFsFormatBarState();
+}
+
+function initFsInsertMenu() {
+  if (fsInsertMenuBound) return;
+  const menu = $("fsInsertMenu");
+  if (!menu) return;
+  fsInsertMenuBound = true;
+  menu.addEventListener("click", (e) => {
+    const btn = e.target.closest(".fs-insert-menu-item");
+    if (!btn) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const type = btn.dataset.insertType;
+    const i = Number(menu.dataset.screen);
+    const at = Number(menu.dataset.at);
+    if (menu.dataset.kind === "field") fsInsertFieldAt(i, at, type);
+    else fsInsertBlockAt(i, at, type);
+    hideFsInsertMenu();
+  });
 }
 
 function initFsFormatBar() {
@@ -4413,10 +4483,11 @@ function initFsFormatBar() {
   const bar = $("fsFormatBar");
   if (!bar) return;
   fsFormatBarBound = true;
+  initFsInsertMenu();
   document.addEventListener("mousedown", (e) => {
-    if (!e.target.closest("#fsInsertMenu") && !e.target.closest(".fs-insert-btn")) {
-      hideFsInsertMenu();
-    }
+    if (e.target.closest("#fsInsertMenu")) return;
+    if (e.target.closest("#fsFormatBar")) return;
+    hideFsInsertMenu();
   });
   bar.querySelectorAll(".fs-fmt-btn").forEach((btn) => {
     btn.addEventListener("mousedown", (e) => e.preventDefault());
@@ -4441,8 +4512,8 @@ function initFsFormatBar() {
     window.requestAnimationFrame(onFsTextSelection);
   });
   document.addEventListener("mousedown", (e) => {
-    if (e.target.closest("#fsFormatBar")) return;
-    if (!e.target.closest(".fs-ed-text")) hideFsFormatBar();
+    if (e.target.closest("#fsFormatBar, #fsInsertMenu, .fs-ed-block, .fs-ed-field")) return;
+    hideFsFormatBar();
   });
   window.addEventListener("scroll", hideFsFormatBar, true);
   $("fsPreviewRow")?.addEventListener("scroll", hideFsFormatBar);
@@ -4465,17 +4536,6 @@ function fsFieldTypeOptions(selected) {
   ).join("");
 }
 
-function fsInsertLineHtml(at, kind) {
-  const label = kind === "field"
-    ? t("flows.studio.insertField")
-    : t("flows.studio.insertBlock");
-  return `
-    <div class="fs-insert-line" data-insert-at="${at}" data-insert-kind="${kind}">
-      <button type="button" class="fs-insert-btn" title="${escapeHtml(label)}" aria-label="${escapeHtml(label)}">+</button>
-      <span class="fs-insert-rule" aria-hidden="true"></span>
-    </div>`;
-}
-
 function fsBlockTypeMenuItems() {
   const types = fsState.schema?.blockTypes || [
     { id: "heading", label: t("flows.studio.blockHeading") },
@@ -4496,9 +4556,9 @@ function hideFsInsertMenu() {
 
 function showFsInsertMenu(anchorBtn, kind, screenIndex, insertAt) {
   const menu = $("fsInsertMenu");
-  if (!menu || !anchorBtn) return;
+  const anchor = anchorBtn || $("fsFormatBar")?.querySelector('[data-fmt-action="add"]');
+  if (!menu || !anchor) return;
   hideFsInsertMenu();
-  anchorBtn.closest(".fs-insert-line")?.classList.add("is-open");
   const items = kind === "field"
     ? (fsState.schema?.fieldTypes || [
       { id: "text", label: t("flows.studio.defaultFieldName") },
@@ -4514,24 +4574,17 @@ function showFsInsertMenu(anchorBtn, kind, screenIndex, insertAt) {
   menu.dataset.at = String(insertAt);
   menu.dataset.kind = kind;
   menu.classList.remove("hidden");
-  const rect = anchorBtn.getBoundingClientRect();
-  const mw = menu.offsetWidth || 160;
-  let left = rect.left;
-  let top = rect.bottom + 6;
-  left = Math.max(12, Math.min(left, window.innerWidth - mw - 12));
-  menu.style.left = `${left}px`;
-  menu.style.top = `${top}px`;
-  menu.querySelectorAll(".fs-insert-menu-item").forEach((btn) => {
-    btn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      const type = btn.dataset.insertType;
-      const i = Number(menu.dataset.screen);
-      const at = Number(menu.dataset.at);
-      if (menu.dataset.kind === "field") fsInsertFieldAt(i, at, type);
-      else fsInsertBlockAt(i, at, type);
-      hideFsInsertMenu();
-    });
-  });
+  const placeMenu = () => {
+    const rect = anchor.getBoundingClientRect();
+    const mw = menu.offsetWidth || 168;
+    let left = rect.left;
+    let top = rect.bottom + 6;
+    left = Math.max(12, Math.min(left, window.innerWidth - mw - 12));
+    menu.style.left = `${left}px`;
+    menu.style.top = `${top}px`;
+  };
+  placeMenu();
+  requestAnimationFrame(placeMenu);
 }
 
 function fsInsertBlockAt(screenIndex, insertAt, type) {
@@ -4555,18 +4608,37 @@ function fsInsertBlockAt(screenIndex, insertAt, type) {
   const at = Math.max(0, Math.min(insertAt, scr.blocks.length));
   scr.blocks.splice(at, 0, block);
   fsState.activeIndex = screenIndex;
+  setFsFormatCtx({ kind: "block", screenIndex, blockIndex: at, editable: null });
   renderFlowStudio();
+  requestAnimationFrame(() => {
+    const wrap = $(`fsPhone${screenIndex}`) || $("fsPreviewRow")?.querySelector(`[data-fs-i="${screenIndex}"]`);
+    const blockEl = wrap?.querySelector(`.fs-ed-block[data-bi="${at}"]`);
+    if (blockEl) showFsFormatBarForBlock(blockEl, wrap);
+  });
 }
 
 function fsInsertFieldAt(screenIndex, insertAt, type) {
   syncFsFromAllPreviews();
   const scr = fsState.screens[screenIndex];
-  if (!scr || scr.layout !== "form") return;
+  if (!scr || scr.layout !== "form") {
+    toast(t("flows.studio.needFormLayout"), "error");
+    return;
+  }
   scr.fields = scr.fields || [];
   const at = Math.max(0, Math.min(insertAt, scr.fields.length));
   scr.fields.splice(at, 0, { type: type || "text", label: "", required: true });
   fsState.activeIndex = screenIndex;
+  setFsFormatCtx({ kind: "field", screenIndex, fieldIndex: at });
   renderFlowStudio();
+  requestAnimationFrame(() => {
+    const wrap = $(`fsPhone${screenIndex}`) || $("fsPreviewRow")?.querySelector(`[data-fs-i="${screenIndex}"]`);
+    const input = wrap?.querySelector(`.fs-ed-field[data-fi="${at}"] .fs-f-label`);
+    if (input) {
+      input.focus();
+      positionFsFormatBar(input.getBoundingClientRect());
+      updateFsFormatBarState();
+    }
+  });
 }
 
 function fsEditableBlockHtml(b, bi) {
@@ -4697,19 +4769,39 @@ function bindFsPreviewRow(row) {
       renderFlowStudio();
     });
   });
-  row.querySelectorAll(".fs-ed-block[data-block-type='image']").forEach((blockEl) => {
-    blockEl.addEventListener("click", (e) => {
-      if (e.target.closest("input, select, label")) return;
+  row.querySelectorAll(".fs-ed-block").forEach((blockEl) => {
+    blockEl.addEventListener("mousedown", (e) => {
+      if (e.target.closest("input, select, label, .fs-ed-text")) return;
       const wrap = blockEl.closest(".fs-phone-wrap");
+      fsState.activeIndex = Number(wrap.dataset.fsI);
       showFsFormatBarForBlock(blockEl, wrap);
     });
   });
   row.querySelectorAll(".fs-field-add-link").forEach((btn) => {
-    btn.addEventListener("click", () => {
+    btn.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
       syncFsFromAllPreviews();
       const wrap = btn.closest(".fs-phone-wrap");
       const i = Number(wrap.dataset.fsI);
-      fsInsertFieldAt(i, (fsState.screens[i]?.fields || []).length, "text");
+      const scr = fsState.screens[i];
+      if (!scr || scr.layout !== "form") return;
+      showFsInsertMenu(btn, "field", i, (scr.fields || []).length);
+    });
+  });
+  row.querySelectorAll(".fs-f-label").forEach((input) => {
+    input.addEventListener("focus", () => {
+      const wrap = input.closest(".fs-phone-wrap");
+      const fieldRow = input.closest(".fs-ed-field");
+      if (!wrap || !fieldRow) return;
+      setFsFormatCtx({
+        kind: "field",
+        screenIndex: Number(wrap.dataset.fsI),
+        fieldIndex: Number(fieldRow.dataset.fi),
+      });
+      fsState.activeIndex = fsFormatCtx.screenIndex;
+      positionFsFormatBar(input.getBoundingClientRect());
+      updateFsFormatBarState();
     });
   });
   row.querySelectorAll(".fs-block-file").forEach((input) => {
@@ -4765,7 +4857,6 @@ function renderFlowStudio() {
   const strip = $("fsScreenStrip");
   const row = $("fsPreviewRow");
   if (!strip || !row) return;
-  if (row.querySelector(".fs-phone-wrap")) syncFsFromAllPreviews();
 
   const max = fsState.schema?.limits?.maxScreens || 8;
   strip.innerHTML = fsState.screens.map((scr, i) =>
@@ -4831,6 +4922,7 @@ async function uploadFsBlockImage(bi, input) {
     scaleType: scr.blocks[bi].scaleType || "contain",
   };
   toast(t("toast.imageUploaded"), "ok");
+  syncFsFromAllPreviews();
   renderFlowStudio();
 }
 
