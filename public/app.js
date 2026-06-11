@@ -4284,6 +4284,28 @@ function defaultFsScreens() {
         { type: "heading", text: t("flows.defaults.step1Heading") },
         { type: "body", text: t("flows.defaults.step1Body"), emphasis: "normal" },
       ],
+      buttonLabel: t("flows.studio.continue"),
+      buttonAction: "next",
+      fields: [],
+    },
+    {
+      layout: "form",
+      title: t("flows.defaults.step2Title"),
+      blocks: [
+        { type: "heading", text: t("flows.defaults.step2Heading") },
+        { type: "body", text: t("flows.defaults.step2Body"), emphasis: "normal" },
+      ],
+      buttonLabel: t("flows.studio.submit"),
+      buttonAction: "next",
+      fields: [{ type: "text", label: t("flows.studio.defaultFieldName"), required: true }],
+    },
+    {
+      layout: "confirm",
+      title: t("flows.defaults.thanksTitle"),
+      blocks: [
+        { type: "heading", text: t("flows.defaults.thanksHeading") },
+        { type: "body", text: t("flows.defaults.thanksBody"), emphasis: "normal" },
+      ],
       buttonLabel: t("flows.studio.close"),
       buttonAction: "complete",
       fields: [],
@@ -4653,8 +4675,10 @@ function initFsInsertMenu() {
     const type = btn.dataset.insertType;
     const i = Number(menu.dataset.screen);
     const at = Number(menu.dataset.at);
-    if (menu.dataset.kind === "field") fsInsertFieldAt(i, at, type);
-    else fsInsertBlockAt(i, at, type);
+    if (menu.dataset.kind === "field" || btn.dataset.insertKind === "field") {
+      const fieldAt = menu.dataset.kind === "field" ? at : (fsState.screens[i]?.fields || []).length;
+      fsInsertFieldAt(i, fieldAt, type);
+    } else fsInsertBlockAt(i, at, type);
     hideFsInsertMenu();
   });
 }
@@ -4700,32 +4724,66 @@ function initFsFormatBar() {
   $("fsPreviewRow")?.addEventListener("scroll", hideFsFormatBar);
 }
 
-function fsFieldTypeOptions(selected) {
-  const types = fsState.schema?.fieldTypes || [
-    { id: "text", label: "Texto" },
+function fsFieldTypeMenuItems() {
+  const fromSchema = fsState.schema?.fieldTypes;
+  if (fromSchema && fromSchema.length) return fromSchema;
+  return [
+    { id: "text", label: t("flows.studio.defaultFieldName") },
+    { id: "textarea", label: t("flows.studio.fieldTextarea") || "Texto largo" },
+    { id: "number", label: t("flows.studio.fieldNumber") || "Número" },
     { id: "email", label: "Email" },
-    { id: "phone", label: "Teléfono" },
-    { id: "date", label: "Fecha" },
-    { id: "calendar", label: "Calendario" },
-    { id: "select", label: "Lista" },
-    { id: "yesno", label: "Sí / No" },
-    { id: "optin", label: "Aceptación" },
-    { id: "checkbox", label: "Casillas" },
+    { id: "phone", label: t("flows.studio.fieldPhone") || "Teléfono" },
+    { id: "select", label: t("flows.studio.fieldSelect") },
+    { id: "yesno", label: t("flows.studio.fieldYesNo") || "Sí / No" },
+    { id: "rating", label: t("flows.studio.fieldRating") || "Calificación" },
+    { id: "date", label: t("flows.studio.fieldDate") },
+    { id: "calendar", label: t("flows.studio.fieldCalendar") || "Calendario" },
+    { id: "optin", label: t("flows.studio.fieldOptin") || "Aceptación" },
+    { id: "checkbox", label: t("flows.studio.fieldCheckbox") || "Varias opciones" },
   ];
-  return types.map((ft) =>
-    `<option value="${escapeHtml(ft.id)}"${ft.id === selected ? " selected" : ""}>${escapeHtml(ft.label)}</option>`
-  ).join("");
 }
 
 function fsBlockTypeMenuItems() {
-  const types = fsState.schema?.blockTypes || [
+  const fromSchema = fsState.schema?.blockTypes;
+  if (fromSchema && fromSchema.length) return fromSchema;
+  return [
     { id: "heading", label: t("flows.studio.blockHeading") },
-    { id: "body", label: t("flows.studio.blockBody") },
     { id: "subheading", label: t("flows.studio.blockSubheading") },
+    { id: "body", label: t("flows.studio.blockBody") },
     { id: "caption", label: t("flows.studio.blockCaption") },
     { id: "image", label: t("flows.studio.blockImage") },
+    { id: "link", label: t("flows.studio.blockLink") },
+    { id: "richtext", label: t("flows.studio.blockRichText") },
+    { id: "carousel", label: t("flows.studio.blockCarousel") },
   ];
-  return types;
+}
+
+function buildFsInsertMenuHtml(kind, screenIndex) {
+  const scr = fsState.screens[screenIndex];
+  const blocks = kind === "field" ? [] : fsBlockTypeMenuItems();
+  const showFields = kind === "field" || (scr && scr.layout !== "confirm");
+  const fields = showFields ? fsFieldTypeMenuItems() : [];
+  let html = blocks.map((item) =>
+    `<button type="button" class="fs-insert-menu-item" role="menuitem" data-insert-type="${escapeHtml(item.id)}" data-insert-kind="block">${escapeHtml(item.label)}</button>`
+  ).join("");
+  if (kind !== "field" && fields.length) {
+    html += `<div class="fs-insert-menu-sep" role="presentation">${escapeHtml(t("flows.studio.insertMenuFields"))}</div>`;
+    html += fields.map((item) =>
+      `<button type="button" class="fs-insert-menu-item" role="menuitem" data-insert-type="${escapeHtml(item.id)}" data-insert-kind="field">${escapeHtml(item.label)}</button>`
+    ).join("");
+  }
+  if (kind === "field") {
+    html = fields.map((item) =>
+      `<button type="button" class="fs-insert-menu-item" role="menuitem" data-insert-type="${escapeHtml(item.id)}" data-insert-kind="field">${escapeHtml(item.label)}</button>`
+    ).join("");
+  }
+  return html;
+}
+
+function fsFieldTypeOptions(selected) {
+  return fsFieldTypeMenuItems().map((ft) =>
+    `<option value="${escapeHtml(ft.id)}"${ft.id === selected ? " selected" : ""}>${escapeHtml(ft.label)}</option>`
+  ).join("");
 }
 
 function hideFsInsertMenu() {
@@ -4741,17 +4799,7 @@ function showFsInsertMenu(anchorBtn, kind, screenIndex, insertAt) {
   if (!menu || !anchor) return;
   hideFsInsertMenu();
   anchor.closest(".fs-insert-line")?.classList.add("is-open");
-  const items = kind === "field"
-    ? (fsState.schema?.fieldTypes || [
-      { id: "text", label: t("flows.studio.defaultFieldName") },
-      { id: "email", label: "Email" },
-      { id: "date", label: t("flows.studio.fieldDate") },
-      { id: "select", label: t("flows.studio.fieldSelect") },
-    ])
-    : fsBlockTypeMenuItems();
-  menu.innerHTML = items.map((item) =>
-    `<button type="button" class="fs-insert-menu-item" role="menuitem" data-insert-type="${escapeHtml(item.id)}">${escapeHtml(item.label)}</button>`
-  ).join("");
+  menu.innerHTML = buildFsInsertMenuHtml(kind, screenIndex);
   menu.dataset.screen = String(screenIndex);
   menu.dataset.at = String(insertAt);
   menu.dataset.kind = kind;
@@ -4810,9 +4858,10 @@ function fsInsertBlockAt(screenIndex, insertAt, type) {
 function fsInsertFieldAt(screenIndex, insertAt, type) {
   syncFsFromAllPreviews();
   const scr = fsState.screens[screenIndex];
-  if (!scr || scr.layout !== "form") {
-    toast(t("flows.studio.needFormLayout"), "error");
-    return;
+  if (!scr) return;
+  if (scr.layout !== "form") {
+    scr.layout = "form";
+    toast(t("flows.studio.switchedToForm"), "info");
   }
   scr.fields = scr.fields || [];
   const maxFields = fsState.schema?.limits?.maxFieldsPerScreen || 12;
