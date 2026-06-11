@@ -282,42 +282,24 @@
     <section class="screen hidden" id="screenTemplates">
       <main class="templates-pane">
         <header class="pane-header">
-          <div>
-            <h1 data-i18n="templates.title">Plantillas</h1>
-            <p class="muted templates-intro" data-i18n="templates.intro">Mensajes aprobados por Meta para iniciar conversaciones.</p>
-          </div>
+          <h1 data-i18n="templates.title">Plantillas</h1>
           <div class="pane-header-actions">
-            <a id="tplMetaManagerLink" class="btn-ghost sm" href="https://business.facebook.com/latest/whatsapp_manager/message_templates" target="_blank" rel="noopener noreferrer" data-i18n="templates.openMetaManager" data-i18n-title="templates.openMetaManagerHint">Abrir en Meta</a>
+            <span id="tplSyncMetaHint" class="muted sm tpl-sync-hint"></span>
+            <button type="button" id="tplSyncMetaBtn" class="btn-ghost sm" data-i18n="templates.syncMeta">Sincronizar</button>
+            <a id="tplMetaManagerLink" class="btn-ghost sm" href="https://business.facebook.com/latest/whatsapp_manager/message_templates" target="_blank" rel="noopener noreferrer" data-i18n="templates.openMetaManager" data-i18n-title="templates.openMetaManagerHint">Meta</a>
             <button id="newTemplateBtn" class="btn-primary sm">
               <svg viewBox="0 0 24 24" class="ic"><path d="M12 5v14M5 12h14"/></svg>
-              <span data-i18n="templates.createNew">Crear nueva</span>
+              <span data-i18n="templates.createNew">Crear</span>
             </button>
           </div>
         </header>
 
-        <section class="tpl-drafts-section" id="tplDraftsSection">
-          <div class="tpl-drafts-head">
-            <div>
-              <h2 class="section-title" data-i18n="templates.draftsTitle">Borradores Punto Pago</h2>
-              <p class="muted sm" data-i18n="templates.draftsIntro">Listos para revisar y enviar a Meta. Al abrir un borrador verás la leyenda de variables (qué es cada dato y formato). Los testigos <strong>Texto</strong> / <strong>+ Flow</strong> se actualizan al sincronizar.</p>
-            </div>
-            <div class="tpl-drafts-actions">
-              <button type="button" id="tplSyncMetaBtn" class="btn-ghost sm" data-i18n="templates.syncMeta">Sincronizar con Meta</button>
-              <span id="tplSyncMetaHint" class="muted sm"></span>
-            </div>
-          </div>
-          <div id="tplPresetCards" class="tpl-preset-cards" data-i18n-dynamic>Cargando borradores…</div>
-        </section>
+        <div id="tplProductGrid" class="tpl-product-grid" data-i18n-dynamic>Cargando…</div>
 
-        <details class="tpl-var-catalog" id="tplVarCatalog">
-          <summary class="tpl-var-catalog-summary"><span data-i18n="templates.varCatalogSummary">Biblioteca de variables</span> <span class="muted" data-i18n="templates.varCatalogSummaryHint">· referencia para operadores</span></summary>
-          <p class="muted sm tpl-var-catalog-intro" data-i18n="templates.varCatalogIntro">Solo guía humana: qué dato va en cada campo y formato correcto. <strong>No cambia</strong> las plantillas ya aprobadas en Meta. Las marcadas «Futuro» son para cuando pidamos nuevas aprobaciones.</p>
-          <div id="tplVarCatalogBody" class="tpl-var-catalog-body muted sm" data-i18n-dynamic>Cargando…</div>
+        <details class="tpl-other-section hidden" id="tplOtherSection">
+          <summary><span data-i18n="templates.otherTitle">Otras en Meta</span> <span class="muted" id="tplOtherCount"></span></summary>
+          <div id="templateList" class="templates-table-wrap"></div>
         </details>
-
-        <h2 class="section-title tpl-approved-title" data-i18n="templates.approvedTitle">Plantillas en tu cuenta</h2>
-        <p class="muted sm tpl-approved-intro" data-i18n="templates.approvedIntro">Todas las plantillas registradas en Meta. «Con tour» incluye botón para abrir el Flow interactivo.</p>
-        <div id="templateList" class="templates-table-wrap"></div>
       </main>
     </section>
 
@@ -525,10 +507,7 @@
     <section class="screen hidden" id="screenFlows">
       <main class="flows-pane">
         <header class="pane-header flows-header">
-          <div>
-            <h1 data-i18n="flows.title">Flows</h1>
-            <p class="muted flows-intro" data-i18n="flows.intro">Formularios interactivos dentro de WhatsApp.</p>
-          </div>
+          <h1 data-i18n="flows.title">Flows</h1>
         </header>
 
         <div id="flowsStatusBar" class="flows-status-bar">
@@ -605,11 +584,8 @@
           <div class="flows-split flows-split-detail">
             <section class="flows-panel flows-list-panel">
               <div class="flows-list-head">
-                <div>
-                  <h2 class="section-title"><span data-i18n="flows.yourFlows">Tus Flows</span> <span class="muted" id="flowsListHint"></span></h2>
-                  <p class="muted sm" data-i18n="flows.flowsListHint">Publicados y el borrador más reciente. Los intentos de prueba se eliminan solos.</p>
-                </div>
-                <button type="button" id="flowAddBtn" class="btn-primary sm" data-i18n="flows.addFlow">+ Agregar flujo</button>
+                <h2 class="section-title"><span data-i18n="flows.yourFlows">Tus Flows</span> <span class="muted" id="flowsListHint"></span></h2>
+                <button type="button" id="flowAddBtn" class="btn-primary sm" data-i18n="flows.addFlow">+ Nuevo</button>
               </div>
               <div id="flowsList" class="flows-list muted" data-i18n-dynamic>Cargando…</div>
             </section>
@@ -630,7 +606,7 @@
 
               <div id="flowsStatsCards" class="flows-stats-grid"></div>
 
-              <section id="flowLaunchPanel" class="flow-launch-panel hidden"></section>
+              <section id="flowTemplateLink" class="flow-template-link hidden"></section>
 
               <nav class="flows-detail-tabs" id="flowsDetailTabs">
                 <button type="button" class="flows-detail-tab active" data-detail-tab="preview" data-i18n="flows.tabPreview">Vista previa</button>
@@ -645,7 +621,7 @@
             </section>
 
             <section class="flows-panel flows-empty-detail" id="flowsEmptyDetail">
-              <p class="muted center-msg" data-i18n="flows.emptySelect">Selecciona un Flow para ver estadísticas, vista previa y envíos.</p>
+              <p class="muted center-msg" data-i18n="flows.emptySelect">Selecciona un Flow para ver métricas y vista previa.</p>
             </section>
             </div>
           </div>
@@ -733,7 +709,6 @@
               <h2 class="section-title" data-i18n="flows.activityTitle">Actividad de Flows</h2>
               <button type="button" id="flowRefreshResponses" class="btn-ghost sm" data-i18n="flows.refresh">Actualizar</button>
             </div>
-            <p class="muted sm" data-i18n="flows.activityIntro">Resumen por Flow o encuesta: cuántas personas lo recibieron, lo abrieron y lo completaron.</p>
             <div id="flowActivitySummary" class="flows-stats-grid flows-activity-summary hidden"></div>
             <div class="billing-table-wrap flow-activity-table-wrap">
               <table class="billing-table flow-activity-table">

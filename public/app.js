@@ -715,8 +715,7 @@ async function onLocaleChange() {
   }
   renderConversations();
   if (state.currentScreen === "templates") {
-    renderTemplateList();
-    renderTplPresetCards();
+    renderTemplatesScreen();
     renderTpMetaRules();
     updateTplSyncHint();
     if (state.variableCatalog.length) loadTplVariableCatalog();
@@ -1402,30 +1401,22 @@ function previewSnippet(t, max = 72) {
   return text.length > max ? text.slice(0, max - 1) + "…" : text;
 }
 
-function renderTemplateRow(t, i) {
+function templateTypeLabel(tpl) {
+  if (templateHasFlowButtonMeta(tpl)) return t("templates.typeTour");
+  return t("templates.typeText");
+}
+
+function renderTemplateRow(t, i, list) {
   const st = (t.status || "").toLowerCase();
   const cls = st === "approved" ? "approved" : st === "rejected" ? "rejected" : "pending";
-  const info = t.categoryInfo || {};
-  const comment = categoryComment(t);
   const canSend = st === "approved";
-  const date = formatTplDate(t.displayAt, t.displayAtKind);
-  const snippet = previewSnippet(t);
-  const fullPreview = previewSnippet(t, 500);
   const isFlowTpl = templateHasFlowButtonMeta(t);
-  return `<tr class="tpl-row${isFlowTpl ? " tpl-row-flow" : ""}" data-i="${i}" title="${escapeHtml(fullPreview)}">
-    <td class="tpl-name-cell">
-      <span class="tpl-table-name">${escapeHtml(t.name)}</span>
-      ${isFlowTpl ? `<span class="tpl-flow-tag">${escapeHtml(t("templates.rowWithTour"))}</span>` : ""}
-      ${comment ? `<span class="tpl-table-note" title="${escapeHtml(comment)}">${escapeHtml(comment)}</span>` : ""}
-    </td>
-    <td>${escapeHtml(t.language || "—")}</td>
-    <td>${catTagHtml(info.billingCategory, info.billingLabel)}</td>
+  const src = list || state.templates;
+  return `<tr class="tpl-row${isFlowTpl ? " tpl-row-flow" : ""}" data-i="${i}">
+    <td class="tpl-name-cell"><span class="tpl-table-name">${escapeHtml(t.name)}</span></td>
+    <td>${escapeHtml(templateTypeLabel(t))}</td>
     <td><span class="status-badge ${cls}">${escapeHtml(t.status || "—")}</span></td>
-    <td class="tpl-date-cell">
-      <span>${escapeHtml(date.main)}</span>
-      ${date.sub ? `<span class="muted">${escapeHtml(date.sub)}</span>` : ""}
-    </td>
-    <td class="tpl-preview-cell muted">${escapeHtml(snippet)}</td>
+    <td>${isFlowTpl ? `<span class="tpl-flow-link-tag">${escapeHtml(t("templates.linkedFlow"))}</span>` : "—"}</td>
     <td class="tpl-action-cell">
       ${canSend
     ? `<button type="button" class="btn-ghost sm tpl-send-btn" data-i="${i}">${escapeHtml(t("templates.sendBtn"))}</button>`
@@ -1434,42 +1425,84 @@ function renderTemplateRow(t, i) {
   </tr>`;
 }
 
-function renderTemplateList() {
-  const list = $("templateList");
+function renderTplProductGrid() {
+  const box = $("tplProductGrid");
+  if (!box) return;
   if (!state.config.templatesEnabled) {
-    list.innerHTML = `<p class="muted center-msg">${escapeHtml(t("templates.configureAccess"))}</p>`;
+    box.innerHTML = `<p class="muted center-msg">${escapeHtml(t("templates.configureAccess"))}</p>`;
     return;
   }
-  if (!state.templates.length) {
-    list.innerHTML = `<p class="muted center-msg">${escapeHtml(t("templates.noTemplates"))}</p>`;
+  if (!state.templatePresets.length) {
+    box.innerHTML = `<p class="muted center-msg">${escapeHtml(t("templates.noDrafts"))}</p>`;
     return;
   }
-  const count = state.templates.length;
-  const countLabel = count === 1 ? t("templates.countOne") : t("templates.countMany", { count });
+  box.innerHTML = state.templatePresets.map((p) => {
+    const ms = presetMetaForKey(p.key);
+    const canSend = ms && ms.readyForProduction;
+    const sendName = preferredTemplateForPreset(p);
+    return `
+    <article class="tpl-product-card${p.isFlowPreset ? " has-flow" : ""}">
+      <div class="tpl-product-head">
+        <h3>${escapeHtml(p.label)}</h3>
+        ${presetVariantRowsHtml(p, ms)}
+      </div>
+      <div class="tpl-product-actions">
+        <button type="button" class="btn-ghost sm tpl-preview-btn" data-preset="${escapeHtml(p.key)}">${escapeHtml(t("templates.viewPreview"))}</button>
+        ${canSend && sendName
+    ? `<button type="button" class="btn-primary sm tpl-send-preset-btn" data-tpl="${escapeHtml(sendName)}">${escapeHtml(t("templates.sendBtn"))}</button>`
+    : ""}
+      </div>
+    </article>`;
+  }).join("");
+  box.querySelectorAll(".tpl-preview-btn").forEach((btn) =>
+    btn.addEventListener("click", () => openTplDraftModal(btn.dataset.preset))
+  );
+  box.querySelectorAll(".tpl-send-preset-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const presetKey = btn.closest(".tpl-product-card")?.querySelector(".tpl-preview-btn")?.dataset.preset;
+      openNewChat(btn.dataset.tpl, { presetKey });
+    });
+  });
+}
+
+function renderTplOtherList() {
+  const list = $("templateList");
+  const section = $("tplOtherSection");
+  const countEl = $("tplOtherCount");
+  if (!list) return;
+  const orphans = orphanTemplates();
+  if (section) section.classList.toggle("hidden", !orphans.length);
+  if (countEl) countEl.textContent = orphans.length ? `(${orphans.length})` : "";
+  if (!orphans.length) {
+    list.innerHTML = "";
+    return;
+  }
   list.innerHTML = `
-    <p class="templates-count muted">${escapeHtml(countLabel)}</p>
     <div class="billing-table-wrap">
-      <table class="templates-table billing-table">
+      <table class="templates-table billing-table templates-table-compact">
         <thead>
           <tr>
             <th>${escapeHtml(t("templates.colName"))}</th>
-            <th>${escapeHtml(t("templates.colLang"))}</th>
-            <th>${escapeHtml(t("templates.colCategory"))}</th>
+            <th>${escapeHtml(t("templates.colType"))}</th>
             <th>${escapeHtml(t("templates.colStatus"))}</th>
-            <th>${escapeHtml(t("templates.colDate"))}</th>
-            <th>${escapeHtml(t("templates.colMessage"))}</th>
+            <th>${escapeHtml(t("templates.colFlow"))}</th>
             <th></th>
           </tr>
         </thead>
-        <tbody>${state.templates.map((t, i) => renderTemplateRow(t, i)).join("")}</tbody>
+        <tbody>${orphans.map((t, i) => renderTemplateRow(t, i, orphans)).join("")}</tbody>
       </table>
     </div>`;
   list.querySelectorAll(".tpl-send-btn").forEach((btn) =>
     btn.addEventListener("click", (e) => {
       e.stopPropagation();
-      openNewChat(state.templates[btn.dataset.i].name);
+      openNewChat(orphans[Number(btn.dataset.i)].name);
     })
   );
+}
+
+function renderTemplatesScreen() {
+  renderTplProductGrid();
+  renderTplOtherList();
 }
 
 function bodyOf(t) {
@@ -1717,38 +1750,46 @@ function metaStatusBadge(status, fallbackLabel) {
   return `<span class="status-badge ${cls}">${escapeHtml(text)}</span>`;
 }
 
-function presetMetaVariantHtml(preset, ms) {
+function presetVariantRowsHtml(preset, ms) {
   if (!preset) return "";
   const textSt = (ms && ms.text && ms.text.status) || "NOT_SUBMITTED";
-  const textName = (ms && ms.text && ms.text.name) || preset.name;
   const flowName = preset.templateFlowName;
   const flowSt = flowName && ms && ms.flow ? ms.flow.status : "NOT_SUBMITTED";
   const catKey = String(preset.category || "UTILITY").toLowerCase();
-  const catHintKey = `templates.metaCategoryHint.${catKey}`;
-  const catHint = t(catHintKey);
-  const ready = ms && ms.readyForProduction
-    ? `<p class="tpl-preset-ready-hint">${escapeHtml(t("templates.readyForProdHint"))}</p>`
-    : `<p class="muted sm tpl-preset-ready-hint">${escapeHtml(t("templates.presetPendingHint"))}</p>`;
-  return `
-    <div class="tpl-preset-variants">
-      <div class="tpl-preset-variant">
-        <span class="tpl-preset-variant-label">${escapeHtml(t("templates.badgeTextExplain"))}</span>
-        <span class="tpl-preset-variant-name">${escapeHtml(textName)}</span>
-        ${metaStatusBadge(textSt)}
-      </div>
-      ${flowName ? `
-      <div class="tpl-preset-variant">
-        <span class="tpl-preset-variant-label">${escapeHtml(t("templates.badgeFlowExplain"))}</span>
-        <span class="tpl-preset-variant-name">${escapeHtml(flowName)}</span>
-        ${metaStatusBadge(flowSt)}
-      </div>` : ""}
-      <div class="tpl-preset-variant tpl-preset-variant-cat">
-        <span class="tpl-preset-variant-label">${escapeHtml(t("templates.metaCategoryLabel"))}</span>
-        <span class="tpl-preset-tag">${escapeHtml(catKey)}</span>
-        ${catHint !== catHintKey ? `<span class="muted sm">${escapeHtml(catHint)}</span>` : ""}
-      </div>
-      ${ready}
+  let rows = `<div class="tpl-variant-row">
+    <span class="tpl-variant-type">${escapeHtml(t("templates.typeText"))}</span>
+    ${metaStatusBadge(textSt)}
+  </div>`;
+  if (flowName) {
+    rows += `<div class="tpl-variant-row">
+      <span class="tpl-variant-type">${escapeHtml(t("templates.typeTour"))}</span>
+      ${metaStatusBadge(flowSt)}
+      <span class="tpl-flow-link-tag" title="${escapeHtml(flowName)}">${escapeHtml(t("templates.linkedFlow"))}</span>
     </div>`;
+  }
+  return `<div class="tpl-variant-rows">${rows}</div><span class="tpl-cat-pill">${escapeHtml(catKey)}</span>`;
+}
+
+function presetTemplateNames() {
+  const names = new Set();
+  state.templatePresets.forEach((p) => {
+    if (p.name) names.add(p.name);
+    if (p.templateFlowName) names.add(p.templateFlowName);
+  });
+  return names;
+}
+
+function orphanTemplates() {
+  const linked = presetTemplateNames();
+  return state.templates.filter((t) => !linked.has(t.name));
+}
+
+function presetForFlowName(flowName) {
+  const n = String(flowName || "").toLowerCase();
+  return state.templatePresets.find((p) => {
+    const prefix = PRESET_FLOW_PREFIX[p.key] || p.flowSampleKey || "";
+    return prefix && n.startsWith(String(prefix).toLowerCase());
+  }) || null;
 }
 
 async function loadTplVariableCatalog() {
@@ -1813,7 +1854,7 @@ async function loadTemplatePresets() {
   state.presetMetaStatus = (res && res.metaStatus) || [];
   state.tplMetaSyncedAt = res && res.syncedAt ? res.syncedAt : null;
   updateTplSyncHint();
-  renderTplPresetCards();
+  if ($("tplProductGrid")) renderTplProductGrid();
 }
 
 async function syncTemplatesWithMeta() {
@@ -1832,8 +1873,7 @@ async function syncTemplatesWithMeta() {
   state.presetMetaStatus = res.metaStatus || [];
   state.tplMetaSyncedAt = res.syncedAt || Date.now();
   updateTplSyncHint();
-  renderTplPresetCards();
-  renderTemplateList();
+  renderTemplatesScreen();
   if (state.activeTemplatePreset) renderTplDraftMetaBar(state.activeTemplatePreset);
   toast(t("toast.syncMetaOk", { total: res.total || 0 }), "ok");
 }
@@ -1851,7 +1891,7 @@ function renderTplDraftMetaBar(key) {
     el.innerHTML = `<p class="muted sm tpl-draft-meta-hint">${escapeHtml(t("templates.draftMetaSyncHint"))}</p>`;
     return;
   }
-  el.innerHTML = presetMetaVariantHtml(preset, ms);
+  el.innerHTML = presetVariantRowsHtml(preset, ms);
 }
 
 function updateTplSyncHint() {
@@ -1862,29 +1902,6 @@ function updateTplSyncHint() {
     return;
   }
   hint.textContent = t("templates.syncHintUpdated", { when: localeDateTime(state.tplMetaSyncedAt) });
-}
-
-function renderTplPresetCards() {
-  const box = $("tplPresetCards");
-  if (!box) return;
-  if (!state.templatePresets.length) {
-    box.innerHTML = `<p class="muted">${escapeHtml(t("templates.noDrafts"))}</p>`;
-    return;
-  }
-  box.innerHTML = state.templatePresets.map((p) => {
-    const ms = presetMetaForKey(p.key);
-    return `
-    <button type="button" class="tpl-preset-card${p.isFlowPreset ? " flow-preset" : ""}" data-preset="${escapeHtml(p.key)}">
-      <h3>${escapeHtml(p.label)}</h3>
-      <p>${escapeHtml(p.description || "")}</p>
-      <div class="tpl-card-meta">
-        ${presetMetaVariantHtml(p, ms)}
-      </div>
-    </button>`;
-  }).join("");
-  box.querySelectorAll(".tpl-preset-card").forEach((btn) =>
-    btn.addEventListener("click", () => openTplDraftModal(btn.dataset.preset))
-  );
 }
 
 async function openTplDraftModal(key) {
@@ -1950,8 +1967,8 @@ async function initTemplateStudio() {
 }
 
 async function refreshTemplatesScreen(opts = {}) {
-  await Promise.all([loadTemplates(), loadTemplatePresets(), loadTplVariableCatalog()]);
-  renderTemplateList();
+  await Promise.all([loadTemplates(), loadTemplatePresets()]);
+  renderTemplatesScreen();
   const highlightName = opts.highlightName || state.pendingTemplateHighlight || null;
   state.pendingTemplateHighlight = null;
   if (highlightName) highlightTemplateInTable(highlightName);
@@ -1959,12 +1976,24 @@ async function refreshTemplatesScreen(opts = {}) {
 
 function highlightTemplateInTable(name) {
   if (!name) return;
+  const preset = presetForTemplateName(name);
+  if (preset) {
+    const card = $("tplProductGrid")?.querySelector(`.tpl-preview-btn[data-preset="${CSS.escape(preset.key)}"]`)?.closest(".tpl-product-card");
+    if (card) {
+      card.classList.add("tpl-row-highlight");
+      card.scrollIntoView({ block: "nearest", behavior: "smooth" });
+      window.setTimeout(() => card.classList.remove("tpl-row-highlight"), 4000);
+      return;
+    }
+  }
+  const orphans = orphanTemplates();
+  const idx = orphans.findIndex((t) => t.name === name);
   const list = $("templateList");
-  if (!list) return;
-  const idx = state.templates.findIndex((t) => t.name === name);
-  if (idx < 0) return;
+  if (idx < 0 || !list) return;
   const row = list.querySelector(`tr.tpl-row[data-i="${idx}"]`);
   if (!row) return;
+  $("tplOtherSection")?.classList.remove("hidden");
+  $("tplOtherSection")?.setAttribute("open", "");
   row.classList.add("tpl-row-highlight");
   row.scrollIntoView({ block: "nearest", behavior: "smooth" });
   window.setTimeout(() => row.classList.remove("tpl-row-highlight"), 4000);
@@ -2333,7 +2362,7 @@ async function createTemplate() {
       "ok"
     );
     await loadTemplates();
-    renderTemplateList();
+    renderTemplatesScreen();
     await loadTemplatePresets();
   } else {
     hint.className = "hint error";
@@ -3788,15 +3817,19 @@ function renderFlowActivityList(rows, emptyMsg) {
   }).join("")}</div>`;
 }
 
-function renderFlowDetailPreview(performance) {
+async function renderFlowDetailPreview(performance) {
   const box = $("flowsDetailPreview");
   if (!box) return;
+  const profile = state.flowSendProfile;
+  const preset = profile && profile.presetKey
+    ? state.templatePresets.find((p) => p.key === profile.presetKey)
+    : presetForFlowName((performance.flow && performance.flow.name) || $("flowsDetailName")?.textContent);
+  const screenId = (profile && profile.defaultScreen) || "INTRO";
+
   if (performance.isPaymentAuth) {
-    box.innerHTML = `
-      <p class="muted sm" style="margin-bottom:10px">${escapeHtml(t("flows.detailPreviewHint"))}</p>
-      <div class="flows-dual-preview">
-        <div class="flows-preview-col"><div id="flowDetailWaPreview"></div></div>
-        <div class="flows-preview-col"><div id="flowDetailFlowPreview"></div></div>
+    box.innerHTML = `<div class="flows-dual-preview">
+        <div class="flows-preview-col"><p class="preview-step">${escapeHtml(t("flows.previewStep1"))}</p><div id="flowDetailWaPreview" class="wa-preview-phone wa-preview-compact"></div></div>
+        <div class="flows-preview-col"><p class="preview-step">${escapeHtml(t("flows.previewStep2"))}</p><div id="flowDetailFlowPreview" class="flow-phone"></div></div>
       </div>`;
     const ov = tplPreviewOverrides();
     renderWaMessagePreview($("flowDetailWaPreview"), {
@@ -3811,9 +3844,38 @@ function renderFlowDetailPreview(performance) {
       flowCta: t("flows.preview.waCta"),
     });
     renderFlowPhonePreview($("flowDetailFlowPreview"), "AUTH", getPayAuthFlowData());
-  } else {
-    box.innerHTML = `<p class="muted sm">${escapeHtml(t("flows.previewPayAuthOnly"))}</p>`;
+    return;
   }
+
+  if (profile && profile.screens && profile.screens.length) {
+    box.innerHTML = `<div class="flows-dual-preview">
+        <div class="flows-preview-col"><p class="preview-step">${escapeHtml(t("flows.previewStep1"))}</p><div id="flowDetailWaPreview" class="wa-preview-phone wa-preview-compact"></div></div>
+        <div class="flows-preview-col"><p class="preview-step">${escapeHtml(t("flows.previewStep2"))}</p>
+          <div id="flowDetailJourney" class="flows-send-journey-steps-wrap"></div>
+          <div id="flowDetailFlowPreview" class="flow-phone"></div>
+        </div>
+      </div>`;
+    let waData = { bodyText: (profile.sendDefaults && profile.sendDefaults.bodyText) || "—", flowCta: profile.defaultCta };
+    if (preset) {
+      const res = await fetchPresetPreview(preset.key, { nombre_cliente: "Cliente" });
+      if (res && res.preview) {
+        waData = {
+          headerText: res.preview.headerText,
+          bodyText: res.preview.bodyText,
+          footerText: res.preview.footerText,
+          flowCta: res.preview.flowCta,
+        };
+      }
+    }
+    renderWaMessagePreview($("flowDetailWaPreview"), waData);
+    renderFlowJourneyPicker("flowDetailJourney", profile.screens, screenId, (id) => {
+      renderFlowScreenPreview($("flowDetailFlowPreview"), id, profile);
+    });
+    renderFlowScreenPreview($("flowDetailFlowPreview"), screenId, profile);
+    return;
+  }
+
+  box.innerHTML = `<p class="muted sm center-msg">${escapeHtml(t("flows.noPreview"))}</p>`;
 }
 
 async function loadFlowDetail(id) {
@@ -3838,13 +3900,13 @@ async function loadFlowDetail(id) {
     respRows,
     t("flows.emptyResponses")
   );
-  renderFlowDetailPreview(perfRes);
+  await renderFlowDetailPreview(perfRes);
   const probarBtn = $("flowDetailProbarBtn");
   if (probarBtn) probarBtn.classList.toggle("hidden", !perfRes.isPaymentAuth);
   setFlowsDetailTab(state.flowsDetailTab || "preview");
   $("flowsDetailPanel").classList.remove("hidden");
   $("flowsEmptyDetail").classList.add("hidden");
-  renderFlowLaunchPanel(perfRes);
+  renderFlowTemplateLink(perfRes);
 }
 
 const fsState = {
@@ -4436,6 +4498,16 @@ async function loadFlows() {
   }
 }
 
+function flowTemplateLinkSummary(flowName) {
+  const preset = presetForFlowName(flowName);
+  if (!preset) return `<span class="flow-tpl-none">${escapeHtml(t("flows.noLinkedTpl"))}</span>`;
+  const ms = presetMetaForKey(preset.key);
+  if (ms && ms.readyForProduction) {
+    return `<span class="flow-tpl-ok">${escapeHtml(t("flows.tplReady"))}</span>`;
+  }
+  return `<span class="flow-tpl-pending">${escapeHtml(t("flows.tplPending"))}</span>`;
+}
+
 function renderFlowsList() {
   const box = $("flowsList");
   const hint = $("flowsListHint");
@@ -4453,7 +4525,7 @@ function renderFlowsList() {
         <strong>${escapeHtml(f.name || f.id)}</strong>
         <span class="flow-status ${escapeHtml(st)}">${escapeHtml(flowStatusLabel(st))}</span>
       </div>
-      <div class="muted" style="font-size:11px;margin-top:4px">ID: ${escapeHtml(f.id)} · ${escapeHtml((f.categories || []).join(", ") || "—")}</div>
+      <div class="flow-item-meta">${flowTemplateLinkSummary(f.name)}</div>
     </div>`;
   }).join("");
   box.querySelectorAll(".flow-item").forEach((el) =>
@@ -4550,7 +4622,8 @@ function applyFlowSendProfile(profileRes) {
   if ($("flowViewScreen")) $("flowViewScreen").value = screenId;
   updateFlowViewPreview();
   if (state.activeFlowId && !$("flowsDetailPanel")?.classList.contains("hidden")) {
-    renderFlowLaunchPanel(state.activeFlowPerformance);
+    renderFlowTemplateLink(state.activeFlowPerformance);
+    renderFlowDetailPreview(state.activeFlowPerformance);
   }
 }
 
@@ -4559,31 +4632,13 @@ function buildFlowLaunchContext(perfRes) {
   const presetKey = profile.presetKey || null;
   const preset = presetKey ? state.templatePresets.find((p) => p.key === presetKey) : null;
   const meta = presetKey ? presetMetaForKey(presetKey) : null;
-  const flow = state.flows.find((x) => x.id === state.activeFlowId) || (perfRes && perfRes.flow) || state.activeFlowDetail || {};
-  const flowStatus = String(flow.status || (perfRes && perfRes.flow && perfRes.flow.status) || "").toUpperCase();
-  const flowPublished = flowStatus === "PUBLISHED";
-  const textApproved = Boolean(meta && meta.text && meta.text.approved);
-  const flowApproved = preset ? isFlowTemplateApproved(preset) : false;
   const preferredTemplateName = preset ? preferredTemplateForPreset(preset) : null;
   const canSend = Boolean(preferredTemplateName);
-  return {
-    presetKey,
-    preset,
-    meta,
-    flowPublished,
-    textApproved,
-    flowApproved,
-    preferredTemplateName,
-    canSend,
-  };
+  return { presetKey, preset, meta, preferredTemplateName, canSend };
 }
 
-function flowLaunchChip(label, kind) {
-  return `<span class="flow-launch-chip ${kind}">${escapeHtml(label)}</span>`;
-}
-
-async function renderFlowLaunchPanel(perfRes) {
-  const panel = $("flowLaunchPanel");
+async function renderFlowTemplateLink(perfRes) {
+  const panel = $("flowTemplateLink");
   if (!panel || !state.activeFlowId) return;
   if (!state.templatePresets.length || !state.templates.length) {
     await Promise.all([
@@ -4593,32 +4648,26 @@ async function renderFlowLaunchPanel(perfRes) {
   }
   const ctx = buildFlowLaunchContext(perfRes);
   state.flowLaunchContext = ctx;
-  if (!ctx.presetKey || !ctx.preset) {
-    panel.classList.remove("hidden");
-    panel.innerHTML = `
-      <h4>${escapeHtml(t("flows.launch.panelTitle"))}</h4>
-      <p class="muted sm">${escapeHtml(t("flows.launch.noPreset"))}</p>
-      <div class="flow-launch-actions">
-        <button type="button" class="btn-ghost sm" id="flowLaunchViewBtn">${escapeHtml(t("flows.launch.viewTour"))}</button>
-      </div>`;
-    $("flowLaunchViewBtn")?.addEventListener("click", openFlowViewModal);
+  if (!ctx.preset) {
+    panel.classList.add("hidden");
+    panel.innerHTML = "";
     return;
   }
-  const chips = [];
-  if (ctx.flowPublished) chips.push(flowLaunchChip(t("flows.launch.chipFlow"), "ok"));
-  if (ctx.textApproved) chips.push(flowLaunchChip(t("flows.launch.chipTextTpl"), "ok"));
-  if (ctx.flowApproved) chips.push(flowLaunchChip(t("flows.launch.chipFlowTpl"), "ok"));
   panel.classList.remove("hidden");
   panel.innerHTML = `
-    <h4>${escapeHtml(t("flows.launch.panelTitle"))}</h4>
-    ${chips.length ? `<div class="flow-launch-chips">${chips.join("")}</div>` : ""}
-    <p class="muted sm">${escapeHtml(t("flows.launch.panelIntro"))}</p>
-    <div class="flow-launch-actions">
-      <button type="button" class="btn-primary" id="flowLaunchOpenBtn" ${ctx.canSend ? "" : "disabled"}>${escapeHtml(t("flows.launch.sendPrimary"))}</button>
-      <button type="button" class="btn-ghost sm" id="flowLaunchViewBtn">${escapeHtml(t("flows.launch.viewTour"))}</button>
+    <div class="flow-template-link-head">
+      <span class="flow-template-link-label">${escapeHtml(t("flows.linkedTemplates"))}</span>
+      ${presetVariantRowsHtml(ctx.preset, ctx.meta)}
+    </div>
+    <div class="flow-template-link-actions">
+      <button type="button" class="btn-primary sm" id="flowLaunchOpenBtn" ${ctx.canSend ? "" : "disabled"}>${escapeHtml(t("flows.launch.sendPrimary"))}</button>
+      <button type="button" class="btn-ghost sm" id="flowGoTemplatesBtn">${escapeHtml(t("flows.goTemplates"))}</button>
     </div>`;
   $("flowLaunchOpenBtn")?.addEventListener("click", openFlowLaunchFromPanel);
-  $("flowLaunchViewBtn")?.addEventListener("click", openFlowViewModal);
+  $("flowGoTemplatesBtn")?.addEventListener("click", () => {
+    switchScreen("templates");
+    if (ctx.preset) openTplDraftModal(ctx.preset.key);
+  });
 }
 
 function openFlowLaunchFromPanel() {
