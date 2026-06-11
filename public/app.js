@@ -4100,6 +4100,7 @@ function setFsFormatCtx(ctx) {
 }
 
 const FS_LAYOUTS = ["message", "form", "confirm"];
+const FS_TEXT_SIZE_ORDER = ["caption", "body", "subheading", "heading"];
 
 function defaultFsScreens() {
   return [
@@ -4263,12 +4264,7 @@ function updateFsFormatBarState() {
   const isImage = block?.type === "image";
   const canEmphasis = !isField && block && (block.type === "body" || block.type === "caption");
   const maxBlocks = fsState.schema?.limits?.maxBlocksPerScreen || 10;
-  const canAddBlock = scr && scr.blocks.length < maxBlocks;
-  const canRemoveBlock = scr && scr.blocks.length > 1;
-  const fields = scr?.fields || [];
-  const canAddField = isField && scr?.layout === "form";
-  const canRemoveField = isField && fields.length > 0;
-  bar.querySelectorAll("[data-fmt]").forEach((btn) => {
+  bar.querySelectorAll("[data-fmt='bold'], [data-fmt='italic']").forEach((btn) => {
     const fmt = btn.dataset.fmt;
     const emph = block?.emphasis || "normal";
     const on = fmt === "bold" ? emph.includes("bold") : emph.includes("italic");
@@ -4276,24 +4272,21 @@ function updateFsFormatBarState() {
     btn.disabled = isField || !canEmphasis || isImage;
     btn.classList.toggle("disabled", isField || !canEmphasis || isImage);
   });
+  const sizeIdx = block && !isImage ? FS_TEXT_SIZE_ORDER.indexOf(block.type) : -1;
+  bar.querySelectorAll("[data-fmt='size-up'], [data-fmt='size-down']").forEach((btn) => {
+    const hidden = isField || isImage || sizeIdx < 0;
+    const atMax = sizeIdx >= FS_TEXT_SIZE_ORDER.length - 1;
+    const atMin = sizeIdx <= 0;
+    const disabled = hidden || (btn.dataset.fmt === "size-up" ? atMax : atMin);
+    btn.disabled = disabled;
+    btn.classList.toggle("disabled", disabled);
+  });
   bar.querySelectorAll("[data-fmt-type]").forEach((btn) => {
     const hidden = isField || isImage;
     btn.classList.toggle("active", !hidden && block?.type === btn.dataset.fmtType);
     btn.disabled = hidden;
     btn.classList.toggle("disabled", hidden);
   });
-  const addBtn = bar.querySelector('[data-fmt-action="add"]');
-  const remBtn = bar.querySelector('[data-fmt-action="remove"]');
-  if (addBtn) {
-    const canAdd = isField ? canAddField : canAddBlock;
-    addBtn.disabled = !canAdd;
-    addBtn.classList.toggle("disabled", !canAdd);
-  }
-  if (remBtn) {
-    const canRemove = isField ? canRemoveField : canRemoveBlock;
-    remBtn.disabled = !canRemove;
-    remBtn.classList.toggle("disabled", !canRemove);
-  }
   bar.classList.toggle("fs-format-bar-image", Boolean(!isField && isImage));
   bar.classList.toggle("fs-format-bar-field", Boolean(isField));
 }
@@ -4381,7 +4374,7 @@ function toggleFsBlockEmphasis(kind) {
   updateFsFormatBarState();
 }
 
-function setFsBlockType(type) {
+function setFsBlockType(type, keepBar) {
   if (!fsFormatCtx) return;
   syncFsFromAllPreviews();
   const i = fsFormatCtx.screenIndex;
@@ -4396,53 +4389,42 @@ function setFsBlockType(type) {
     delete block.emphasis;
   }
   fsState.activeIndex = i;
-  hideFsFormatBar();
+  if (!keepBar) hideFsFormatBar();
   renderFlowStudio();
+  if (keepBar) {
+    requestAnimationFrame(() => {
+      const wrap = $(`fsPhone${i}`) || $("fsPreviewRow")?.querySelector(`[data-fs-i="${i}"]`);
+      const blockEl = wrap?.querySelector(`.fs-ed-block[data-bi="${bi}"]`);
+      if (blockEl) showFsFormatBarForBlock(blockEl, wrap);
+    });
+  }
 }
 
-function removeFsBlockFromCtx() {
+function stepFsBlockSize(delta) {
+  if (!fsFormatCtx || fsFormatCtx.kind === "field") return;
   syncFsFromAllPreviews();
-  const ctx = fsFormatCtx || fsPersistedCtx;
-  const i = ctx?.screenIndex ?? fsState.activeIndex;
-  const scr = fsState.screens[i];
+  const block = fsState.screens[fsFormatCtx.screenIndex]?.blocks?.[fsFormatCtx.blockIndex];
+  if (!block || block.type === "image") return;
+  let idx = FS_TEXT_SIZE_ORDER.indexOf(block.type);
+  if (idx < 0) idx = 1;
+  const next = idx + delta;
+  if (next < 0 || next >= FS_TEXT_SIZE_ORDER.length) return;
+  setFsBlockType(FS_TEXT_SIZE_ORDER[next], true);
+}
+
+function fsRemoveBlockAt(screenIndex, blockIndex) {
+  syncFsFromAllPreviews();
+  const scr = fsState.screens[screenIndex];
   if (!scr) return;
-  if (ctx?.kind === "field") {
-    const fi = ctx.fieldIndex ?? 0;
-    if (!(scr.fields || []).length) return;
-    scr.fields.splice(fi, 1);
-    fsState.activeIndex = i;
-    hideFsFormatBar();
-    hideFsInsertMenu();
-    renderFlowStudio();
-    return;
-  }
-  const bi = ctx?.blockIndex ?? 0;
   if (scr.blocks.length <= 1) {
     toast(t("toast.minOneBlock"), "error");
     return;
   }
-  scr.blocks.splice(bi, 1);
-  fsState.activeIndex = i;
+  scr.blocks.splice(blockIndex, 1);
+  fsState.activeIndex = screenIndex;
   hideFsFormatBar();
   hideFsInsertMenu();
   renderFlowStudio();
-}
-
-function addFsBlockFromCtx(anchorBtn) {
-  const ctx = fsFormatCtx || fsPersistedCtx;
-  const i = ctx?.screenIndex ?? fsState.activeIndex;
-  const scr = fsState.screens[i];
-  if (!scr) return;
-  const anchor = anchorBtn || $("fsFormatBar")?.querySelector('[data-fmt-action="add"]');
-  if (ctx?.kind === "field" || (scr.layout === "form" && document.activeElement?.closest?.(".fs-ed-field"))) {
-    const fi = ctx?.fieldIndex ?? (scr.fields || []).length;
-    showFsInsertMenu(anchor, "field", i, fi + 1);
-    return;
-  }
-  const insertAt = ctx != null && ctx.blockIndex != null
-    ? ctx.blockIndex + 1
-    : (scr.blocks?.length || 0);
-  showFsInsertMenu(anchor, "block", i, insertAt);
 }
 
 function showFsFormatBarForBlock(blockEl, wrap) {
@@ -4493,12 +4475,12 @@ function initFsFormatBar() {
     btn.addEventListener("mousedown", (e) => e.preventDefault());
     btn.addEventListener("click", (e) => {
       e.stopPropagation();
-      if (btn.dataset.fmtAction === "add") {
-        addFsBlockFromCtx(btn);
+      if (btn.dataset.fmt === "size-up") {
+        stepFsBlockSize(1);
         return;
       }
-      if (btn.dataset.fmtAction === "remove") {
-        removeFsBlockFromCtx();
+      if (btn.dataset.fmt === "size-down") {
+        stepFsBlockSize(-1);
         return;
       }
       if (btn.dataset.fmt === "bold" || btn.dataset.fmt === "italic") {
@@ -4512,7 +4494,7 @@ function initFsFormatBar() {
     window.requestAnimationFrame(onFsTextSelection);
   });
   document.addEventListener("mousedown", (e) => {
-    if (e.target.closest("#fsFormatBar, #fsInsertMenu, .fs-ed-block, .fs-ed-field")) return;
+    if (e.target.closest("#fsFormatBar, #fsInsertMenu, .fs-ed-block, .fs-ed-field, .fs-insert-line")) return;
     hideFsFormatBar();
   });
   window.addEventListener("scroll", hideFsFormatBar, true);
@@ -4556,9 +4538,10 @@ function hideFsInsertMenu() {
 
 function showFsInsertMenu(anchorBtn, kind, screenIndex, insertAt) {
   const menu = $("fsInsertMenu");
-  const anchor = anchorBtn || $("fsFormatBar")?.querySelector('[data-fmt-action="add"]');
+  const anchor = anchorBtn;
   if (!menu || !anchor) return;
   hideFsInsertMenu();
+  anchor.closest(".fs-insert-line")?.classList.add("is-open");
   const items = kind === "field"
     ? (fsState.schema?.fieldTypes || [
       { id: "text", label: t("flows.studio.defaultFieldName") },
@@ -4641,11 +4624,32 @@ function fsInsertFieldAt(screenIndex, insertAt, type) {
   });
 }
 
-function fsEditableBlockHtml(b, bi) {
+function fsInsertLineHtml(at) {
+  return `<div class="fs-insert-line" data-insert-at="${at}">
+    <button type="button" class="fs-insert-plus" title="${escapeHtml(t("flows.studio.insertAddContent"))}">+</button>
+  </div>`;
+}
+
+function fsBlocksEditorHtml(scr, screenIndex) {
+  const blocks = scr.blocks || [];
+  let html = fsInsertLineHtml(0);
+  blocks.forEach((b, bi) => {
+    html += fsEditableBlockHtml(b, bi, screenIndex);
+    html += fsInsertLineHtml(bi + 1);
+  });
+  return html;
+}
+
+function fsEditableBlockHtml(b, bi, screenIndex) {
+  const blockCount = fsState.screens[screenIndex]?.blocks?.length || 0;
+  const removeBtn = blockCount > 1
+    ? `<button type="button" class="fs-block-remove" title="${escapeHtml(t("flows.studio.removeBlock"))}">−</button>`
+    : "";
   if (b.type === "image") {
     const preview = b.previewUrl || (b.src ? `data:image/png;base64,${b.src}` : "");
     return `
       <div class="fs-ed-block" data-bi="${bi}" data-block-type="image">
+        ${removeBtn}
         ${preview ? `<img class="fs-preview-img" src="${escapeHtml(preview)}" alt="" />` : `<div class="fs-preview-img fs-preview-img-empty muted sm">${escapeHtml(t("flows.studio.noImageYet"))}</div>`}
         <label class="flows-upload-label sm fs-ed-upload"><span>${escapeHtml(t("flows.studio.uploadImage"))}</span>
           <input type="file" accept="image/png,image/jpeg" class="fs-block-file" data-bi="${bi}" />
@@ -4672,6 +4676,7 @@ function fsEditableBlockHtml(b, bi) {
   }
   return `
     <div class="fs-ed-block" data-bi="${bi}" data-block-type="${escapeHtml(b.type)}">
+      ${removeBtn}
       ${textHtml}
     </div>`;
 }
@@ -4706,7 +4711,7 @@ function renderFsPhoneEditor(scr, index) {
   const canDelete = fsState.screens.length > 1;
   const btnLabel = scr.buttonLabel || (isLast ? t("flows.studio.close") : t("flows.studio.continue"));
   const stepOf = t("flows.studio.previewStepOf", { n: index + 1, total: fsState.screens.length });
-  const blocksHtml = (scr.blocks || []).map((b, bi) => fsEditableBlockHtml(b, bi)).join("");
+  const blocksHtml = fsBlocksEditorHtml(scr, index);
   const layoutOpts = FS_LAYOUTS.map((id) =>
     `<option value="${id}"${scr.layout === id ? " selected" : ""}>${escapeHtml(fsLayoutLabel(id))}</option>`
   ).join("");
@@ -4777,6 +4782,29 @@ function bindFsPreviewRow(row) {
       showFsFormatBarForBlock(blockEl, wrap);
     });
   });
+  row.querySelectorAll(".fs-insert-plus").forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      syncFsFromAllPreviews();
+      const wrap = btn.closest(".fs-phone-wrap");
+      const line = btn.closest(".fs-insert-line");
+      const i = Number(wrap.dataset.fsI);
+      const at = Number(line?.dataset.insertAt ?? 0);
+      fsState.activeIndex = i;
+      showFsInsertMenu(btn, "block", i, at);
+    });
+  });
+  row.querySelectorAll(".fs-block-remove").forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const wrap = btn.closest(".fs-phone-wrap");
+      const blockEl = btn.closest(".fs-ed-block");
+      if (!wrap || !blockEl) return;
+      fsRemoveBlockAt(Number(wrap.dataset.fsI), Number(blockEl.dataset.bi));
+    });
+  });
   row.querySelectorAll(".fs-field-add-link").forEach((btn) => {
     btn.addEventListener("click", (e) => {
       e.preventDefault();
@@ -4790,19 +4818,7 @@ function bindFsPreviewRow(row) {
     });
   });
   row.querySelectorAll(".fs-f-label").forEach((input) => {
-    input.addEventListener("focus", () => {
-      const wrap = input.closest(".fs-phone-wrap");
-      const fieldRow = input.closest(".fs-ed-field");
-      if (!wrap || !fieldRow) return;
-      setFsFormatCtx({
-        kind: "field",
-        screenIndex: Number(wrap.dataset.fsI),
-        fieldIndex: Number(fieldRow.dataset.fi),
-      });
-      fsState.activeIndex = fsFormatCtx.screenIndex;
-      positionFsFormatBar(input.getBoundingClientRect());
-      updateFsFormatBarState();
-    });
+    input.addEventListener("focus", () => hideFsFormatBar());
   });
   row.querySelectorAll(".fs-block-file").forEach((input) => {
     input.addEventListener("change", () => {

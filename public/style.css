@@ -1479,9 +1479,40 @@ input, textarea, select { font-family: inherit; }
 }
 .fs-ed-body { min-height: 200px; padding-left: 14px !important; padding-right: 14px !important; }
 .fs-ed-block {
-  margin-bottom: 8px; padding: 2px 0; border: none; border-radius: 6px; background: transparent;
+  position: relative; margin-bottom: 4px; padding: 2px 24px 2px 0;
+  border: none; border-radius: 6px; background: transparent;
 }
 .fs-ed-block[data-block-type="image"] { cursor: pointer; }
+.fs-block-remove {
+  position: absolute; top: 2px; right: 0; z-index: 2;
+  width: 22px; height: 22px; border: none; border-radius: 6px;
+  background: transparent; color: #94a3b8; font-size: 16px; line-height: 1;
+  cursor: pointer; opacity: 0; transition: opacity .15s, color .15s, background .15s;
+}
+.fs-ed-block:hover .fs-block-remove,
+.fs-block-remove:focus { opacity: 1; }
+.fs-block-remove:hover { color: #dc2626; background: #fef2f2; }
+.fs-insert-line {
+  display: flex; align-items: center; justify-content: center;
+  margin: 0; height: 18px; opacity: 0; transition: opacity .15s;
+}
+.fs-ed-body:hover .fs-insert-line,
+.fs-insert-line:hover,
+.fs-insert-line.is-open { opacity: 1; }
+.fs-insert-line::before,
+.fs-insert-line::after {
+  content: ""; flex: 1; height: 0; border-top: 1px dashed #cbd5e1;
+}
+.fs-insert-plus {
+  width: 22px; height: 22px; border-radius: 50%;
+  border: 1px dashed #94a3b8; background: #fff; color: #64748b;
+  font-size: 15px; font-weight: 500; line-height: 20px; text-align: center;
+  cursor: pointer; margin: 0 6px; flex-shrink: 0; padding: 0;
+  transition: border-color .15s, color .15s, background .15s;
+}
+.fs-insert-plus:hover {
+  border-color: var(--brand); color: var(--brand); background: var(--brand-50);
+}
 .fs-ed-text.fs-em-bold { font-weight: 700; }
 .fs-ed-text.fs-em-italic { font-style: italic; }
 .fs-ed-text.fs-em-bold-italic { font-weight: 700; font-style: italic; }
@@ -1507,6 +1538,7 @@ input, textarea, select { font-family: inherit; }
 .fs-format-bar-field [data-fmt-type] { display: none; }
 .fs-format-bar-image .fs-fmt-sep,
 .fs-format-bar-field .fs-fmt-sep { display: none; }
+.fs-format-bar-field { display: none !important; }
 .fs-ed-fields-head {
   display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px;
 }
