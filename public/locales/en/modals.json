@@ -68,6 +68,9 @@
     "document": "Document",
     "template": "Template",
     "sticker": "Sticker",
-    "interactive": "Interactive"
+    "interactive": "Interactive",
+    "location": "Location",
+    "contacts": "Contact",
+    "reaction": "Reaction"
   }
 }

@@ -56,6 +56,8 @@ function memGetOrCreate(phone, name, phoneNumberId) {
 function buildMessage({
   direction, text, type = "text", status = null, id = null,
   media = null, mediaId = null, voice = null,
+  replyTo = null, location = null, reactionEmoji = null, reactionTo = null,
+  contacts = null,
 }) {
   const message = {
     id: id || `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
@@ -68,6 +70,11 @@ function buildMessage({
   if (media) message.media = media;
   if (mediaId) message.mediaId = mediaId;
   if (voice != null) message.voice = voice;
+  if (replyTo) message.replyTo = replyTo;
+  if (location) message.location = location;
+  if (reactionEmoji != null) message.reactionEmoji = reactionEmoji;
+  if (reactionTo) message.reactionTo = reactionTo;
+  if (contacts) message.contacts = contacts;
   return message;
 }
 
@@ -84,8 +91,16 @@ async function addMessage({
   media = null,
   mediaId = null,
   voice = null,
+  replyTo = null,
+  location = null,
+  reactionEmoji = null,
+  reactionTo = null,
+  contacts = null,
 }) {
-  const message = buildMessage({ direction, text, type, status, id, media, mediaId, voice });
+  const message = buildMessage({
+    direction, text, type, status, id, media, mediaId, voice,
+    replyTo, location, reactionEmoji, reactionTo, contacts,
+  });
 
   if (redis) {
     const convoKey = `${PREFIX}convo:${phone}`;

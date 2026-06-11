@@ -60,6 +60,42 @@ module.exports = class GraphApi {
     }
   }
 
+  static async markAsRead(senderPhoneNumberId, messageId) {
+    if (!messageId || !senderPhoneNumberId) return null;
+    const api = getApi();
+    return api.call(
+      'POST',
+      [`${senderPhoneNumberId}`, 'messages'],
+      {
+        messaging_product: 'whatsapp',
+        status: 'read',
+        message_id: messageId,
+      },
+    );
+  }
+
+  static async messageWithReaction(senderPhoneNumberId, recipientPhoneNumber, targetMessageId, emoji) {
+    const requestBody = {
+      messaging_product: 'whatsapp',
+      recipient_type: 'individual',
+      to: recipientPhoneNumber,
+      type: 'reaction',
+      reaction: {
+        message_id: targetMessageId,
+        emoji: emoji || '',
+      },
+    };
+    const api = getApi();
+    return api.call('POST', [`${senderPhoneNumberId}`, 'messages'], requestBody);
+  }
+
+  static #withReplyContext(requestBody, replyToMessageId) {
+    if (replyToMessageId) {
+      requestBody.context = { message_id: replyToMessageId };
+    }
+    return requestBody;
+  }
+
   // --- Upload media to WhatsApp (returns media id for sending) ---
   static async uploadMedia(phoneNumberId, { buffer, mimeType, filename, type }) {
     const form = new FormData();
@@ -77,19 +113,19 @@ module.exports = class GraphApi {
   }
 
   // --- Media (image / document / audio / video) by link or uploaded media id ---
-  static async messageWithMedia(messageId, senderPhoneNumberId, recipientPhoneNumber, { mediaType, link, mediaId, caption, filename }) {
+  static async messageWithMedia(messageId, senderPhoneNumberId, recipientPhoneNumber, { mediaType, link, mediaId, caption, filename, replyToMessageId }) {
     const type = ["image", "document", "audio", "video"].includes(mediaType) ? mediaType : "image";
     const media = mediaId ? { id: mediaId } : { link };
     if (caption && type !== "audio") media.caption = caption;
     if (type === "document" && filename) media.filename = filename;
 
-    const requestBody = {
+    const requestBody = this.#withReplyContext({
       messaging_product: "whatsapp",
       recipient_type: "individual",
       to: recipientPhoneNumber,
       type,
       [type]: media,
-    };
+    }, replyToMessageId);
 
     return this.#makeApiCall(messageId, senderPhoneNumberId, requestBody);
   }
@@ -439,8 +475,8 @@ module.exports = class GraphApi {
     return api.call("POST", [`${senderPhoneNumberId}`, "messages"], requestBody);
   }
 
-  static async messageWithText(messageId, senderPhoneNumberId, recipientPhoneNumber, text) {
-    const requestBody = {
+  static async messageWithText(messageId, senderPhoneNumberId, recipientPhoneNumber, text, options = {}) {
+    const requestBody = this.#withReplyContext({
       messaging_product: "whatsapp",
       recipient_type: "individual",
       to: recipientPhoneNumber,
@@ -449,7 +485,7 @@ module.exports = class GraphApi {
         preview_url: false,
         body: text
       }
-    };
+    }, options.replyToMessageId);
 
     return this.#makeApiCall(messageId, senderPhoneNumberId, requestBody);
   }

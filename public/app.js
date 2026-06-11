@@ -138,6 +138,7 @@ const state = {
   knownEventIds: null,
   readThrough: {},
   soundEnabled: true,
+  replyTo: null,
 };
 
 /* ---------- tiny helpers ---------- */
@@ -907,6 +908,7 @@ function renderConversations() {
 function closeChatView() {
   state.activePhone = null;
   state.highlightMessageId = null;
+  clearReplyTo();
   $("emptyState").classList.remove("hidden");
   $("chatView").classList.add("hidden");
   const chats = document.querySelector("#screenChats");
@@ -934,6 +936,7 @@ async function openConversation(phone, name, highlightMessageId = null, opts = {
   ]);
   markConversationRead(state.activePhone, opts.minTimestamp);
   markChatNotificationsRead(state.activePhone);
+  markWhatsAppRead(state.activePhone);
   renderConversations();
   if (state.highlightMessageId) {
     requestAnimationFrame(() => {
@@ -958,6 +961,7 @@ async function loadMessages(phone) {
       if (phoneKey(phone) === phoneKey(state.activePhone) && state.currentScreen === "chats") {
         markConversationRead(phone);
         markChatNotificationsRead(phone);
+        markWhatsAppRead(phone);
         renderConversations();
       }
     }
@@ -984,6 +988,9 @@ const TYPE_LABELS = {
   template: "modals.msgTypes.template",
   sticker: "modals.msgTypes.sticker",
   interactive: "modals.msgTypes.interactive",
+  location: "modals.msgTypes.location",
+  contacts: "modals.msgTypes.contacts",
+  reaction: "modals.msgTypes.reaction",
 };
 
 function msgTypeLabel(type) {
@@ -1209,12 +1216,85 @@ async function saveNotes() {
 
 function previewText(m) {
   if (!m) return "";
+  if (m.type === "reaction") return m.reactionEmoji ? `${m.reactionEmoji}` : t("chats.reaction");
   if (m.text) return m.text;
   if (m.type === "image") return "[imagen]";
-  if (m.type === "audio") return "[nota de voz]";
+  if (m.type === "audio") return m.voice ? "[nota de voz]" : "[audio]";
   if (m.type === "video") return "[video]";
   if (m.type === "document") return "[documento]";
+  if (m.type === "sticker") return "[sticker]";
+  if (m.type === "location") return m.location?.name || t("chats.location");
+  if (m.type === "contacts") return t("chats.contact");
   return "";
+}
+
+function messageQuotePreview(m) {
+  if (!m) return "";
+  const p = previewText(m);
+  return p || msgTypeLabel(m.type);
+}
+
+function isWaMessageId(id) {
+  return id && String(id).startsWith("wamid.");
+}
+
+async function markWhatsAppRead(phone) {
+  if (!phone) return;
+  try {
+    await post(`/api/conversations/${encodeURIComponent(phone)}/mark-read`, {});
+  } catch (_) { /* non-blocking */ }
+}
+
+function isMessagingWindowOpen() {
+  const detail = state.conversationDetail;
+  if (detail && detail.windowExpiresAt) {
+    return Date.now() < detail.windowExpiresAt * 1000;
+  }
+  const last = lastInboundTs();
+  return Boolean(last && Date.now() - last < DAY_MS);
+}
+
+function setReplyTo(m) {
+  if (!m || !isWaMessageId(m.id)) {
+    toast(t("chats.replyUnavailable"), "error");
+    return;
+  }
+  state.replyTo = { id: m.id, preview: messageQuotePreview(m) };
+  syncReplyBar();
+  $("messageInput")?.focus();
+}
+
+function clearReplyTo() {
+  state.replyTo = null;
+  syncReplyBar();
+}
+
+function syncReplyBar() {
+  const bar = $("replyBar");
+  const preview = $("replyPreview");
+  if (!bar) return;
+  if (!state.replyTo) {
+    bar.classList.add("hidden");
+    if (preview) preview.textContent = "";
+    return;
+  }
+  bar.classList.remove("hidden");
+  if (preview) preview.textContent = state.replyTo.preview || "";
+}
+
+function syncComposerState() {
+  const open = isMessagingWindowOpen();
+  const input = $("messageInput");
+  const attach = $("attachBtn");
+  const composer = $("composer");
+  const sendBtn = composer?.querySelector(".send-btn");
+  if (input) {
+    input.disabled = !open;
+    input.placeholder = open ? t("chats.writePlaceholder") : t("chats.writeClosedPlaceholder");
+  }
+  if (attach) attach.disabled = !open;
+  if (sendBtn) sendBtn.disabled = !open;
+  composer?.classList.toggle("composer-closed", !open);
 }
 
 function mediaSrc(m) {
@@ -1232,8 +1312,11 @@ function formatDuration(seconds) {
 
 function renderMedia(m) {
   const src = mediaSrc(m);
+  if (m.type === "sticker" && src) {
+    return `<img class="msg-sticker" src="${escapeHtml(src)}" alt="Sticker" loading="lazy" />`;
+  }
   if (!src) return "";
-  if (m.type === "image") {
+  if (m.type === "image" || m.type === "sticker") {
     return `<img src="${escapeHtml(src)}" alt="" loading="lazy" />`;
   }
   if (m.type === "audio") {
@@ -1251,6 +1334,62 @@ function renderMedia(m) {
     return `<a class="doc-link" href="${escapeHtml(src)}" target="_blank" rel="noopener">${escapeHtml(label)}</a>`;
   }
   return "";
+}
+
+function renderLocationBlock(m) {
+  const loc = m.location;
+  if (!loc || loc.latitude == null || loc.longitude == null) return "";
+  const label = [loc.name, loc.address].filter(Boolean).join(" · ")
+    || `${loc.latitude}, ${loc.longitude}`;
+  const mapsUrl = `https://www.google.com/maps?q=${encodeURIComponent(loc.latitude)},${encodeURIComponent(loc.longitude)}`;
+  return `<a class="msg-location" href="${escapeHtml(mapsUrl)}" target="_blank" rel="noopener">
+    <span class="msg-location-pin">📍</span>
+    <span>${escapeHtml(label)}</span>
+  </a>`;
+}
+
+function renderContactsBlock(m) {
+  const list = m.contacts;
+  if (!Array.isArray(list) || !list.length) return "";
+  return list.map((c) => {
+    const phone = (c.phones && c.phones[0]) || "";
+    return `<div class="msg-contact">
+      <strong>${escapeHtml(c.name || t("chats.contact"))}</strong>
+      ${phone ? `<span class="muted sm">${escapeHtml(phone)}</span>` : ""}
+    </div>`;
+  }).join("");
+}
+
+function renderQuoteBlock(m) {
+  const refId = m.replyTo && (m.replyTo.messageId || m.replyTo);
+  if (!refId) return "";
+  const ref = state.messages.find((x) => x.id === refId);
+  const preview = ref ? messageQuotePreview(ref) : t("chats.quotedMessage");
+  return `<div class="msg-quote"><span class="msg-quote-bar"></span><span class="msg-quote-text">${escapeHtml(String(preview).slice(0, 140))}</span></div>`;
+}
+
+function renderReactionBlock(m) {
+  if (m.type !== "reaction") return "";
+  const emoji = m.reactionEmoji || m.text?.replace(/^Reacción\s?/, "") || "👍";
+  return `<div class="msg-reaction-out">${escapeHtml(emoji)}</div>`;
+}
+
+function renderMsgActions(m) {
+  if (m.direction !== "in" || !isWaMessageId(m.id)) return "";
+  return `<div class="msg-actions">
+    <button type="button" class="msg-action-btn" data-action="reply" data-msg-id="${escapeHtml(m.id)}" title="${escapeHtml(t("chats.reply"))}">↩</button>
+    <button type="button" class="msg-action-btn" data-action="react" data-emoji="👍" data-msg-id="${escapeHtml(m.id)}" title="${escapeHtml(t("chats.react"))}">👍</button>
+    <button type="button" class="msg-action-btn" data-action="react" data-emoji="❤️" data-msg-id="${escapeHtml(m.id)}" title="${escapeHtml(t("chats.react"))}">❤️</button>
+    <button type="button" class="msg-action-btn" data-action="react" data-emoji="😂" data-msg-id="${escapeHtml(m.id)}" title="${escapeHtml(t("chats.react"))}">😂</button>
+  </div>`;
+}
+
+async function sendReaction(messageId, emoji) {
+  const phone = state.activePhone;
+  if (!phone || !messageId) return;
+  const res = await post("/api/send-reaction", { phone, messageId, emoji });
+  if (!res.ok) toast(res.error || t("toast.sendFailedGeneric"), "error");
+  else await loadMessages(phone);
 }
 
 function guessMediaType(file) {
@@ -1337,18 +1476,31 @@ function renderMessages() {
   box.innerHTML = state.messages
     .map((m) => {
       const tplClass = m.type === "template" ? " tpl" : "";
-      const media = renderMedia(m);
-      const caption = m.text ? escapeHtml(m.text) : "";
+      const isReaction = m.type === "reaction";
+      const media = isReaction ? renderReactionBlock(m) : renderMedia(m);
+      const location = renderLocationBlock(m);
+      const contacts = renderContactsBlock(m);
+      const quote = renderQuoteBlock(m);
+      const caption = m.text && !isReaction ? escapeHtml(m.text) : "";
       const time = new Date(m.timestamp).toLocaleTimeString(localeCode() === "ru" ? "ru" : localeCode() === "en" ? "en-US" : "es", { hour: "2-digit", minute: "2-digit" });
       const isHi = hi && (m.id === hi);
-      return `<div class="msg-row ${m.direction}" data-msg-id="${escapeHtml(m.id)}"${isHi ? ' id="billHighlightMsg"' : ""}>
-        <div class="bubble${tplClass}${isHi ? " msg-highlight" : ""}">
-          ${media}${caption}
-          <div class="bubble-meta">${time}${statusTick(m)}</div>
+      return `<div class="msg-row ${m.direction}${isReaction ? " reaction" : ""}" data-msg-id="${escapeHtml(m.id)}"${isHi ? ' id="billHighlightMsg"' : ""}>
+        <div class="bubble${tplClass}${isHi ? " msg-highlight" : ""}${isReaction ? " reaction-bubble" : ""}">
+          ${quote}${media}${location}${contacts}${caption}
+          <div class="bubble-meta">${time}${statusTick(m)}${renderMsgActions(m)}</div>
         </div>
       </div>`;
     })
     .join("");
+  box.querySelectorAll(".msg-action-btn").forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const msgId = btn.dataset.msgId;
+      const msg = state.messages.find((x) => x.id === msgId);
+      if (btn.dataset.action === "reply") setReplyTo(msg);
+      else if (btn.dataset.action === "react") sendReaction(msgId, btn.dataset.emoji);
+    });
+  });
   box.scrollTop = box.scrollHeight;
   bindAudioDurations();
 }
@@ -1397,14 +1549,21 @@ function updateWindow() {
     banner.classList.remove("hidden");
     banner.innerHTML = t("chats.windowClosedBanner");
   }
+  syncComposerState();
 }
 
 /* ---------- send text ---------- */
 async function sendText(text) {
   const phone = state.activePhone;
   if (!phone || !text.trim()) return;
+  if (!isMessagingWindowOpen()) {
+    toast(t("chats.windowClosedHint"), "error");
+    return;
+  }
+  const replyToMessageId = state.replyTo?.id || null;
   $("messageInput").value = "";
-  const res = await post("/api/send", { phone, text: text.trim() });
+  clearReplyTo();
+  const res = await post("/api/send", { phone, text: text.trim(), replyToMessageId });
   if (res.warning) toast(res.warning, "error");
   else if (res.error) toast(t("toast.sendFailed", { error: res.error }), "error");
   await loadMessages(phone);
@@ -2993,27 +3152,34 @@ async function sendNewChat() {
 async function sendMedia() {
   const phone = state.activePhone;
   if (!phone) return;
+  if (!isMessagingWindowOpen()) {
+    toast(t("chats.windowClosedHint"), "error");
+    return;
+  }
   const file = $("mdFile").files[0];
   const link = $("mdLink").value.trim();
   if (!file && !link) { toast(t("toast.fileOrLinkRequired"), "error"); return; }
 
+  const replyToMessageId = state.replyTo?.id || null;
   let res;
   if (file) {
     const form = new FormData();
     form.append("phone", phone);
     form.append("mediaType", $("mdType").value);
     form.append("caption", $("mdCaption").value.trim());
+    if (replyToMessageId) form.append("replyToMessageId", replyToMessageId);
     form.append("file", file, file.name);
     $("mdSend").disabled = true;
     res = await postForm("/api/send-media", form);
     $("mdSend").disabled = false;
   } else {
     res = await post("/api/send-media", {
-      phone, mediaType: $("mdType").value, link, caption: $("mdCaption").value.trim(),
+      phone, mediaType: $("mdType").value, link, caption: $("mdCaption").value.trim(), replyToMessageId,
     });
   }
 
   closeModals();
+  clearReplyTo();
   if (res.ok) toast(t("toast.sent"), "ok");
   else toast(t("toast.sendFailed", { error: res.error || res.warning || "error" }), "error");
   $("mdFile").value = "";
@@ -6454,6 +6620,7 @@ function bindEvents() {
   }
   $("searchInput").addEventListener("input", (e) => { state.filter = e.target.value; renderConversations(); });
   $("composer").addEventListener("submit", (e) => { e.preventDefault(); sendText($("messageInput").value); });
+  $("replyCancel")?.addEventListener("click", clearReplyTo);
   $("newChatBtn").addEventListener("click", () => openNewChat());
   $("ncTemplate").addEventListener("change", async (e) => {
     renderTemplateFields(tplByName(e.target.value));

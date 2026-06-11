@@ -68,6 +68,9 @@
     "document": "Documento",
     "template": "Plantilla",
     "sticker": "Sticker",
-    "interactive": "Interactivo"
+    "interactive": "Interactivo",
+    "location": "Ubicación",
+    "contacts": "Contacto",
+    "reaction": "Reacción"
   }
 }

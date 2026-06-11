@@ -68,6 +68,9 @@
     "document": "Документ",
     "template": "Шаблон",
     "sticker": "Стикер",
-    "interactive": "Интерактив"
+    "interactive": "Интерактив",
+    "location": "Местоположение",
+    "contacts": "Контакт",
+    "reaction": "Реакция"
   }
 }

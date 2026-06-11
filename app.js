@@ -2327,7 +2327,7 @@ function parseSendMediaBody(req, res, next) {
 
 // Send media: upload a file from the UI or fall back to a public https link
 app.post('/api/send-media', parseSendMediaBody, async (req, res) => {
-  const { phone, mediaType, link, caption } = req.body || {};
+  const { phone, mediaType, link, caption, replyToMessageId } = req.body || {};
   const file = req.file;
 
   if (!phone) {
@@ -2350,6 +2350,10 @@ app.post('/api/send-media', parseSendMediaBody, async (req, res) => {
     return res.status(200).json({ ok: false, warning: 'Falta PHONE_NUMBER_ID o ACCESS_TOKEN.' });
   }
 
+  const replyTo = replyToMessageId && isWaMessageId(replyToMessageId)
+    ? { messageId: replyToMessageId }
+    : null;
+
   let stored;
   try {
     let mediaId = null;
@@ -2371,6 +2375,7 @@ app.post('/api/send-media', parseSendMediaBody, async (req, res) => {
       status: 'pending',
       media: file ? null : link,
       mediaId,
+      replyTo,
     });
 
     const response = await GraphApi.messageWithMedia(undefined, phoneNumberId, phone, {
@@ -2379,6 +2384,7 @@ app.post('/api/send-media', parseSendMediaBody, async (req, res) => {
       mediaId,
       caption,
       filename,
+      replyToMessageId: replyTo ? replyTo.messageId : undefined,
     });
 
     await finalizeOutbound(phone, stored, response);
@@ -2466,6 +2472,77 @@ app.post('/api/portal/notifications/read', apiJson, async (req, res) => {
   }
 });
 
+function isWaMessageId(id) {
+  return id && String(id).startsWith('wamid.');
+}
+
+async function resolveLastInboundWaId(phone) {
+  const msgs = await Store.getMessages(phone);
+  for (let i = msgs.length - 1; i >= 0; i -= 1) {
+    const m = msgs[i];
+    if (m.direction === 'in' && isWaMessageId(m.id)) return m.id;
+  }
+  return null;
+}
+
+// Mark customer messages as read on WhatsApp (blue ticks for the customer)
+app.post('/api/conversations/:phone/mark-read', apiJson, async (req, res) => {
+  const phone = req.params.phone;
+  const { messageId } = req.body || {};
+  const convo = await Store.getConversation(phone);
+  const phoneNumberId = (convo && convo.phoneNumberId) || config.phoneNumberId;
+  if (!phoneNumberId || !config.accessToken) {
+    return res.json({ ok: false, skipped: true, reason: 'no_credentials' });
+  }
+  let waId = messageId;
+  if (!isWaMessageId(waId)) {
+    waId = await resolveLastInboundWaId(phone);
+  }
+  if (!isWaMessageId(waId)) {
+    return res.json({ ok: true, skipped: true, reason: 'no_inbound_message' });
+  }
+  try {
+    await GraphApi.markAsRead(phoneNumberId, waId);
+    res.json({ ok: true, messageId: waId });
+  } catch (err) {
+    res.status(200).json({ ok: false, error: String(err.message || err) });
+  }
+});
+
+// Send emoji reaction to a customer message
+app.post('/api/send-reaction', apiJson, async (req, res) => {
+  const { phone, messageId, emoji } = req.body || {};
+  if (!phone || !messageId) {
+    return res.status(400).json({ error: 'Se requieren "phone" y "messageId".' });
+  }
+  if (!isWaMessageId(messageId)) {
+    return res.status(400).json({ error: 'messageId debe ser un ID de WhatsApp (wamid).' });
+  }
+  const convo = await Store.getConversation(phone);
+  const phoneNumberId = (convo && convo.phoneNumberId) || config.phoneNumberId;
+  if (!phoneNumberId || !config.accessToken) {
+    return res.status(400).json({ error: 'Falta PHONE_NUMBER_ID o ACCESS_TOKEN.' });
+  }
+  const stored = await Store.addMessage({
+    phone,
+    phoneNumberId,
+    direction: 'out',
+    text: emoji ? `Reacción ${emoji}` : 'Reacción eliminada',
+    type: 'reaction',
+    status: 'pending',
+    reactionEmoji: emoji || '',
+    reactionTo: messageId,
+  });
+  try {
+    const response = await GraphApi.messageWithReaction(phoneNumberId, phone, messageId, emoji || '');
+    await finalizeOutbound(phone, stored, response);
+    res.json({ ok: true, message: stored });
+  } catch (err) {
+    await Store.updateMessageStatus(phone, stored.id, 'failed');
+    res.status(200).json({ ok: false, message: stored, error: String(err.message || err) });
+  }
+});
+
 // List all conversations
 app.get('/api/conversations', async (req, res) => {
   try {
@@ -2538,7 +2615,7 @@ app.patch('/api/conversations/:phone', apiJson, async (req, res) => {
 
 // Send a text message manually from the web interface
 app.post('/api/send', apiJson, async (req, res) => {
-  const { phone, text } = req.body || {};
+  const { phone, text, replyToMessageId } = req.body || {};
   if (!phone || !text) {
     return res.status(400).json({ error: 'Se requieren "phone" y "text".' });
   }
@@ -2546,6 +2623,10 @@ app.post('/api/send', apiJson, async (req, res) => {
   const convo = await Store.getConversation(phone);
   const phoneNumberId =
     (convo && convo.phoneNumberId) || process.env.PHONE_NUMBER_ID;
+
+  const replyTo = replyToMessageId && isWaMessageId(replyToMessageId)
+    ? { messageId: replyToMessageId }
+    : null;
 
   // Store the outgoing message right away so the UI feels responsive
   const stored = await Store.addMessage({
@@ -2555,6 +2636,7 @@ app.post('/api/send', apiJson, async (req, res) => {
     text,
     type: 'text',
     status: 'pending',
+    replyTo,
   });
 
   if (!phoneNumberId || !config.accessToken) {
@@ -2568,7 +2650,9 @@ app.post('/api/send', apiJson, async (req, res) => {
   }
 
   try {
-    const response = await GraphApi.messageWithText(undefined, phoneNumberId, phone, text);
+    const response = await GraphApi.messageWithText(undefined, phoneNumberId, phone, text, {
+      replyToMessageId: replyTo ? replyTo.messageId : undefined,
+    });
     await finalizeOutbound(phone, stored, response);
     await trackBillableSend({
       phone,
@@ -3107,6 +3191,34 @@ async function mirrorIncomingMessage(rawMessage, contactNames, senderPhoneNumber
 
   const audio = rawMessage.type === 'audio' ? rawMessage.audio : null;
   const text = extractMessageText(rawMessage);
+  const ctx = rawMessage.context;
+  const replyTo = ctx && ctx.id ? { messageId: String(ctx.id), from: ctx.from || null } : null;
+
+  let location = null;
+  if (rawMessage.type === 'location' && rawMessage.location) {
+    location = {
+      latitude: rawMessage.location.latitude,
+      longitude: rawMessage.location.longitude,
+      name: rawMessage.location.name || '',
+      address: rawMessage.location.address || '',
+    };
+  }
+
+  let reactionEmoji = null;
+  let reactionTo = null;
+  if (rawMessage.type === 'reaction' && rawMessage.reaction) {
+    reactionEmoji = rawMessage.reaction.emoji || '';
+    reactionTo = rawMessage.reaction.message_id || null;
+  }
+
+  let contacts = null;
+  if (rawMessage.type === 'contacts' && Array.isArray(rawMessage.contacts)) {
+    contacts = rawMessage.contacts.map((c) => ({
+      name: (c.name && (c.name.formatted_name || c.name.first_name)) || '',
+      phones: (c.phones || []).map((p) => p.phone || p.wa_id).filter(Boolean),
+    }));
+  }
+
   const message = await Store.addMessage({
     phone: rawMessage.from,
     name: contactNames[rawMessage.from],
@@ -3118,6 +3230,11 @@ async function mirrorIncomingMessage(rawMessage, contactNames, senderPhoneNumber
     mediaId: extractMediaId(rawMessage),
     voice: audio ? Boolean(audio.voice) : null,
     status: 'received',
+    replyTo,
+    location,
+    reactionEmoji,
+    reactionTo,
+    contacts,
   });
 
   PortalEvents.pushChatMessage({
@@ -3177,8 +3294,26 @@ function extractMessageText(rawMessage) {
       return (rawMessage.document && rawMessage.document.caption)
         || (rawMessage.document && rawMessage.document.filename)
         || '';
-    case 'location':
+    case 'location': {
+      const loc = rawMessage.location || {};
+      const parts = [loc.name, loc.address].filter(Boolean);
+      if (parts.length) return parts.join(' · ');
+      if (loc.latitude != null && loc.longitude != null) {
+        return `${loc.latitude}, ${loc.longitude}`;
+      }
       return '[ubicación]';
+    }
+    case 'reaction': {
+      const emoji = rawMessage.reaction && rawMessage.reaction.emoji;
+      return emoji ? `Reacción ${emoji}` : '[reacción]';
+    }
+    case 'contacts': {
+      const list = rawMessage.contacts || [];
+      const names = list.map((c) => (c.name && c.name.formatted_name) || '').filter(Boolean);
+      return names.length ? `Contacto: ${names.join(', ')}` : '[contacto]';
+    }
+    case 'sticker':
+      return '';
     default:
       return `[${rawMessage.type}]`;
   }
