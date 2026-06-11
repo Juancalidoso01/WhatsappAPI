@@ -135,9 +135,20 @@ function toast(msg, kind = "") {
 
 const READ_THROUGH_KEY = "pp_read_through";
 
+function phoneKey(phone) {
+  return String(phone || "").replace(/\D/g, "");
+}
+
 function loadReadThrough() {
   try {
-    return JSON.parse(localStorage.getItem(READ_THROUGH_KEY) || "{}");
+    const raw = JSON.parse(localStorage.getItem(READ_THROUGH_KEY) || "{}");
+    const out = {};
+    Object.entries(raw).forEach(([k, v]) => {
+      const pk = phoneKey(k);
+      if (!pk) return;
+      out[pk] = Math.max(out[pk] || 0, Number(v) || 0);
+    });
+    return out;
   } catch (_) {
     return {};
   }
@@ -156,7 +167,7 @@ function ensureKnownEventIds() {
 function conversationUnread(c) {
   const last = c && c.lastMessage;
   if (!last || last.direction !== "in") return false;
-  const seen = state.readThrough[c.phone] || 0;
+  const seen = state.readThrough[phoneKey(c.phone)] || 0;
   return last.timestamp > seen;
 }
 
@@ -164,10 +175,20 @@ function totalUnreadChats() {
   return state.conversations.filter(conversationUnread).length;
 }
 
-function markConversationRead(phone) {
-  const c = state.conversations.find((x) => x.phone === phone);
-  const ts = (c && c.lastMessage && c.lastMessage.timestamp) || Date.now();
-  state.readThrough[phone] = Math.max(state.readThrough[phone] || 0, ts);
+function markConversationRead(phone, minTimestamp = 0) {
+  const pk = phoneKey(phone);
+  if (!pk) return;
+  const c = state.conversations.find((x) => phoneKey(x.phone) === pk);
+  let ts = Math.max(Number(minTimestamp) || 0, Date.now());
+  if (c && c.lastMessage && c.lastMessage.timestamp) {
+    ts = Math.max(ts, c.lastMessage.timestamp);
+  }
+  if (phoneKey(state.activePhone) === pk && state.messages.length) {
+    for (const m of state.messages) {
+      if (m.timestamp) ts = Math.max(ts, m.timestamp);
+    }
+  }
+  state.readThrough[pk] = Math.max(state.readThrough[pk] || 0, ts);
   saveReadThrough();
   updateUnreadBadges();
 }
@@ -301,7 +322,7 @@ function playTemplateNotifySound() {
 
 function alertChatInbound(title, body, onClick, phone) {
   const viewingChat = phone
-    && state.activePhone === String(phone)
+    && phoneKey(state.activePhone) === phoneKey(phone)
     && state.currentScreen === "chats";
   if (!viewingChat) playChatNotifySound();
   showNotifyCard({ title, body, onClick });
@@ -415,9 +436,12 @@ function handleLiveNotification(ev) {
   if (ev.type === "chat") {
     const phone = ev.meta && ev.meta.phone;
     const name = ev.meta && ev.meta.name;
-    const isActive = state.activePhone === phone && state.currentScreen === "chats";
+    const isActive = phoneKey(state.activePhone) === phoneKey(phone) && state.currentScreen === "chats";
     if (isActive) {
-      loadMessages(phone);
+      loadMessages(phone).then(() => {
+        markConversationRead(phone, ev.at);
+        renderConversations();
+      });
       markChatNotificationsRead(phone);
       return;
     }
@@ -434,7 +458,7 @@ function handleLiveNotification(ev) {
     if (!shouldNotifyInbound(pseudo)) return;
     const open = () => {
       switchScreen("chats");
-      openConversation(phone, name);
+      openConversation(phone, name, null, { minTimestamp: ev.at });
     };
     alertChatInbound(title, body, open, phone);
     updateUnreadBadges();
@@ -492,7 +516,7 @@ function applyNotifReadState(patch) {
       return;
     }
     if (idSet && idSet.has(e.id)) e.read = true;
-    if (chatPhone && e.type === "chat" && e.meta && String(e.meta.phone) === String(chatPhone)) {
+    if (chatPhone && e.type === "chat" && e.meta && phoneKey(e.meta.phone) === phoneKey(chatPhone)) {
       e.read = true;
     }
     if (type && e.type === type) e.read = true;
@@ -567,12 +591,17 @@ function renderNotifPanel() {
 async function handleNotifItemClick(id, type) {
   const ev = state.notifications.find((e) => e.id === id);
   if (!ev) return;
-  const res = await post("/api/portal/notifications/read", { ids: [id] });
-  applyNotifReadState({ ids: [id], unread: res && res.unread });
+  if (type === "chat" && ev.meta && ev.meta.phone) {
+    const res = await post("/api/portal/notifications/read", { chatPhone: String(ev.meta.phone) });
+    applyNotifReadState({ chatPhone: String(ev.meta.phone), unread: res && res.unread });
+  } else {
+    const res = await post("/api/portal/notifications/read", { ids: [id] });
+    applyNotifReadState({ ids: [id], unread: res && res.unread });
+  }
   toggleNotifPanel(false);
   if (type === "chat" && ev.meta) {
     switchScreen("chats");
-    await openConversation(ev.meta.phone, ev.meta.name);
+    await openConversation(ev.meta.phone, ev.meta.name, null, { minTimestamp: ev.at });
     return;
   }
   if (type === "template") {
@@ -768,7 +797,7 @@ async function loadConversations() {
     if (state.convSnapshotReady) {
       const inbound = detectInboundChanges(prev, data);
       for (const c of inbound) {
-        if (state.activePhone === c.phone && state.currentScreen === "chats") {
+        if (phoneKey(state.activePhone) === phoneKey(c.phone) && state.currentScreen === "chats") {
           await loadMessages(c.phone);
         } else {
           showInboundAlert(c);
@@ -799,7 +828,7 @@ function renderConversations() {
       const last = c.lastMessage || {};
       const prefix = last.direction === "out" ? t("common.you") + ": " : "";
       const unread = conversationUnread(c);
-      return `<li class="conv${unread ? " unread" : ""}${c.phone === state.activePhone ? " active" : ""}" data-phone="${escapeHtml(c.phone)}" data-name="${escapeHtml(c.name)}">
+      return `<li class="conv${unread ? " unread" : ""}${phoneKey(c.phone) === phoneKey(state.activePhone) ? " active" : ""}" data-phone="${escapeHtml(c.phone)}" data-name="${escapeHtml(c.name)}">
         <div class="avatar">${escapeHtml(initials(c.name))}</div>
         <div class="conv-body">
           <div class="conv-top">
@@ -828,22 +857,25 @@ function closeChatView() {
   renderConversations();
 }
 
-async function openConversation(phone, name, highlightMessageId = null) {
-  state.activePhone = phone;
+async function openConversation(phone, name, highlightMessageId = null, opts = {}) {
+  state.activePhone = phoneKey(phone) || String(phone);
   state.highlightMessageId = highlightMessageId || null;
   $("emptyState").classList.add("hidden");
   $("chatView").classList.remove("hidden");
   $("chatName").textContent = name;
-  $("chatPhone").textContent = "+" + phone;
+  $("chatPhone").textContent = "+" + state.activePhone;
   $("chatAvatar").textContent = initials(name);
   $("detailName").textContent = name;
-  $("detailPhone").textContent = "+" + phone;
+  $("detailPhone").textContent = "+" + state.activePhone;
   $("detailAvatar").textContent = initials(name);
   document.querySelector("#screenChats").classList.add("show-chat");
-  renderConversations();
-  await Promise.all([loadMessages(phone), loadConversationDetail(phone)]);
-  markConversationRead(phone);
-  markChatNotificationsRead(phone);
+  await Promise.all([
+    loadConversations(),
+    loadMessages(state.activePhone),
+    loadConversationDetail(state.activePhone),
+  ]);
+  markConversationRead(state.activePhone, opts.minTimestamp);
+  markChatNotificationsRead(state.activePhone);
   renderConversations();
   if (state.highlightMessageId) {
     requestAnimationFrame(() => {
@@ -865,7 +897,7 @@ async function loadMessages(phone) {
       state.messages = data;
       renderMessages();
       updateWindow();
-      if (phone === state.activePhone && state.currentScreen === "chats") {
+      if (phoneKey(phone) === phoneKey(state.activePhone) && state.currentScreen === "chats") {
         markConversationRead(phone);
         markChatNotificationsRead(phone);
         renderConversations();
