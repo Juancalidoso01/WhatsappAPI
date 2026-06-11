@@ -518,6 +518,33 @@ async function getOrCreateFlowFromSample(sampleKey, cacheKey) {
   return { flowId: String(result.id), endpointUri, flow: result, sample: tpl };
 }
 
+/** Plantillas con botón FLOW exigen un Flow PUBLICADO en Meta (no borrador en caché). */
+async function resolvePublishedFlowForTemplate(sampleKey, cacheKey) {
+  const tpl = flowSamples.getSample(sampleKey);
+  if (!tpl) throw new Error(`Sample ${sampleKey} no configurado.`);
+
+  if (tpl.name && config.wabaId) {
+    const result = await GraphApi.listFlows(config.wabaId);
+    const flows = (result && result.data) || [];
+    const published = flows.find(
+      (f) => f.name === tpl.name && String(f.status || '').toUpperCase() === 'PUBLISHED'
+    );
+    if (published && published.id) {
+      if (cacheKey && redis) await redis.set(cacheKey, String(published.id));
+      return { flowId: String(published.id), sample: tpl };
+    }
+  }
+
+  const resolved = await getOrCreateFlowFromSample(sampleKey, cacheKey);
+  const meta = await GraphApi.getFlow(resolved.flowId, 'id,name,status');
+  if (String(meta.status || '').toUpperCase() !== 'PUBLISHED') {
+    throw new Error(
+      `El Flow "${tpl.name}" debe estar PUBLICADO en Meta para usarlo en plantillas. Estado: ${meta.status || 'desconocido'}.`
+    );
+  }
+  return { flowId: resolved.flowId, sample: tpl };
+}
+
 async function getOrCreatePaymentAuthFlow() {
   return getOrCreateFlowFromSample('payment_auth', PAYMENT_AUTH_FLOW_KEY);
 }
@@ -1369,7 +1396,7 @@ app.post('/api/templates/presets/:key/submit', apiJson, async (req, res) => {
       const sampleKey = preset.flowSampleKey || 'payment_auth';
       const cacheKey = preset.flowCacheKey
         || (sampleKey === 'tarjeta_credito' ? TARJETA_CREDITO_FLOW_KEY : PAYMENT_AUTH_FLOW_KEY);
-      const { flowId: fid, sample } = await getOrCreateFlowFromSample(sampleKey, cacheKey);
+      const { flowId: fid, sample } = await resolvePublishedFlowForTemplate(sampleKey, cacheKey);
       flowId = fid;
       const screenId = preset.flowScreenId || (sample && sample.defaultScreen) || 'WELCOME_SCREEN';
       built.components.push({
