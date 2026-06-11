@@ -441,11 +441,21 @@ function handleLiveNotification(ev) {
     return;
   }
   if (ev.type === "template") {
-    const open = () => switchScreen("templates");
+    const tplName = ev.meta && ev.meta.name;
+    const open = () => {
+      state.pendingTemplateHighlight = tplName || null;
+      if (state.currentScreen === "templates") refreshTemplatesScreen({ highlightName: tplName });
+      else switchScreen("templates");
+    };
     const kind = status === "APPROVED" || status === "REINSTATED" ? "ok" : status === "REJECTED" ? "error" : "";
     showNotifyCard({ title, body, onClick: open, kind });
     alertInBackground(title, body, open, "template");
     if (!document.hidden) playTemplateNotifySound();
+    if (state.currentScreen === "templates") {
+      refreshTemplatesScreen({ highlightName: tplName });
+    } else {
+      Promise.all([loadTemplates(), loadTemplatePresets()]).catch(() => {});
+    }
   }
 }
 
@@ -566,7 +576,9 @@ async function handleNotifItemClick(id, type) {
     return;
   }
   if (type === "template") {
-    switchScreen("templates");
+    state.pendingTemplateHighlight = (ev.meta && ev.meta.name) || null;
+    if (state.currentScreen !== "templates") switchScreen("templates");
+    else refreshTemplatesScreen({ highlightName: state.pendingTemplateHighlight });
     markTemplateNotificationsRead();
   }
 }
@@ -1887,7 +1899,28 @@ async function updatePayAuthPreview() {
 }
 
 async function initTemplateStudio() {
-  await Promise.all([loadTemplatePresets(), loadTplVariableCatalog()]);
+  await refreshTemplatesScreen();
+}
+
+async function refreshTemplatesScreen(opts = {}) {
+  await Promise.all([loadTemplates(), loadTemplatePresets(), loadTplVariableCatalog()]);
+  renderTemplateList();
+  const highlightName = opts.highlightName || state.pendingTemplateHighlight || null;
+  state.pendingTemplateHighlight = null;
+  if (highlightName) highlightTemplateInTable(highlightName);
+}
+
+function highlightTemplateInTable(name) {
+  if (!name) return;
+  const list = $("templateList");
+  if (!list) return;
+  const idx = state.templates.findIndex((t) => t.name === name);
+  if (idx < 0) return;
+  const row = list.querySelector(`tr.tpl-row[data-i="${idx}"]`);
+  if (!row) return;
+  row.classList.add("tpl-row-highlight");
+  row.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  window.setTimeout(() => row.classList.remove("tpl-row-highlight"), 4000);
 }
 
 function applyPresetToForm(preset) {
@@ -4823,13 +4856,7 @@ function switchScreen(name) {
   const cache = state.screenCache;
   if (name === "templates") {
     markTemplateNotificationsRead();
-    if (!cache.templates) {
-      cache.templates = true;
-      loadTemplates().then(renderTemplateList);
-    } else {
-      renderTemplateList();
-    }
-    initTemplateStudio();
+    refreshTemplatesScreen({ highlightName: state.pendingTemplateHighlight });
   }
   if (name === "bulk") {
     if (!cache.bulk) {

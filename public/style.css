@@ -725,6 +725,7 @@ input, textarea, select { font-family: inherit; }
   letter-spacing: .04em; padding: 2px 6px; border-radius: 999px; background: #eef2ff; color: #4338ca;
 }
 .tpl-row-flow .tpl-table-name { font-weight: 600; }
+.tpl-row-highlight td { animation: bill-highlight 1.2s ease 3; }
 
 .template-detail { padding: 30px; overflow-y: auto; }
 .template-detail h2 { margin: 0 0 6px; }
