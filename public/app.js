@@ -4214,8 +4214,11 @@ function syncFsPreviewScreen(index, wrap) {
   }
   const footer = wrap.querySelector(".fs-ed-footer-btn");
   if (footer) scr.buttonLabel = footer.value.trim();
-  const action = wrap.querySelector(".fs-ed-action");
-  if (action) scr.buttonAction = action.value;
+  const screenIndex = Number(wrap.dataset.fsI);
+  const isLast = screenIndex === fsState.screens.length - 1;
+  scr.buttonAction = (scr.layout === "confirm" || isLast) ? "complete" : "next";
+  const layoutSel = wrap.querySelector(".fs-layout-sel");
+  if (layoutSel) scr.layout = layoutSel.value;
   syncScreenLegacyFromBlocks(scr);
 }
 
@@ -4242,18 +4245,36 @@ function updateFsFormatBarState() {
   if (!bar || !fsFormatCtx) return;
   const scr = fsState.screens[fsFormatCtx.screenIndex];
   const block = scr?.blocks?.[fsFormatCtx.blockIndex];
+  const isImage = block?.type === "image";
   const canEmphasis = block && (block.type === "body" || block.type === "caption");
+  const canRemove = scr && scr.blocks.length > 1;
+  const max = fsState.schema?.limits?.maxBlocksPerScreen || 10;
+  const canAdd = scr && scr.blocks.length < max;
   bar.querySelectorAll("[data-fmt]").forEach((btn) => {
     const fmt = btn.dataset.fmt;
     const emph = block?.emphasis || "normal";
     const on = fmt === "bold" ? emph.includes("bold") : emph.includes("italic");
     btn.classList.toggle("active", canEmphasis && on);
-    btn.disabled = !canEmphasis;
-    btn.classList.toggle("disabled", !canEmphasis);
+    btn.disabled = !canEmphasis || isImage;
+    btn.classList.toggle("disabled", !canEmphasis || isImage);
   });
   bar.querySelectorAll("[data-fmt-type]").forEach((btn) => {
-    btn.classList.toggle("active", block?.type === btn.dataset.fmtType);
+    const hidden = isImage;
+    btn.classList.toggle("active", !hidden && block?.type === btn.dataset.fmtType);
+    btn.disabled = hidden;
+    btn.classList.toggle("disabled", hidden);
   });
+  const addBtn = bar.querySelector('[data-fmt-action="add"]');
+  const remBtn = bar.querySelector('[data-fmt-action="remove"]');
+  if (addBtn) {
+    addBtn.disabled = !canAdd;
+    addBtn.classList.toggle("disabled", !canAdd);
+  }
+  if (remBtn) {
+    remBtn.disabled = !canRemove;
+    remBtn.classList.toggle("disabled", !canRemove);
+  }
+  bar.classList.toggle("fs-format-bar-image", Boolean(isImage));
 }
 
 function positionFsFormatBar(rect) {
@@ -4353,6 +4374,40 @@ function setFsBlockType(type) {
   renderFlowStudio();
 }
 
+function removeFsBlockFromCtx() {
+  if (!fsFormatCtx) return;
+  syncFsFromAllPreviews();
+  const i = fsFormatCtx.screenIndex;
+  const bi = fsFormatCtx.blockIndex;
+  const scr = fsState.screens[i];
+  if (!scr || scr.blocks.length <= 1) {
+    toast(t("toast.minOneBlock"), "error");
+    return;
+  }
+  scr.blocks.splice(bi, 1);
+  fsState.activeIndex = i;
+  hideFsFormatBar();
+  renderFlowStudio();
+}
+
+function addFsBlockFromCtx(anchorBtn) {
+  if (!fsFormatCtx) return;
+  const insertAt = fsFormatCtx.blockIndex + 1;
+  showFsInsertMenu(anchorBtn || $("fsFormatBar")?.querySelector('[data-fmt-action="add"]'), "block", fsFormatCtx.screenIndex, insertAt);
+}
+
+function showFsFormatBarForBlock(blockEl, wrap) {
+  if (!blockEl || !wrap) return;
+  fsFormatCtx = {
+    screenIndex: Number(wrap.dataset.fsI),
+    blockIndex: Number(blockEl.dataset.bi),
+    editable: blockEl.querySelector(".fs-ed-text"),
+  };
+  const rect = (fsFormatCtx.editable || blockEl).getBoundingClientRect();
+  positionFsFormatBar(rect);
+  updateFsFormatBarState();
+}
+
 function initFsFormatBar() {
   if (fsFormatBarBound) return;
   const bar = $("fsFormatBar");
@@ -4367,6 +4422,14 @@ function initFsFormatBar() {
     btn.addEventListener("mousedown", (e) => e.preventDefault());
     btn.addEventListener("click", (e) => {
       e.stopPropagation();
+      if (btn.dataset.fmtAction === "add") {
+        addFsBlockFromCtx(btn);
+        return;
+      }
+      if (btn.dataset.fmtAction === "remove") {
+        removeFsBlockFromCtx();
+        return;
+      }
       if (btn.dataset.fmt === "bold" || btn.dataset.fmt === "italic") {
         toggleFsBlockEmphasis(btn.dataset.fmt);
         return;
@@ -4506,33 +4569,11 @@ function fsInsertFieldAt(screenIndex, insertAt, type) {
   renderFlowStudio();
 }
 
-function fsBlocksWithInsertsHtml(scr) {
-  const blocks = scr.blocks || [];
-  let html = fsInsertLineHtml(0, "block");
-  blocks.forEach((b, bi) => {
-    html += fsEditableBlockHtml(b, bi, blocks.length);
-    html += fsInsertLineHtml(bi + 1, "block");
-  });
-  return html;
-}
-
-function fsEditableBlockHtml(b, bi, scrLen) {
-  const upDisabled = bi === 0 ? " disabled" : "";
-  const downDisabled = bi === scrLen - 1 ? " disabled" : "";
-  const bar = `
-    <div class="fs-ed-block-bar">
-      <span class="fs-ed-block-type">${escapeHtml(fsBlockLabel(b.type))}</span>
-      <div class="fs-ed-block-actions">
-        <button type="button" class="btn-ghost sm fs-b-up"${upDisabled}>↑</button>
-        <button type="button" class="btn-ghost sm fs-b-down"${downDisabled}>↓</button>
-        <button type="button" class="btn-ghost sm fs-b-remove">×</button>
-      </div>
-    </div>`;
+function fsEditableBlockHtml(b, bi) {
   if (b.type === "image") {
     const preview = b.previewUrl || (b.src ? `data:image/png;base64,${b.src}` : "");
     return `
       <div class="fs-ed-block" data-bi="${bi}" data-block-type="image">
-        ${bar}
         ${preview ? `<img class="fs-preview-img" src="${escapeHtml(preview)}" alt="" />` : `<div class="fs-preview-img fs-preview-img-empty muted sm">${escapeHtml(t("flows.studio.noImageYet"))}</div>`}
         <label class="flows-upload-label sm fs-ed-upload"><span>${escapeHtml(t("flows.studio.uploadImage"))}</span>
           <input type="file" accept="image/png,image/jpeg" class="fs-block-file" data-bi="${bi}" />
@@ -4559,7 +4600,6 @@ function fsEditableBlockHtml(b, bi, scrLen) {
   }
   return `
     <div class="fs-ed-block" data-bi="${bi}" data-block-type="${escapeHtml(b.type)}">
-      ${bar}
       ${textHtml}
     </div>`;
 }
@@ -4567,22 +4607,23 @@ function fsEditableBlockHtml(b, bi, scrLen) {
 function fsEditableFieldsHtml(scr) {
   if (scr.layout !== "form") return "";
   const fields = scr.fields || [];
-  let rows = fsInsertLineHtml(0, "field");
-  fields.forEach((f, fi) => {
+  const rows = fields.map((f, fi) => {
     const needsOpts = f.type === "select" || f.type === "checkbox";
     const optsVal = (f.options || []).join(", ");
-    rows += `
+    return `
       <div class="fs-ed-field" data-fi="${fi}">
         <input type="text" class="fs-f-label" placeholder="${escapeHtml(t("flows.studio.fieldLabel"))}" value="${escapeHtml(f.label || "")}" />
         <select class="fs-f-type">${fsFieldTypeOptions(f.type)}</select>
         <button type="button" class="btn-ghost sm fs-f-remove" title="×">×</button>
         ${needsOpts ? `<input type="text" class="fs-f-opts sm" placeholder="${escapeHtml(t("flows.studio.fieldOptionsPh"))}" value="${escapeHtml(optsVal)}" />` : ""}
       </div>`;
-    rows += fsInsertLineHtml(fi + 1, "field");
-  });
+  }).join("");
   return `
     <div class="fs-ed-fields">
-      <span class="fs-ed-fields-label">${escapeHtml(t("flows.studio.formFields"))}</span>
+      <div class="fs-ed-fields-head">
+        <span class="fs-ed-fields-label">${escapeHtml(t("flows.studio.formFields"))}</span>
+        <button type="button" class="fs-field-add-link">+ ${escapeHtml(t("flows.studio.addField"))}</button>
+      </div>
       ${rows}
     </div>`;
 }
@@ -4593,12 +4634,10 @@ function renderFsPhoneEditor(scr, index) {
   const canDelete = fsState.screens.length > 1;
   const btnLabel = scr.buttonLabel || (isLast ? t("flows.studio.close") : t("flows.studio.continue"));
   const stepOf = t("flows.studio.previewStepOf", { n: index + 1, total: fsState.screens.length });
-  const blocksHtml = fsBlocksWithInsertsHtml(scr);
-  const layoutBtns = FS_LAYOUTS.map((id) =>
-    `<button type="button" class="fs-ed-layout${scr.layout === id ? " active" : ""}" data-layout="${id}">${escapeHtml(fsLayoutLabel(id))}</button>`
+  const blocksHtml = (scr.blocks || []).map((b, bi) => fsEditableBlockHtml(b, bi)).join("");
+  const layoutOpts = FS_LAYOUTS.map((id) =>
+    `<option value="${id}"${scr.layout === id ? " selected" : ""}>${escapeHtml(fsLayoutLabel(id))}</option>`
   ).join("");
-  const actionNext = isLast ? "" : `<option value="next"${scr.buttonAction !== "complete" ? " selected" : ""}>${escapeHtml(t("flows.studio.actionNext"))}</option>`;
-  const actionComplete = `<option value="complete"${scr.buttonAction === "complete" || isLast ? " selected" : ""}>${escapeHtml(t("flows.studio.actionComplete"))}</option>`;
   const dotsHtml = fsState.screens.map((_, i) =>
     `<span class="${i === index ? "on" : ""}"></span>`
   ).join("");
@@ -4608,6 +4647,7 @@ function renderFsPhoneEditor(scr, index) {
       <div class="fs-preview-meta">
         <span class="fs-preview-badge">${escapeHtml(t("flows.studio.previewBadge"))}</span>
         <span class="fs-preview-step muted sm">${escapeHtml(stepOf)}</span>
+        <select class="fs-layout-sel" title="${escapeHtml(t("flows.studio.screenType"))}">${layoutOpts}</select>
         ${canDelete ? `<button type="button" class="fs-screen-del" data-fs-del="${index}">${escapeHtml(t("flows.studio.removeScreenBtn"))}</button>` : ""}
       </div>
       <div class="fs-phone-device">
@@ -4617,17 +4657,12 @@ function renderFsPhoneEditor(scr, index) {
             <span class="flow-phone-title fs-ed-title" contenteditable="true" data-placeholder="${escapeHtml(t("flows.studio.screenTitle"))}">${escapeHtml(scr.title || t("flows.studio.step", { n: index + 1 }))}</span>
             <span class="flow-phone-menu fs-preview-decor" aria-hidden="true">⋯</span>
           </div>
-          <div class="fs-ed-layouts">${layoutBtns}</div>
           <div class="flow-phone-body fs-ed-body">
             ${blocksHtml}
             ${fsEditableFieldsHtml(scr)}
           </div>
           <div class="flow-phone-footer fs-ed-footer">
             <input type="text" class="fs-ed-footer-btn" value="${escapeHtml(btnLabel)}" placeholder="${escapeHtml(t("flows.studio.screenButton"))}" />
-            <label class="fs-ed-action-wrap muted sm">
-              <span>${escapeHtml(t("flows.studio.onButtonTap"))}</span>
-              <select class="fs-ed-action">${actionNext}${actionComplete}</select>
-            </label>
           </div>
         </div>
       </div>
@@ -4643,14 +4678,14 @@ function bindFsPreviewRow(row) {
       else el.classList.remove("empty");
     });
   });
-  row.querySelectorAll(".fs-ed-layout").forEach((btn) => {
-    btn.addEventListener("click", () => {
+  row.querySelectorAll(".fs-layout-sel").forEach((sel) => {
+    sel.addEventListener("change", () => {
       syncFsFromAllPreviews();
-      const wrap = btn.closest(".fs-phone-wrap");
+      const wrap = sel.closest(".fs-phone-wrap");
       const i = Number(wrap.dataset.fsI);
       const scr = fsState.screens[i];
       if (!scr) return;
-      scr.layout = btn.dataset.layout;
+      scr.layout = sel.value;
       if (scr.layout === "form" && !(scr.fields || []).length) {
         scr.fields = [{ type: "text", label: t("flows.studio.defaultFieldName"), required: true }];
       }
@@ -4662,55 +4697,19 @@ function bindFsPreviewRow(row) {
       renderFlowStudio();
     });
   });
-  row.querySelectorAll(".fs-insert-btn").forEach((btn) => {
-    btn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      const line = btn.closest(".fs-insert-line");
-      const wrap = btn.closest(".fs-phone-wrap");
-      if (!line || !wrap) return;
-      showFsInsertMenu(btn, line.dataset.insertKind, Number(wrap.dataset.fsI), Number(line.dataset.insertAt));
+  row.querySelectorAll(".fs-ed-block[data-block-type='image']").forEach((blockEl) => {
+    blockEl.addEventListener("click", (e) => {
+      if (e.target.closest("input, select, label")) return;
+      const wrap = blockEl.closest(".fs-phone-wrap");
+      showFsFormatBarForBlock(blockEl, wrap);
     });
   });
-  row.querySelectorAll(".fs-b-remove").forEach((btn) => {
+  row.querySelectorAll(".fs-field-add-link").forEach((btn) => {
     btn.addEventListener("click", () => {
       syncFsFromAllPreviews();
       const wrap = btn.closest(".fs-phone-wrap");
       const i = Number(wrap.dataset.fsI);
-      const scr = fsState.screens[i];
-      const bi = Number(btn.closest(".fs-ed-block").dataset.bi);
-      if (!scr || scr.blocks.length <= 1) {
-        toast(t("toast.minOneBlock"), "error");
-        return;
-      }
-      scr.blocks.splice(bi, 1);
-      fsState.activeIndex = i;
-      renderFlowStudio();
-    });
-  });
-  row.querySelectorAll(".fs-b-up").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      syncFsFromAllPreviews();
-      const wrap = btn.closest(".fs-phone-wrap");
-      const i = Number(wrap.dataset.fsI);
-      const scr = fsState.screens[i];
-      const bi = Number(btn.closest(".fs-ed-block").dataset.bi);
-      if (!scr || bi <= 0) return;
-      [scr.blocks[bi - 1], scr.blocks[bi]] = [scr.blocks[bi], scr.blocks[bi - 1]];
-      fsState.activeIndex = i;
-      renderFlowStudio();
-    });
-  });
-  row.querySelectorAll(".fs-b-down").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      syncFsFromAllPreviews();
-      const wrap = btn.closest(".fs-phone-wrap");
-      const i = Number(wrap.dataset.fsI);
-      const scr = fsState.screens[i];
-      const bi = Number(btn.closest(".fs-ed-block").dataset.bi);
-      if (!scr || bi >= scr.blocks.length - 1) return;
-      [scr.blocks[bi + 1], scr.blocks[bi]] = [scr.blocks[bi], scr.blocks[bi + 1]];
-      fsState.activeIndex = i;
-      renderFlowStudio();
+      fsInsertFieldAt(i, (fsState.screens[i]?.fields || []).length, "text");
     });
   });
   row.querySelectorAll(".fs-block-file").forEach((input) => {
