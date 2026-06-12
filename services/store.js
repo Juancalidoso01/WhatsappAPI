@@ -222,6 +222,11 @@ function parseConvoMeta(meta, phone) {
     leadProfile: leadProfile.parse(meta.leadProfile),
     archived: meta.archived === "1" || meta.archived === true,
     lastReadAt: meta.lastReadAt != null && meta.lastReadAt !== "" ? Number(meta.lastReadAt) : 0,
+    needsHuman: meta.needsHuman === "1" ? "1" : "",
+    humanActiveAt: meta.humanActiveAt || "",
+    aiState: meta.aiState || "idle",
+    aiEscalationReason: meta.aiEscalationReason || "",
+    aiReplyCount: meta.aiReplyCount ? Number(meta.aiReplyCount) : 0,
   };
 }
 

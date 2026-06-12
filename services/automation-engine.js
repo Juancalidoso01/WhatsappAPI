@@ -372,11 +372,7 @@ async function runAutomationForInbound({
 }) {
   if (!phone || !config.accessToken || !phoneNumberId) return { ran: false };
 
-  const { rules, settings, ai } = await AutomationStore.listRules();
-  if (!settings.enabled) {
-    console.log("[automation] skipped: global disabled");
-    return { ran: false, reason: "disabled" };
-  }
+  const { rules, ai } = await AutomationStore.listRules();
 
   const ctx = {
     phone: String(phone).replace(/\D/g, ""),
@@ -477,36 +473,78 @@ async function runAutomationForInbound({
   }
 
   if (!activeRules.length && !(ai && ai.enabled && ai.fallbackEnabled)) {
-    return { ran: false, reason: "no_rules" };
+    return { ran: false, reason: "nothing_enabled" };
   }
 
   return { ran: results.length > 0, results };
 }
 
-function buildReadiness({ settings, ai, rules, botEnabled, geminiConfigured, geminiViaFaq }) {
+function buildConversationAiStatus({ meta, windowOpen, readiness }) {
+  const m = meta || {};
+  const needsHuman = m.needsHuman === "1" || m.needsHuman === true;
+  const humanActiveAt = m.humanActiveAt ? Number(m.humanActiveAt) : 0;
+  const humanActive = Boolean(humanActiveAt && Date.now() - humanActiveAt < 3600000);
+  const awaitingFeedback = m.aiState === "awaiting_feedback";
+  const r = readiness || {};
+  const blockers = [];
+
+  if (r.botEnabled) blockers.push("bot");
+  if (!r.aiEnabled) blockers.push("global_off");
+  if (!r.geminiConfigured) blockers.push("no_gemini");
+  if (r.aiEnabled && !r.fallbackEnabled && !r.hasAiRule) blockers.push("no_fallback");
+  if (needsHuman) blockers.push("needs_human");
+  if (humanActive) blockers.push("human_active");
+  if (!windowOpen) blockers.push("window_closed");
+
+  let mode = "ready";
+  if (r.botEnabled) mode = "bot";
+  else if (!r.aiEnabled) mode = "off";
+  else if (!r.geminiConfigured) mode = "no_gemini";
+  else if (needsHuman) mode = "escalated";
+  else if (humanActive) mode = "human_active";
+  else if (awaitingFeedback) mode = "awaiting_feedback";
+  else if (r.aiEnabled && !r.fallbackEnabled && !r.hasAiRule) mode = "no_fallback";
+  else if (!windowOpen) mode = "window_closed";
+  else mode = "ready";
+
+  const canRespond = mode === "ready";
+
+  return {
+    mode,
+    canRespond,
+    blockers,
+    needsHuman,
+    humanActive,
+    awaitingFeedback,
+    windowOpen: Boolean(windowOpen),
+    escalationReason: m.aiEscalationReason || "",
+    globalAiEnabled: Boolean(r.aiEnabled),
+    globalReady: Boolean(r.ready),
+    aiReplyCount: Number(m.aiReplyCount) || 0,
+  };
+}
+
+function buildReadiness({ ai, rules, botEnabled, geminiConfigured, geminiViaFaq }) {
   const hints = [];
   const aiOn = Boolean(ai && ai.enabled);
-  const autoOn = Boolean(settings && settings.enabled);
   const fallback = Boolean(ai && ai.fallbackEnabled);
   const hasAiRule = (rules || []).some(
     (r) => r.enabled && (r.actions || []).some((a) => a.type === "reply_ai"),
   );
 
-  if (botEnabled) hints.push("BOT_ENABLED=true en el servidor bloquea la automatización.");
-  if (!autoOn) hints.push("Activa «Automatización activa» (switch del header).");
-  if (!aiOn) hints.push("Activa «Agente IA» en la pestaña Agente IA.");
+  if (botEnabled) hints.push("BOT_ENABLED=true en el servidor bloquea respuestas automáticas.");
+  if (!aiOn) hints.push("Activa «Agente IA activo» en esta pestaña.");
   if (aiOn && !fallback && !hasAiRule) {
-    hints.push("Activa «Fallback IA» o crea una regla con acción «Responder con IA».");
+    hints.push("Activa «Fallback IA» para responder cuando no haya reglas manuales.");
   }
   if (!geminiConfigured) {
     hints.push("Sin conexión IA: configura FAQ proxy (INTEGRATION_API_KEY en FAQ) o GOOGLE_GENERATIVE_AI_API_KEY.");
   }
 
-  const canReply = autoOn && aiOn && geminiConfigured && (fallback || hasAiRule) && !botEnabled;
+  const canReply = aiOn && geminiConfigured && (fallback || hasAiRule) && !botEnabled;
   return {
     ready: canReply && hints.length === 0,
     canReply,
-    automationEnabled: autoOn,
     aiEnabled: aiOn,
     fallbackEnabled: fallback,
     hasAiRule,
@@ -522,4 +560,5 @@ module.exports = {
   evaluateConditions,
   isWindowOpen,
   buildReadiness,
+  buildConversationAiStatus,
 };

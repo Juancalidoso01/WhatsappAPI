@@ -17,7 +17,6 @@
     "reply_text",
     "reply_template",
     "reply_buttons",
-    "reply_ai",
     "archive",
     "add_note",
   ];
@@ -218,17 +217,10 @@
             <p class="muted" data-i18n="automation.intro">${esc(t("automation.intro"))}</p>
           </div>
           <div class="automation-header-actions">
-            <label class="automation-switch" id="automationGlobalToggle">
-              <input type="checkbox" id="automationEnabled" ${state.settings.enabled ? "checked" : ""} />
-              <span></span>
-              <em data-i18n="automation.globalEnabled">${esc(t("automation.globalEnabled"))}</em>
-            </label>
             <button type="button" class="btn-primary" id="automationNewRule" data-i18n="automation.newRule">${esc(t("automation.newRule"))}</button>
           </div>
         </header>
         <div id="automationBotWarn" class="automation-banner hidden"></div>
-        <div id="automationGeminiWarn" class="automation-banner hidden"></div>
-        <div id="automationReadiness" class="automation-readiness hidden"></div>
         <nav class="automation-main-tabs" role="tablist">
           <button type="button" class="automation-main-tab active" data-auto-tab="rules" data-i18n="automation.tabs.rules">${esc(t("automation.tabs.rules"))}</button>
           <button type="button" class="automation-main-tab" data-auto-tab="ai" data-i18n="automation.tabs.ai">${esc(t("automation.tabs.ai"))}</button>
@@ -236,6 +228,7 @@
         <div id="automationRulesView" class="automation-grid">
           <section class="automation-rules-panel">
             <h2 data-i18n="automation.rulesTitle">${esc(t("automation.rulesTitle"))}</h2>
+            <p class="muted sm" data-i18n="automation.rulesIntro">${esc(t("automation.rulesIntro"))}</p>
             <div id="automationRulesList" class="automation-rules-list"></div>
           </section>
           <section class="automation-log-panel">
@@ -283,13 +276,6 @@
     paint();
   }
 
-  function syncAutomationHeader() {
-    const en = document.getElementById("automationEnabled");
-    if (en && document.activeElement !== en) {
-      en.checked = Boolean(state.settings && state.settings.enabled);
-    }
-  }
-
   function updateAiEnabledUi(enabled) {
     const box = document.querySelector(".automation-ai-toggle-box");
     if (box) {
@@ -306,12 +292,11 @@
 
   function applyAiSaveResponse(data) {
     if (data.ai) state.ai = data.ai;
-    if (data.settings) state.settings = data.settings;
     if (data.readiness) state.readiness = data.readiness;
     state.aiFormDirty = false;
-    syncAutomationHeader();
     updateAiEnabledUi(Boolean(state.ai && state.ai.enabled));
     paintReadiness();
+    window.dispatchEvent(new CustomEvent("automation-ai-updated", { detail: data }));
   }
 
   async function saveAiSettings(payload, { silent } = {}) {
@@ -369,19 +354,18 @@
         warn.textContent = "";
       }
     }
-    const en = document.getElementById("automationEnabled");
-    if (en && document.activeElement !== en) {
-      en.checked = Boolean(state.settings.enabled);
-    }
     paintAiWarnings();
-    paintReadiness();
     bindRuleCards();
   }
 
   function paintReadiness() {
     const box = document.getElementById("automationReadiness");
-    if (!box || !state.readiness) {
+    if (!box || state.activeTab !== "ai") {
       if (box) box.classList.add("hidden");
+      return;
+    }
+    if (!state.readiness) {
+      box.classList.add("hidden");
       return;
     }
     const r = state.readiness;
@@ -399,14 +383,16 @@
 
   function paintAiWarnings() {
     const gem = document.getElementById("automationGeminiWarn");
-    if (gem) {
-      if (!state.geminiConfigured) {
-        gem.classList.remove("hidden");
-        gem.textContent = t("automation.ai.noGeminiKey");
-      } else {
-        gem.classList.add("hidden");
-        gem.textContent = "";
-      }
+    if (!gem || state.activeTab !== "ai") {
+      if (gem) gem.classList.add("hidden");
+      return;
+    }
+    if (!state.geminiConfigured) {
+      gem.classList.remove("hidden");
+      gem.textContent = t("automation.ai.noGeminiKey");
+    } else {
+      gem.classList.add("hidden");
+      gem.textContent = "";
     }
   }
 
@@ -425,7 +411,13 @@
     if (state.activeTab === "ai") {
       if (!state.aiViewMounted || !state.aiFormDirty) {
         renderAiView();
+      } else {
+        paintAiWarnings();
+        paintReadiness();
       }
+    } else {
+      paintAiWarnings();
+      paintReadiness();
     }
   }
 
@@ -472,6 +464,8 @@
             </label>
           </div>
         </header>
+        <div id="automationGeminiWarn" class="automation-banner hidden"></div>
+        <div id="automationReadiness" class="automation-readiness hidden"></div>
         <form id="automationAiForm" class="automation-ai-form">
           <label data-i18n="automation.ai.role">${t("automation.ai.role")}
             <input type="text" id="aiRole" maxlength="120" value="${esc(ai.role || "")}" />
@@ -562,6 +556,8 @@
     if (window.I18n) I18n.applyDom(box);
     state.aiViewMounted = true;
     state.aiFormDirty = false;
+    paintAiWarnings();
+    paintReadiness();
   }
 
   function collectAiPayload() {
@@ -647,8 +643,6 @@
       fields = `<textarea class="act-body" rows="2" placeholder="${esc(t("automation.editor.bodyPh"))}">${esc(a.body || "")}</textarea>${btns}`;
     } else if (type === "add_note") {
       fields = `<textarea class="act-note" rows="2" placeholder="${esc(t("automation.editor.notePh"))}">${esc(a.note || "")}</textarea>`;
-    } else if (type === "reply_ai") {
-      fields = `<span class="muted sm">${esc(t("automation.editor.aiUsesGlobal"))}</span>`;
     } else {
       fields = `<span class="muted">${esc(t("automation.editor.noExtraFields"))}</span>`;
     }
@@ -885,28 +879,6 @@
       }
     });
 
-    document.getElementById("automationEnabled")?.addEventListener("change", async (e) => {
-      const enabled = e.target.checked;
-      const prev = Boolean(state.settings && state.settings.enabled);
-      state.settings = { ...(state.settings || {}), enabled };
-      syncAutomationHeader();
-      try {
-        const data = await api("/api/automation/settings", {
-          method: "PATCH",
-          body: JSON.stringify({ enabled }),
-        });
-        state.settings = data.settings || { enabled };
-        syncAutomationHeader();
-        paintReadiness();
-        toastMsg(enabled ? t("automation.toast.enabled") : t("automation.toast.disabled"), "ok");
-      } catch (err) {
-        state.settings = { enabled: prev };
-        e.target.checked = prev;
-        syncAutomationHeader();
-        toastMsg(err.message, "err");
-      }
-    });
-
     document.querySelectorAll(".automation-main-tab").forEach((btn) => {
       btn.addEventListener("click", () => setAutomationTab(btn.dataset.autoTab));
     });
@@ -1018,7 +990,6 @@
     state.faqSiteUrl = data.faqSiteUrl || "";
     state.readiness = data.readiness || null;
     paint();
-    syncAutomationHeader();
     if (state.activeTab === "ai" && !state.aiFormDirty) {
       renderAiView();
     } else if (state.activeTab === "ai" && state.ai) {

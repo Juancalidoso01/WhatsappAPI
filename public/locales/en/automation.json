@@ -1,13 +1,13 @@
 {
   "title": "Automation",
-  "intro": "Define rules for inbound messages and configure an AI agent that answers from your FAQ.",
-  "globalEnabled": "Automation on",
+  "intro": "Manual workflow rules and a separate FAQ-powered AI agent.",
   "newRule": "New rule",
-  "rulesTitle": "Rules",
+  "rulesTitle": "Rules & workflows",
+  "rulesIntro": "Each rule turns on with its own switch. Use this for manual automations (not the AI agent).",
   "logTitle": "Recent activity",
-  "empty": "No rules yet. Create one to auto-respond based on what the user writes.",
+  "empty": "No rules yet. Create one to automate actions based on what the user writes.",
   "logEmpty": "No recent runs.",
-  "botWarning": "The conversational bot (BOT_ENABLED) is active: automation does not run while the bot handles messages. Disable it on the server to use these rules.",
+  "botWarning": "The conversational bot (BOT_ENABLED) is active: automatic replies are paused while the bot handles messages.",
   "tabs": {
     "rules": "Rules",
     "ai": "AI agent"
@@ -112,8 +112,8 @@
     "noFailed": "No failures recorded."
   },
   "readiness": {
-    "ok": "Ready: the AI will reply to inbound messages when configured.",
-    "pending": "To enable AI replies:"
+    "ok": "Ready: the AI agent will reply to inbound messages.",
+    "pending": "To enable the AI agent:"
   },
   "toast": {
     "created": "Rule created",

@@ -194,6 +194,8 @@
             </button>
           </header>
 
+          <div id="aiAgentBanner" class="ai-agent-banner hidden" role="status" aria-live="polite"></div>
+
           <div id="messages" class="messages"></div>
 
           <div id="windowBanner" class="window-banner hidden"></div>
@@ -309,6 +311,11 @@
           <span class="detail-label" data-i18n="chats.window">Ventana de mensajería</span>
           <div id="detailWindow" class="window-pill">—</div>
           <p class="detail-hint muted" id="detailWindowExpiry"></p>
+        </div>
+        <div class="detail-section">
+          <span class="detail-label" data-i18n="chats.aiAgent.title">Estado del agente IA</span>
+          <div id="detailAiPill" class="ai-agent-pill">—</div>
+          <p class="detail-hint muted" id="detailAiHint"></p>
         </div>
         <div class="detail-section">
           <span class="detail-label" data-i18n="chats.origin">Origen de conversación</span>

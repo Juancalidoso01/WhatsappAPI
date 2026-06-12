@@ -256,9 +256,6 @@ async function setAiSettings(patch) {
     merged.corrections = current.corrections || [];
   }
   const saved = await writeAiSettings(merged);
-  if (patch && patch.enabled === true) {
-    await setSettings({ enabled: true });
-  }
   return saved;
 }
 

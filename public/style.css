@@ -697,6 +697,52 @@ input, textarea, select { font-family: inherit; }
   background: #fff6e0; color: #8a6300; border: 1px solid #ffe6a8; text-align: center;
 }
 
+.ai-agent-banner {
+  margin: 0 18px 8px; padding: 10px 14px; border-radius: 11px; font-size: 12.5px;
+  line-height: 1.45; border: 1px solid transparent;
+  display: flex; align-items: flex-start; gap: 10px;
+}
+.ai-agent-banner::before {
+  content: ""; width: 8px; height: 8px; border-radius: 50%; margin-top: 5px; flex-shrink: 0;
+}
+.ai-agent-banner .ai-agent-banner-body { flex: 1; min-width: 0; }
+.ai-agent-banner .ai-agent-banner-actions { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 8px; }
+.ai-agent-banner.ready { background: #e8f7ef; color: #13633a; border-color: #b8e6cc; }
+.ai-agent-banner.ready::before { background: #22a058; }
+.ai-agent-banner.off,
+.ai-agent-banner.no_fallback,
+.ai-agent-banner.no_gemini { background: #f3f4f6; color: #4b5563; border-color: #e5e7eb; }
+.ai-agent-banner.off::before,
+.ai-agent-banner.no_fallback::before,
+.ai-agent-banner.no_gemini::before { background: #9ca3af; }
+.ai-agent-banner.escalated,
+.ai-agent-banner.human_active,
+.ai-agent-banner.bot { background: #fff0e8; color: #9a3412; border-color: #fed7aa; }
+.ai-agent-banner.escalated::before,
+.ai-agent-banner.human_active::before,
+.ai-agent-banner.bot::before { background: #ea580c; }
+.ai-agent-banner.awaiting_feedback { background: #eef4ff; color: #1e40af; border-color: #bfdbfe; }
+.ai-agent-banner.awaiting_feedback::before { background: #3b82f6; }
+.ai-agent-banner.window_closed { background: #fff6e0; color: #8a6300; border-color: #ffe6a8; }
+.ai-agent-banner.window_closed::before { background: #d97706; }
+
+.ai-agent-pill {
+  display: inline-block; padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 600;
+}
+.ai-agent-pill.ready { background: #e3f8ee; color: var(--green); }
+.ai-agent-pill.off,
+.ai-agent-pill.no_fallback,
+.ai-agent-pill.no_gemini { background: #eef0f2; color: #6b7280; }
+.ai-agent-pill.escalated,
+.ai-agent-pill.human_active,
+.ai-agent-pill.bot { background: #fdecea; color: var(--red); }
+.ai-agent-pill.awaiting_feedback { background: #e8f0ff; color: #2563eb; }
+.ai-agent-pill.window_closed { background: #fff6e0; color: #8a6300; }
+
+@media (max-width: 640px) {
+  .ai-agent-banner { margin: 0 10px 8px; }
+}
+
 .composer {
   display: flex; align-items: center; gap: 8px; padding: 14px 18px;
   background: var(--surface); border-top: 1px solid var(--border);

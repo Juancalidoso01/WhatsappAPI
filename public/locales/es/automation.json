@@ -1,13 +1,13 @@
 {
   "title": "Automatización",
-  "intro": "Define reglas que reaccionan a mensajes entrantes y configura un agente IA que responde con base en el FAQ.",
-  "globalEnabled": "Automatización activa",
+  "intro": "Reglas manuales para flujos de trabajo y agente IA independiente con base en el FAQ.",
   "newRule": "Nueva regla",
-  "rulesTitle": "Reglas",
+  "rulesTitle": "Reglas y flujos",
+  "rulesIntro": "Cada regla se activa sola con su switch. Aquí van respuestas automáticas o acciones que configures manualmente (no incluye la IA).",
   "logTitle": "Actividad reciente",
-  "empty": "Aún no hay reglas. Crea la primera para responder automáticamente según lo que escriba el usuario.",
+  "empty": "Aún no hay reglas. Crea la primera para automatizar acciones según lo que escriba el usuario.",
   "logEmpty": "Sin ejecuciones recientes.",
-  "botWarning": "El bot conversacional (BOT_ENABLED) está activo: la automatización no se ejecuta mientras el bot responde. Desactívalo en el servidor para usar estas reglas.",
+  "botWarning": "El bot conversacional (BOT_ENABLED) está activo: las respuestas automáticas no se ejecutan mientras el bot responde.",
   "tabs": {
     "rules": "Reglas",
     "ai": "Agente IA"
@@ -112,7 +112,7 @@
     "noFailed": "Sin fallos registrados."
   },
   "readiness": {
-    "ok": "Listo: la IA responderá mensajes entrantes cuando corresponda.",
+    "ok": "Listo: el agente IA responderá mensajes entrantes.",
     "pending": "Para que responda la IA:"
   },
   "toast": {

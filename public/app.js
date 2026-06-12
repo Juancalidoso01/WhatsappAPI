@@ -1111,7 +1111,10 @@ function updateDetailReleaseAiBtn() {
   const btn = $("detailReleaseAiBtn");
   if (!btn) return;
   const d = state.conversationDetail;
+  const aiStatus = d && d.aiStatus;
   const blocked = Boolean(
+    aiStatus && (aiStatus.mode === "escalated" || aiStatus.mode === "human_active")
+  ) || Boolean(
     d && (d.needsHuman === "1" || (d.humanActiveAt && Date.now() - Number(d.humanActiveAt) < 3600000)),
   );
   btn.classList.toggle("hidden", !blocked);
@@ -1132,6 +1135,7 @@ async function releaseAiForConversation(phone) {
     updateDetailReleaseAiBtn();
   }
   toast(t("chats.releaseAiOk"), "ok");
+  await loadConversationDetail(pk).catch(() => {});
 }
 
 async function setConversationArchived(phone, archived) {
@@ -1282,6 +1286,7 @@ async function openConversation(phone, name, highlightMessageId = null, opts = {
   markChatNotificationsRead(state.activePhone);
   markWhatsAppRead(state.activePhone);
   renderConversations();
+  updateAiAgentBanner();
   if (state.highlightMessageId) {
     requestAnimationFrame(() => {
       const box = $("messages");
@@ -1327,8 +1332,16 @@ async function loadConversationDetail(phone) {
     }
     if (data) {
       state.conversationDetail = data;
+      if (data.automationReadiness && state.config) {
+        state.config.automation = {
+          ...(state.config.automation || {}),
+          readiness: data.automationReadiness,
+          aiEnabled: Boolean(data.automationReadiness.aiEnabled),
+        };
+      }
       renderDetailPanel();
       updateWindow();
+      updateAiAgentBanner();
     }
   } catch (_) {
     toast(t("toast.detailLoadFailed", { error: t("chats.listLoadFailed") }), "error");
@@ -1566,6 +1579,7 @@ function renderDetailPanel() {
   }
   updateDetailArchiveBtn();
   updateDetailReleaseAiBtn();
+  renderDetailAiStatus();
 }
 
 async function saveNotes() {
@@ -2103,6 +2117,117 @@ function updateWindow() {
     banner.innerHTML = bannerHtml;
   }
   syncComposerState();
+  updateAiAgentBanner();
+}
+
+const AI_AGENT_MSG_KEYS = {
+  ready: "ready",
+  off: "off",
+  bot: "bot",
+  no_gemini: "noGemini",
+  no_fallback: "noFallback",
+  escalated: "escalated",
+  human_active: "humanActive",
+  awaiting_feedback: "awaitingFeedback",
+  window_closed: "windowClosed",
+};
+
+const AI_AGENT_PILL_KEYS = {
+  ready: "pillReady",
+  off: "pillOff",
+  bot: "pillBot",
+  no_gemini: "pillNoGemini",
+  no_fallback: "pillNoFallback",
+  escalated: "pillEscalated",
+  human_active: "pillHumanActive",
+  awaiting_feedback: "pillAwaitingFeedback",
+  window_closed: "pillWindowClosed",
+};
+
+function resolveAiAgentStatus() {
+  const fromDetail = state.conversationDetail && state.conversationDetail.aiStatus;
+  if (fromDetail) return fromDetail;
+  const readiness = state.config && state.config.automation && state.config.automation.readiness;
+  if (!readiness) return null;
+  let mode = "ready";
+  if (readiness.botEnabled) mode = "bot";
+  else if (!readiness.aiEnabled) mode = "off";
+  else if (!readiness.geminiConfigured) mode = "no_gemini";
+  else if (readiness.aiEnabled && !readiness.fallbackEnabled && !readiness.hasAiRule) mode = "no_fallback";
+  return { mode, canRespond: Boolean(readiness.ready), globalOnly: true };
+}
+
+function buildAiAgentStatusHtml(status) {
+  if (!status) return "";
+  const mode = status.mode || "off";
+  const msgKey = AI_AGENT_MSG_KEYS[mode] || "off";
+  let html = t(`chats.aiAgent.${msgKey}`);
+  if (mode === "escalated" && status.escalationReason) {
+    html += `<br><span class="muted sm">${escapeHtml(t("chats.aiAgent.escalatedReason", { reason: status.escalationReason }))}</span>`;
+  }
+  return html;
+}
+
+function buildAiAgentBannerActions(status) {
+  if (!status || status.globalOnly) {
+    const mode = status && status.mode;
+    if (mode === "off" || mode === "no_fallback" || mode === "no_gemini") {
+      return `<button type="button" class="btn-ghost sm ai-open-automation">${escapeHtml(t("chats.aiAgent.openAutomation"))}</button>`;
+    }
+    return "";
+  }
+  const mode = status.mode;
+  const parts = [];
+  if (mode === "off" || mode === "no_fallback" || mode === "no_gemini") {
+    parts.push(`<button type="button" class="btn-ghost sm ai-open-automation">${escapeHtml(t("chats.aiAgent.openAutomation"))}</button>`);
+  }
+  if (mode === "escalated" || mode === "human_active") {
+    parts.push(`<button type="button" class="btn-ghost sm ai-release-banner">${escapeHtml(t("chats.aiAgent.releaseInBanner"))}</button>`);
+  }
+  return parts.join("");
+}
+
+function updateAiAgentBanner() {
+  const banner = $("aiAgentBanner");
+  const chatView = $("chatView");
+  if (!banner || !chatView || chatView.classList.contains("hidden") || !state.activePhone) {
+    if (banner) {
+      banner.classList.add("hidden");
+      banner.innerHTML = "";
+    }
+    return;
+  }
+
+  const status = resolveAiAgentStatus();
+  if (!status) {
+    banner.classList.add("hidden");
+    banner.innerHTML = "";
+    return;
+  }
+
+  const mode = status.mode || "off";
+  const actions = buildAiAgentBannerActions(status);
+  banner.className = `ai-agent-banner ${mode}`;
+  banner.innerHTML = `<div class="ai-agent-banner-body">${buildAiAgentStatusHtml(status)}${actions ? `<div class="ai-agent-banner-actions">${actions}</div>` : ""}</div>`;
+  banner.classList.remove("hidden");
+}
+
+function renderDetailAiStatus() {
+  const pill = $("detailAiPill");
+  const hint = $("detailAiHint");
+  if (!pill || !hint) return;
+  const status = state.conversationDetail && state.conversationDetail.aiStatus;
+  if (!status) {
+    pill.textContent = "—";
+    pill.className = "ai-agent-pill";
+    hint.textContent = "";
+    return;
+  }
+  const mode = status.mode || "off";
+  const pillKey = AI_AGENT_PILL_KEYS[mode] || "pillOff";
+  pill.textContent = t(`chats.aiAgent.${pillKey}`);
+  pill.className = `ai-agent-pill ${mode}`;
+  hint.innerHTML = buildAiAgentStatusHtml(status);
 }
 
 /* ---------- send text ---------- */
@@ -8007,6 +8132,40 @@ function bindEvents() {
   const detailReleaseAiBtn = $("detailReleaseAiBtn");
   if (detailReleaseAiBtn) {
     detailReleaseAiBtn.addEventListener("click", () => releaseAiForConversation(state.activePhone));
+  }
+  const chatViewEl = $("chatView");
+  if (chatViewEl && !chatViewEl.dataset.aiBannerBound) {
+    chatViewEl.dataset.aiBannerBound = "1";
+    chatViewEl.addEventListener("click", (e) => {
+      if (e.target.closest(".ai-open-automation")) {
+        e.preventDefault();
+        switchScreen("automation");
+      }
+      if (e.target.closest(".ai-release-banner")) {
+        e.preventDefault();
+        releaseAiForConversation(state.activePhone);
+      }
+    });
+  }
+  if (!window.__aiAutomationListener) {
+    window.__aiAutomationListener = true;
+    window.addEventListener("automation-ai-updated", (ev) => {
+      const data = ev.detail || {};
+      state.config = state.config || {};
+      state.config.automation = {
+        ...(state.config.automation || {}),
+        aiEnabled: Boolean(data.ai && data.ai.enabled),
+        fallbackEnabled: Boolean(data.ai && data.ai.fallbackEnabled),
+        geminiConfigured: data.geminiConfigured,
+        geminiViaFaq: data.geminiViaFaq,
+        readiness: data.readiness,
+      };
+      if (state.activePhone) {
+        loadConversationDetail(state.activePhone).catch(() => {});
+      } else {
+        updateAiAgentBanner();
+      }
+    });
   }
   const detailArchiveBtn = $("detailArchiveBtn");
   if (detailArchiveBtn) {

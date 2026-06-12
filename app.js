@@ -43,7 +43,7 @@ const {
 } = require('./services/interactive-send');
 const AutomationStore = require('./services/automation-store');
 const GeminiAgent = require('./services/gemini-agent');
-const { runAutomationForInbound, buildReadiness } = require('./services/automation-engine');
+const { runAutomationForInbound, buildReadiness, buildConversationAiStatus, isWindowOpen } = require('./services/automation-engine');
 const AiResolution = require('./services/ai-resolution');
 const WorkspaceStore = require('./services/workspace-store');
 const reports = require('./services/reports');
@@ -382,6 +382,16 @@ app.post('/api/auth/logout', (req, res) => {
 app.get('/api/config', async (req, res) => {
   const workspace = await WorkspaceStore.getWorkspace(config.brandName);
   const session = dashboardAuth.getSession(req);
+  const [{ rules, ai }] = await Promise.all([
+    AutomationStore.listRules(),
+  ]);
+  const readiness = buildReadiness({
+    ai,
+    rules,
+    botEnabled: config.botEnabled,
+    geminiConfigured: GeminiAgent.isConfigured(),
+    geminiViaFaq: GeminiAgent.isFaqProxyConfigured(),
+  });
   res.json({
     brandName: config.brandName,
     phoneNumberId: config.phoneNumberId || null,
@@ -396,6 +406,13 @@ app.get('/api/config', async (req, res) => {
     allowSimulate: config.allowSimulate,
     isProduction: config.isProduction,
     persistent: Store.isPersistent(),
+    automation: {
+      aiEnabled: Boolean(ai && ai.enabled),
+      fallbackEnabled: Boolean(ai && ai.fallbackEnabled),
+      geminiConfigured: GeminiAgent.isConfigured(),
+      geminiViaFaq: GeminiAgent.isFaqProxyConfigured(),
+      readiness,
+    },
     workspace: {
       displayName: workspace.displayName,
       workspaceName: workspace.workspaceName,
@@ -573,7 +590,6 @@ app.get('/api/automation', async (req, res) => {
       geminiViaFaq: GeminiAgent.isFaqProxyConfigured(),
       faqSiteUrl: config.faqSiteUrl,
       readiness: buildReadiness({
-        settings,
         ai,
         rules,
         botEnabled: config.botEnabled,
@@ -635,7 +651,6 @@ app.patch('/api/automation/ai', apiJson, async (req, res) => {
       geminiConfigured: GeminiAgent.isConfigured(),
       geminiViaFaq: GeminiAgent.isFaqProxyConfigured(),
       readiness: buildReadiness({
-        settings,
         ai,
         rules,
         botEnabled: config.botEnabled,
@@ -3073,7 +3088,8 @@ app.get('/api/conversations/:phone/messages', async (req, res) => {
 // Enriched contact detail (country, window, stats, notes)
 app.get('/api/conversations/:phone/detail', async (req, res) => {
   try {
-    const detail = await Store.getConversationDetail(req.params.phone);
+    const phone = String(req.params.phone || '').replace(/\D/g, '');
+    const detail = await Store.getConversationDetail(phone);
     if (!detail) return res.status(404).json({ error: 'Conversación no encontrada.' });
     const country = phoneMeta.inferCountry(detail.phone);
     const countryPayload = {
@@ -3081,6 +3097,22 @@ app.get('/api/conversations/:phone/detail', async (req, res) => {
       name: country.name,
       flag: phoneMeta.countryFlag(country.code),
     };
+    const [{ rules, ai }, windowOpen] = await Promise.all([
+      AutomationStore.listRules(),
+      isWindowOpen(phone),
+    ]);
+    const readiness = buildReadiness({
+      ai,
+      rules,
+      botEnabled: config.botEnabled,
+      geminiConfigured: GeminiAgent.isConfigured(),
+      geminiViaFaq: GeminiAgent.isFaqProxyConfigured(),
+    });
+    const aiStatus = buildConversationAiStatus({
+      meta: detail,
+      windowOpen,
+      readiness,
+    });
     res.json({
       ...detail,
       country: countryPayload,
@@ -3090,6 +3122,8 @@ app.get('/api/conversations/:phone/detail', async (req, res) => {
         { ...detail, phoneFormatted: phoneMeta.formatPhone(detail.phone) },
         countryPayload
       ),
+      aiStatus,
+      automationReadiness: readiness,
     });
   } catch (err) {
     console.error('getConversationDetail error:', err.message);
