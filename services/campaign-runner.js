@@ -96,4 +96,37 @@ async function processBatch({ campaignId, templateDef, phoneNumberId }) {
   return { done: stopped, processed, stopReason, totals: refreshed.totals, cursor: newCursor };
 }
 
-module.exports = { processBatch, BATCH_SIZE };
+const MAX_CRON_CAMPAIGNS = 8;
+
+async function tickAllRunning({ listCampaigns, findTemplate, phoneNumberId }) {
+  const all = await listCampaigns();
+  const running = (all || []).filter((c) => c.status === "running").slice(0, MAX_CRON_CAMPAIGNS);
+  const results = [];
+
+  for (const campaign of running) {
+    const tpl = await findTemplate(campaign.template, campaign.language);
+    if (!tpl) {
+      results.push({ id: campaign.id, name: campaign.name, ok: false, error: "Plantilla no encontrada." });
+      continue;
+    }
+    try {
+      const batch = await processBatch({
+        campaignId: campaign.id,
+        templateDef: tpl,
+        phoneNumberId,
+      });
+      results.push({ id: campaign.id, name: campaign.name, ok: true, batch });
+    } catch (err) {
+      results.push({
+        id: campaign.id,
+        name: campaign.name,
+        ok: false,
+        error: String(err.message || err),
+      });
+    }
+  }
+
+  return { processed: results.length, results };
+}
+
+module.exports = { processBatch, tickAllRunning, BATCH_SIZE, MAX_CRON_CAMPAIGNS };

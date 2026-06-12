@@ -11,6 +11,22 @@
   <link rel="stylesheet" href="/style.css" />
 </head>
 <body>
+  <div id="loginGate" class="login-gate hidden" role="dialog" aria-labelledby="loginGateTitle">
+    <div class="login-gate-card">
+      <img src="/logo.png" alt="" class="login-gate-logo" width="48" height="48" />
+      <h1 id="loginGateTitle" data-i18n="auth.title">Acceso al panel</h1>
+      <p class="muted sm" data-i18n="auth.subtitle">Ingresa la contraseña del dashboard para continuar.</p>
+      <form id="loginForm" class="login-gate-form">
+        <label>
+          <span data-i18n="auth.password">Contraseña</span>
+          <input id="loginPassword" type="password" autocomplete="current-password" required data-i18n-placeholder="auth.passwordPlaceholder" placeholder="Contraseña del panel" />
+        </label>
+        <p id="loginError" class="login-gate-error hidden" role="alert"></p>
+        <button type="submit" id="loginSubmitBtn" class="btn-primary" data-i18n="auth.login">Entrar</button>
+      </form>
+    </div>
+  </div>
+
   <div class="app">
     <!-- Navegación principal -->
     <nav class="app-nav" id="appNav" aria-label="Menú principal" data-i18n-aria="nav.mainMenu">
@@ -460,6 +476,7 @@
             </label>
             <div class="ws-actions">
               <button type="button" id="wsSaveProfile" class="btn-primary sm" data-i18n="workspace.saveProfile">Guardar perfil</button>
+              <button type="button" id="wsLogoutBtn" class="btn-ghost sm hidden" data-i18n="auth.logout">Cerrar sesión</button>
             </div>
           </div>
         </section>

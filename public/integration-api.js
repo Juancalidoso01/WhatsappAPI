@@ -107,7 +107,10 @@ curl -s -X POST "$BASE/api/integrations/campaigns/CAMPAIGN_ID/start" \\
       }
       box.textContent = t("integration.live.loading");
       try {
-        const res = await fetch(`/api/templates/${encodeURIComponent(name)}/variables?language=${encodeURIComponent(lang)}`);
+        const res = await fetch(
+          `/api/templates/${encodeURIComponent(name)}/variables?language=${encodeURIComponent(lang)}`,
+          { credentials: "include" },
+        );
         const data = await res.json();
         if (!data.ok || !data.eventVariables || !data.eventVariables.length) {
           box.className = "api-live-box";

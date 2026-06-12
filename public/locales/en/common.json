@@ -19,5 +19,14 @@
   "online": "Online · persistent data",
   "memory": "In-memory mode",
   "persistentOn": "Persistence active",
-  "persistentOff": "In-memory mode"
+  "persistentOff": "In-memory mode",
+  "auth": {
+    "title": "Panel access",
+    "subtitle": "Enter the dashboard password to continue.",
+    "password": "Password",
+    "passwordPlaceholder": "Dashboard password",
+    "login": "Sign in",
+    "logout": "Sign out",
+    "loginFailed": "Incorrect password."
+  }
 }

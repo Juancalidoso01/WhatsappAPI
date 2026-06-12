@@ -139,25 +139,44 @@ const state = {
   readThrough: {},
   soundEnabled: true,
   replyTo: null,
+  eventsBound: false,
 };
 
 /* ---------- tiny helpers ---------- */
 const $ = (id) => document.getElementById(id);
+const fetchOpts = (opts = {}) => ({ credentials: "include", ...opts });
+
 const api = async (url, opts) => {
-  const res = await fetch(url, opts);
-  return res.json().catch(() => ({}));
+  const res = await fetch(url, fetchOpts(opts));
+  const data = await res.json().catch(() => ({}));
+  if (res.status === 401 && data.code === "AUTH_REQUIRED" && !String(url).includes("/api/auth/")) {
+    showLoginGate(data.error);
+  }
+  return data;
 };
 const post = (url, body) =>
-  api(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  api(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
 const patch = (url, body) =>
-  api(url, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  api(url, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
 const put = (url, body) =>
-  api(url, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  api(url, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
 const del = (url) => api(url, { method: "DELETE" });
 const postForm = (url, formData) => api(url, { method: "POST", body: formData });
 
 function postCsv(url, formData) {
-  return fetch(url, { method: "POST", body: formData }).then((res) => res.json().catch(() => ({})));
+  return fetch(url, fetchOpts({ method: "POST", body: formData })).then((res) => res.json().catch(() => ({})));
 }
 
 function escapeHtml(s) {
@@ -719,6 +738,56 @@ async function requestBrowserNotifications() {
   }
 }
 
+/* ---------- dashboard auth ---------- */
+function showLoginGate(message) {
+  const gate = $("loginGate");
+  const app = document.querySelector(".app");
+  if (!gate) return;
+  gate.classList.remove("hidden");
+  if (app) app.classList.add("hidden");
+  const err = $("loginError");
+  if (err) {
+    err.textContent = message || "";
+    err.classList.toggle("hidden", !message);
+  }
+  $("loginPassword")?.focus();
+}
+
+function hideLoginGate() {
+  $("loginGate")?.classList.add("hidden");
+  document.querySelector(".app")?.classList.remove("hidden");
+  const err = $("loginError");
+  if (err) {
+    err.textContent = "";
+    err.classList.add("hidden");
+  }
+}
+
+async function submitDashboardLogin() {
+  const password = ($("loginPassword") || {}).value || "";
+  const btn = $("loginSubmitBtn");
+  if (btn) btn.disabled = true;
+  const res = await post("/api/auth/login", { password });
+  if (btn) btn.disabled = false;
+  if (!res.ok) {
+    const err = $("loginError");
+    if (err) {
+      err.textContent = res.error || t("auth.loginFailed");
+      err.classList.remove("hidden");
+    }
+    return;
+  }
+  hideLoginGate();
+  await bootDashboard();
+}
+
+async function logoutDashboard() {
+  await api("/api/auth/logout", { method: "POST" });
+  showLoginGate();
+  stopPolling();
+  stopBulkPolling();
+}
+
 /* ---------- init ---------- */
 async function init() {
   state.readThrough = loadReadThrough();
@@ -726,18 +795,37 @@ async function init() {
   ensureKnownEventIds();
   try {
     state.config = await api("/api/config");
-  } catch (_) {}
+  } catch (_) {
+    state.config = state.config || {};
+  }
   await initI18n();
+
+  const session = await api("/api/auth/session");
+  if (session.authRequired && !session.authenticated) {
+    showLoginGate();
+    if (window.I18n) I18n.applyDom();
+    bindLoginEvents();
+    return;
+  }
+  await bootDashboard();
+}
+
+async function bootDashboard() {
   applyBranding();
   initSidebar();
   initLeadFormOptions();
-  bindEvents();
+  if (!state.eventsBound) {
+    bindEvents();
+    state.eventsBound = true;
+  }
+  bindLoginEvents();
   loadWorkspace().catch(() => {});
   await loadConversations();
   await loadNotifications();
   startPolling();
   requestBrowserNotifications();
   updateSoundBtn();
+  updateLogoutVisibility();
   document.addEventListener("visibilitychange", () => {
     if (!document.hidden) {
       loadConversations().then(() => loadNotifications());
@@ -745,6 +833,29 @@ async function init() {
     }
     startPolling();
   });
+}
+
+function updateLogoutVisibility() {
+  const btn = $("wsLogoutBtn");
+  if (!btn) return;
+  const show = Boolean(state.config && state.config.authRequired);
+  btn.classList.toggle("hidden", !show);
+}
+
+function bindLoginEvents() {
+  const form = $("loginForm");
+  if (form && !form.dataset.bound) {
+    form.dataset.bound = "1";
+    form.addEventListener("submit", (e) => {
+      e.preventDefault();
+      submitDashboardLogin();
+    });
+  }
+  const logout = $("wsLogoutBtn");
+  if (logout && !logout.dataset.bound) {
+    logout.dataset.bound = "1";
+    logout.addEventListener("click", logoutDashboard);
+  }
 }
 
 async function initI18n() {

@@ -64,6 +64,21 @@ module.exports = Object.freeze({
   // Optional key for external systems (header X-API-Key)
   integrationApiKey: process.env.INTEGRATION_API_KEY || null,
 
+  // Dashboard login (when set, all /api/* except webhooks require session cookie)
+  dashboardPassword: process.env.DASHBOARD_PASSWORD || null,
+  dashboardSecret:
+    process.env.DASHBOARD_SECRET
+    || process.env.APP_SECRET
+    || process.env.DASHBOARD_PASSWORD
+    || null,
+
+  // Vercel Cron: Authorization Bearer CRON_SECRET
+  cronSecret: process.env.CRON_SECRET || null,
+
+  isProduction: process.env.VERCEL_ENV === "production" || process.env.NODE_ENV === "production",
+
+  allowSimulate: process.env.ALLOW_SIMULATE === "true",
+
   // Branding shown in the web interface
   brandName: process.env.BRAND_NAME || "Punto Pago",
 

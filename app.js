@@ -30,6 +30,7 @@ const { parseLineHealth } = require('./services/line-health');
 const { validateRowsForTemplate, extractEventVariables } = require('./services/template-params');
 const campaignMetrics = require('./services/campaign-metrics');
 const { requireIntegrationKey } = require('./services/api-auth');
+const dashboardAuth = require('./services/dashboard-auth');
 const WorkspaceStore = require('./services/workspace-store');
 const reports = require('./services/reports');
 const templateBuilder = require('./services/template-builder');
@@ -285,9 +286,34 @@ app.post('/webhook', webhookJson, (req, res) => {
 
 // ----- Local web interface API -----
 
+app.use(dashboardAuth.requireDashboardAuth);
+
+app.get('/api/auth/session', (req, res) => {
+  const session = dashboardAuth.getSession(req);
+  res.json({ ok: true, ...session });
+});
+
+app.post('/api/auth/login', apiJson, (req, res) => {
+  if (!dashboardAuth.isAuthRequired()) {
+    return res.json({ ok: true, authRequired: false, authenticated: true });
+  }
+  const password = req.body && req.body.password;
+  if (!dashboardAuth.verifyPassword(password)) {
+    return res.status(401).json({ ok: false, error: 'Contraseña incorrecta.' });
+  }
+  res.setHeader('Set-Cookie', dashboardAuth.sessionCookieHeader());
+  return res.json({ ok: true, authRequired: true, authenticated: true });
+});
+
+app.post('/api/auth/logout', (req, res) => {
+  res.setHeader('Set-Cookie', dashboardAuth.clearSessionCookieHeader());
+  res.json({ ok: true, authenticated: false });
+});
+
 // Expose non-sensitive runtime config to the UI
 app.get('/api/config', async (req, res) => {
   const workspace = await WorkspaceStore.getWorkspace(config.brandName);
+  const session = dashboardAuth.getSession(req);
   res.json({
     brandName: config.brandName,
     phoneNumberId: config.phoneNumberId || null,
@@ -306,6 +332,8 @@ app.get('/api/config', async (req, res) => {
       hasProfilePhoto: workspace.hasProfilePhoto,
       portalLanguage: workspace.portalLanguage,
     },
+    authRequired: session.authRequired,
+    authenticated: session.authenticated,
   });
 });
 
@@ -2922,6 +2950,30 @@ app.post('/api/campaigns/:id/pause', async (req, res) => {
   res.json({ ok: true, campaign: enrichCampaign(await CampaignStore.getCampaign(campaign.id)) });
 });
 
+app.post('/api/campaigns/cron/tick', async (req, res) => {
+  const secret = config.cronSecret;
+  const auth = req.get('Authorization') || '';
+  const bearer = auth.replace(/^Bearer\s+/i, '').trim();
+  const headerSecret = req.get('X-Cron-Secret') || bearer;
+  if (!secret || headerSecret !== secret) {
+    return res.status(401).json({ ok: false, error: 'No autorizado.' });
+  }
+  if (!config.phoneNumberId || !config.accessToken) {
+    return res.status(400).json({ ok: false, error: 'Falta PHONE_NUMBER_ID o ACCESS_TOKEN.' });
+  }
+  try {
+    const result = await CampaignRunner.tickAllRunning({
+      listCampaigns: () => CampaignStore.listCampaigns(),
+      findTemplate: findTemplateDefinition,
+      phoneNumberId: config.phoneNumberId,
+    });
+    res.json({ ok: true, ...result });
+  } catch (err) {
+    console.error('campaign cron tick:', err.message);
+    res.status(500).json({ ok: false, error: String(err.message || err) });
+  }
+});
+
 app.post('/api/campaigns/:id/tick', async (req, res) => {
   const campaign = await CampaignStore.getCampaign(req.params.id);
   if (!campaign) return res.status(404).json({ ok: false, error: 'Campaña no encontrada.' });
@@ -3100,6 +3152,12 @@ app.get('/api/campaigns/:id/export', async (req, res) => {
 
 // Inject a fake incoming message, so the UI can be tested without WhatsApp
 app.post('/api/simulate-incoming', apiJson, async (req, res) => {
+  if (config.isProduction && !config.allowSimulate) {
+    return res.status(403).json({
+      ok: false,
+      error: 'Simulación deshabilitada en producción. Usa ALLOW_SIMULATE=true solo en entornos de prueba.',
+    });
+  }
   const { phone, name, text } = req.body || {};
   if (!phone || !text) {
     return res.status(400).json({ error: 'Se requieren "phone" y "text".' });
@@ -3159,6 +3217,13 @@ app.get('/api/health', (req, res) => {
 
 // Check if all environment variables are set
 config.checkEnvVariables();
+
+if (config.isProduction && !dashboardAuth.isAuthRequired()) {
+  console.warn('WARNING: DASHBOARD_PASSWORD no configurado — el panel está abierto sin login.');
+}
+if (config.isProduction && !config.integrationApiKey) {
+  console.warn('WARNING: INTEGRATION_API_KEY no configurado — la API de integración está bloqueada.');
+}
 
 // Verify that the callback came from Facebook.
 function verifyRequestSignature(req, res, buf) {

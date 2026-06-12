@@ -19,5 +19,14 @@
   "online": "En línea · datos persistentes",
   "memory": "Modo memoria",
   "persistentOn": "Persistencia activa",
-  "persistentOff": "Modo memoria"
+  "persistentOff": "Modo memoria",
+  "auth": {
+    "title": "Acceso al panel",
+    "subtitle": "Ingresa la contraseña del dashboard para continuar.",
+    "password": "Contraseña",
+    "passwordPlaceholder": "Contraseña del panel",
+    "login": "Entrar",
+    "logout": "Cerrar sesión",
+    "loginFailed": "Contraseña incorrecta."
+  }
 }

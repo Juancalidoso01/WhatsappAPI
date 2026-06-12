@@ -27,6 +27,40 @@
 
 * { box-sizing: border-box; }
 html, body { height: 100%; margin: 0; }
+
+.login-gate {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: linear-gradient(160deg, var(--brand-50) 0%, var(--bg) 45%, #fff 100%);
+}
+.login-gate.hidden { display: none; }
+.login-gate-card {
+  width: min(400px, 100%);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-lg);
+  padding: 28px 28px 24px;
+  text-align: center;
+}
+.login-gate-logo { margin-bottom: 12px; border-radius: 12px; }
+.login-gate-card h1 { margin: 0 0 6px; font-size: 20px; }
+.login-gate-form { margin-top: 18px; text-align: left; }
+.login-gate-form label { display: block; margin-bottom: 12px; }
+.login-gate-form input {
+  width: 100%;
+  margin-top: 6px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font: inherit;
+}
+.login-gate-form .btn-primary { width: 100%; margin-top: 4px; }
+.login-gate-error { color: var(--red); font-size: 13px; margin: 0 0 8px; }
+
 body {
   font-family: var(--font);
   background: var(--bg);
