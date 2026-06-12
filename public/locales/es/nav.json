@@ -2,6 +2,7 @@
   "chats": { "label": "Conversaciones", "short": "Chats", "title": "Conversaciones" },
   "templates": { "label": "Plantillas", "short": "Plantillas", "title": "Plantillas" },
   "bulk": { "label": "Cargas masivas", "short": "Masivas", "title": "Cargas masivas" },
+  "automation": { "label": "Automatización", "short": "Auto", "title": "Automatización" },
   "integration": { "label": "Integración API", "short": "API", "title": "Integración API" },
   "flows": { "label": "WhatsApp Flows", "short": "Flows", "title": "WhatsApp Flows" },
   "billing": { "label": "Facturación", "short": "Costos", "title": "Facturación" },

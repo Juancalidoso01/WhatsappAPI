@@ -1,0 +1,65 @@
+{
+  "title": "Automatización",
+  "intro": "Define reglas que reaccionan a mensajes entrantes: condiciones (texto, tipo, primer mensaje) y acciones automáticas (responder, plantilla, archivar, nota).",
+  "globalEnabled": "Automatización activa",
+  "newRule": "Nueva regla",
+  "rulesTitle": "Reglas",
+  "logTitle": "Actividad reciente",
+  "empty": "Aún no hay reglas. Crea la primera para responder automáticamente según lo que escriba el usuario.",
+  "logEmpty": "Sin ejecuciones recientes.",
+  "botWarning": "El bot conversacional (BOT_ENABLED) está activo: la automatización no se ejecuta mientras el bot responde. Desactívalo en el servidor para usar estas reglas.",
+  "rule": {
+    "active": "Activa",
+    "paused": "Pausada",
+    "order": "Orden",
+    "stopOnMatch": "Detener tras coincidir",
+    "toggle": "Activar o pausar",
+    "edit": "Editar",
+    "delete": "Eliminar",
+    "confirmDelete": "¿Eliminar esta regla?",
+    "if": "Si",
+    "then": "Entonces"
+  },
+  "conditions": {
+    "any": "Cualquier mensaje",
+    "contains": "Contiene",
+    "equals": "Es igual a",
+    "starts_with": "Empieza con",
+    "message_type": "Tipo de mensaje",
+    "first_inbound": "Primer mensaje del contacto"
+  },
+  "actions": {
+    "reply_text": "Responder texto",
+    "reply_template": "Enviar plantilla",
+    "reply_buttons": "Responder con botones",
+    "archive": "Archivar conversación",
+    "add_note": "Agregar nota interna"
+  },
+  "editor": {
+    "new": "Nueva regla",
+    "edit": "Editar regla",
+    "name": "Nombre de la regla",
+    "stopOnMatch": "Detener evaluación de otras reglas tras coincidir",
+    "conditions": "Condiciones (todas deben cumplirse)",
+    "actions": "Acciones (se ejecutan en orden)",
+    "addCondition": "Agregar condición",
+    "addAction": "Agregar acción",
+    "cancel": "Cancelar",
+    "save": "Guardar regla",
+    "valuePh": "Texto a buscar",
+    "caseInsensitive": "Sin distinguir mayúsculas",
+    "textPh": "Mensaje de respuesta (ventana 24 h)",
+    "bodyPh": "Cuerpo del mensaje con botones",
+    "buttonPh": "Botón",
+    "notePh": "Nota visible solo en el panel",
+    "noTemplates": "Sin plantillas aprobadas",
+    "noExtraFields": "Sin campos adicionales"
+  },
+  "toast": {
+    "created": "Regla creada",
+    "saved": "Regla guardada",
+    "deleted": "Regla eliminada",
+    "enabled": "Automatización activada",
+    "disabled": "Automatización desactivada"
+  }
+}

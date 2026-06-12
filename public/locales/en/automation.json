@@ -1,0 +1,65 @@
+{
+  "title": "Automation",
+  "intro": "Define rules that react to inbound messages: conditions (text, type, first message) and automatic actions (reply, template, archive, note).",
+  "globalEnabled": "Automation on",
+  "newRule": "New rule",
+  "rulesTitle": "Rules",
+  "logTitle": "Recent activity",
+  "empty": "No rules yet. Create one to auto-respond based on what the user writes.",
+  "logEmpty": "No recent runs.",
+  "botWarning": "The conversational bot (BOT_ENABLED) is active: automation does not run while the bot handles messages. Disable it on the server to use these rules.",
+  "rule": {
+    "active": "Active",
+    "paused": "Paused",
+    "order": "Order",
+    "stopOnMatch": "Stop after match",
+    "toggle": "Enable or pause",
+    "edit": "Edit",
+    "delete": "Delete",
+    "confirmDelete": "Delete this rule?",
+    "if": "If",
+    "then": "Then"
+  },
+  "conditions": {
+    "any": "Any message",
+    "contains": "Contains",
+    "equals": "Equals",
+    "starts_with": "Starts with",
+    "message_type": "Message type",
+    "first_inbound": "Contact's first message"
+  },
+  "actions": {
+    "reply_text": "Reply with text",
+    "reply_template": "Send template",
+    "reply_buttons": "Reply with buttons",
+    "archive": "Archive conversation",
+    "add_note": "Add internal note"
+  },
+  "editor": {
+    "new": "New rule",
+    "edit": "Edit rule",
+    "name": "Rule name",
+    "stopOnMatch": "Stop evaluating other rules after a match",
+    "conditions": "Conditions (all must match)",
+    "actions": "Actions (run in order)",
+    "addCondition": "Add condition",
+    "addAction": "Add action",
+    "cancel": "Cancel",
+    "save": "Save rule",
+    "valuePh": "Text to match",
+    "caseInsensitive": "Case insensitive",
+    "textPh": "Reply message (24h window)",
+    "bodyPh": "Message body with buttons",
+    "buttonPh": "Button",
+    "notePh": "Note visible only in the panel",
+    "noTemplates": "No approved templates",
+    "noExtraFields": "No extra fields"
+  },
+  "toast": {
+    "created": "Rule created",
+    "saved": "Rule saved",
+    "deleted": "Rule deleted",
+    "enabled": "Automation enabled",
+    "disabled": "Automation disabled"
+  }
+}

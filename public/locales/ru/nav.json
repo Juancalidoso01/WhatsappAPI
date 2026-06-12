@@ -2,6 +2,7 @@
   "chats": { "label": "Диалоги", "short": "Чаты", "title": "Диалоги" },
   "templates": { "label": "Шаблоны", "short": "Шаблоны", "title": "Шаблоны" },
   "bulk": { "label": "Массовые рассылки", "short": "Массовые", "title": "Массовые рассылки" },
+  "automation": { "label": "Автоматизация", "short": "Авто", "title": "Автоматизация" },
   "integration": { "label": "Интеграция API", "short": "API", "title": "Интеграция API" },
   "flows": { "label": "WhatsApp Flows", "short": "Flows", "title": "WhatsApp Flows" },
   "billing": { "label": "Биллинг", "short": "Расходы", "title": "Биллинг" },

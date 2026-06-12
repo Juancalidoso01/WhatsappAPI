@@ -10,6 +10,7 @@
     chats: ["chats", "detail", "modals", "templates"],
     templates: ["templates", "modals"],
     bulk: ["bulk", "modals"],
+    automation: ["automation"],
     integration: ["integration"],
     workspace: ["workspace"],
     flows: ["flows", "modals", "templates"],

@@ -4901,6 +4901,14 @@ async function initIntegrationScreen() {
   }
 }
 
+async function initAutomationScreen() {
+  await loadTemplates();
+  if (window.AutomationModule) {
+    window.AutomationModule.setTemplates(state.templates);
+    await window.AutomationModule.init();
+  }
+}
+
 /* ---------- workspace hub ---------- */
 function toggleWorkspaceFlyout(force) {
   const fly = $("workspaceFlyout");
@@ -7587,6 +7595,7 @@ function switchScreen(name) {
   $("screenChats").classList.toggle("hidden", name !== "chats");
   $("screenTemplates").classList.toggle("hidden", name !== "templates");
   $("screenBulk").classList.toggle("hidden", name !== "bulk");
+  $("screenAutomation").classList.toggle("hidden", name !== "automation");
   $("screenIntegration").classList.toggle("hidden", name !== "integration");
   $("screenWorkspace").classList.toggle("hidden", name !== "workspace");
   $("screenFlows").classList.toggle("hidden", name !== "flows");
@@ -7641,6 +7650,19 @@ function switchScreen(name) {
     };
     if (window.I18n) I18n.ensureScreen("bulk").then(bootBulk);
     else bootBulk();
+  }
+  if (name === "automation") {
+    const bootAutomation = () => {
+      if (!cache.automation) {
+        cache.automation = true;
+        initAutomationScreen();
+      } else if (window.AutomationModule) {
+        window.AutomationModule.setTemplates(state.templates);
+        window.AutomationModule.refresh();
+      }
+    };
+    if (window.I18n) I18n.ensureScreen("automation").then(bootAutomation);
+    else bootAutomation();
   }
   if (name === "integration") {
     if (!cache.integration) {

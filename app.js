@@ -40,6 +40,8 @@ const {
   validateListPayload,
   buildOutboundInteractiveMeta,
 } = require('./services/interactive-send');
+const AutomationStore = require('./services/automation-store');
+const { runAutomationForInbound } = require('./services/automation-engine');
 const WorkspaceStore = require('./services/workspace-store');
 const reports = require('./services/reports');
 const templateBuilder = require('./services/template-builder');
@@ -273,7 +275,17 @@ app.post('/webhook', webhookJson, (req, res) => {
             value.messages.forEach(rawMessage => {
               // Mirror the incoming message into the local web interface
               Promise.resolve(mirrorIncomingMessage(rawMessage, contactNames, senderPhoneNumberId))
-                .catch(err => console.error('addMessage error:', err));
+                .then((mirrored) => {
+                  if (config.botEnabled || !mirrored) return null;
+                  return runAutomationForInbound({
+                    phone: rawMessage.from,
+                    phoneNumberId: senderPhoneNumberId,
+                    contactName: contactNames[rawMessage.from],
+                    text: mirrored.text,
+                    messageType: mirrored.type,
+                  });
+                })
+                .catch(err => console.error('addMessage/automation error:', err));
 
               Promise.resolve(handleFlowResponse(rawMessage, contactNames))
                 .catch(err => console.error('flow response error:', err));
@@ -484,6 +496,58 @@ app.get('/api/reports/export', async (req, res) => {
     res.send('\uFEFF' + csv);
   } catch (err) {
     res.status(500).send(String(err.message || err));
+  }
+});
+
+// ----- Automation (conditional rules) -----
+
+app.get('/api/automation', async (req, res) => {
+  try {
+    const [{ rules, settings }, log] = await Promise.all([
+      AutomationStore.listRules(),
+      AutomationStore.listLog(40),
+    ]);
+    res.json({ ok: true, rules, settings, log, botEnabled: config.botEnabled });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: String(err.message || err) });
+  }
+});
+
+app.post('/api/automation/rules', apiJson, async (req, res) => {
+  try {
+    const rule = await AutomationStore.createRule(req.body || {});
+    res.json({ ok: true, rule });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: String(err.message || err) });
+  }
+});
+
+app.put('/api/automation/rules/:id', apiJson, async (req, res) => {
+  try {
+    const rule = await AutomationStore.updateRule(req.params.id, req.body || {});
+    if (!rule) return res.status(404).json({ ok: false, error: 'Regla no encontrada.' });
+    res.json({ ok: true, rule });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: String(err.message || err) });
+  }
+});
+
+app.delete('/api/automation/rules/:id', async (req, res) => {
+  try {
+    const ok = await AutomationStore.deleteRule(req.params.id);
+    if (!ok) return res.status(404).json({ ok: false, error: 'Regla no encontrada.' });
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: String(err.message || err) });
+  }
+});
+
+app.patch('/api/automation/settings', apiJson, async (req, res) => {
+  try {
+    const settings = await AutomationStore.setSettings(req.body || {});
+    res.json({ ok: true, settings });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: String(err.message || err) });
   }
 });
 
