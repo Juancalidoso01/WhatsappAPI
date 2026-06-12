@@ -454,6 +454,26 @@ app.get('/api/reports/summary', async (req, res) => {
   }
 });
 
+app.get('/api/reports/export', async (req, res) => {
+  try {
+    let templates = [];
+    if (config.accessToken && config.wabaId) {
+      try {
+        const result = await GraphApi.listTemplates(config.wabaId);
+        templates = (result && result.data) || [];
+      } catch (_) {}
+    }
+    const summary = await reports.buildSummary({ templates });
+    const csv = reports.summaryToCsv(summary);
+    const stamp = new Date(summary.generatedAt || Date.now()).toISOString().slice(0, 10);
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="informe-${stamp}.csv"`);
+    res.send('\uFEFF' + csv);
+  } catch (err) {
+    res.status(500).send(String(err.message || err));
+  }
+});
+
 // ----- WhatsApp Flows -----
 
 async function ensureFlowEndpointReady(options = {}) {
@@ -2456,6 +2476,72 @@ app.post('/api/send-media', parseSendMediaBody, async (req, res) => {
       kind: 'media',
       preview: label,
       source: 'send_media',
+    });
+    res.json({ ok: true, message: stored });
+  } catch (err) {
+    if (stored) {
+      await Store.updateMessageStatus(phone, stored.id, 'failed');
+      stored.status = 'failed';
+    }
+    res.status(200).json({ ok: false, message: stored, error: String(err.message || err) });
+  }
+});
+
+app.post('/api/send-location', apiJson, async (req, res) => {
+  const {
+    phone, latitude, longitude, name, address, replyToMessageId,
+  } = req.body || {};
+  if (!phone || latitude == null || longitude == null) {
+    return res.status(400).json({ error: 'Se requieren phone, latitude y longitude.' });
+  }
+  const lat = Number(latitude);
+  const lng = Number(longitude);
+  if (Number.isNaN(lat) || Number.isNaN(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+    return res.status(400).json({ error: 'Coordenadas inválidas.' });
+  }
+
+  const convo = await Store.getConversation(phone);
+  const phoneNumberId = (convo && convo.phoneNumberId) || config.phoneNumberId;
+  if (!phoneNumberId || !config.accessToken) {
+    return res.status(200).json({ ok: false, warning: 'Falta PHONE_NUMBER_ID o ACCESS_TOKEN.' });
+  }
+
+  const locName = name ? String(name).trim() : '';
+  const locAddr = address ? String(address).trim() : '';
+  const label = locName || locAddr || `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+  const replyTo = replyToMessageId && isWaMessageId(replyToMessageId)
+    ? { messageId: replyToMessageId }
+    : null;
+
+  let stored;
+  try {
+    stored = await Store.addMessage({
+      phone,
+      phoneNumberId,
+      direction: 'out',
+      text: label,
+      type: 'location',
+      status: 'pending',
+      location: { latitude: lat, longitude: lng, name: locName || null, address: locAddr || null },
+      replyTo,
+    });
+
+    const response = await GraphApi.messageWithLocation(phoneNumberId, phone, {
+      latitude: lat,
+      longitude: lng,
+      name: locName || undefined,
+      address: locAddr || undefined,
+      replyToMessageId: replyTo ? replyTo.messageId : undefined,
+    });
+
+    await finalizeOutbound(phone, stored, response);
+    await trackBillableSend({
+      phone,
+      messageId: stored.id,
+      localMessageId: stored.id,
+      kind: 'location',
+      preview: label,
+      source: 'send_location',
     });
     res.json({ ok: true, message: stored });
   } catch (err) {

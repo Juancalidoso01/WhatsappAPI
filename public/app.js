@@ -1,7 +1,9 @@
 "use strict";
 
-const POLL_MS = 6000;
-const POLL_HIDDEN_MS = 8000;
+const POLL_CHAT_MS = 3000;
+const POLL_CHAT_SSE_MS = 8000;
+const POLL_IDLE_MS = 12000;
+const POLL_HIDDEN_MS = 20000;
 const SOUND_ENABLED_KEY = "pp-notify-sound";
 const DAY_MS = 24 * 60 * 60 * 1000;
 const t = (key, vars) => (window.I18n ? I18n.t(key, vars) : key);
@@ -140,6 +142,8 @@ const state = {
   soundEnabled: true,
   replyTo: null,
   eventsBound: false,
+  sseConnected: false,
+  sseSource: null,
 };
 
 /* ---------- tiny helpers ---------- */
@@ -785,6 +789,7 @@ async function logoutDashboard() {
   await api("/api/auth/logout", { method: "POST" });
   showLoginGate();
   stopPolling();
+  stopRealtimeStream();
   stopBulkPolling();
 }
 
@@ -823,6 +828,7 @@ async function bootDashboard() {
   await loadConversations();
   await loadNotifications();
   startPolling();
+  startRealtimeStream();
   requestBrowserNotifications();
   updateSoundBtn();
   updateLogoutVisibility();
@@ -3423,6 +3429,47 @@ async function sendMedia() {
   await loadMessages(phone);
 }
 
+async function sendLocation() {
+  const phone = state.activePhone;
+  if (!phone) return;
+  if (!isMessagingWindowOpen()) {
+    toast(t("chats.windowClosedHint"), "error");
+    return;
+  }
+  const lat = Number(($("locLat") || {}).value);
+  const lng = Number(($("locLng") || {}).value);
+  if (Number.isNaN(lat) || Number.isNaN(lng)) {
+    toast(t("chats.locationInvalid"), "error");
+    return;
+  }
+  const res = await post("/api/send-location", {
+    phone,
+    latitude: lat,
+    longitude: lng,
+    name: ($("locName") || {}).value.trim(),
+    address: ($("locAddress") || {}).value.trim(),
+    replyToMessageId: state.replyTo?.id || null,
+  });
+  closeModals();
+  clearReplyTo();
+  if (res.ok) toast(t("toast.sent"), "ok");
+  else toast(t("toast.sendFailed", { error: res.error || res.warning || "error" }), "error");
+  ["locLat", "locLng", "locName", "locAddress"].forEach((id) => {
+    const el = $(id);
+    if (el) el.value = "";
+  });
+  await loadMessages(phone);
+}
+
+function openLocationModal() {
+  if (!state.activePhone) return;
+  if (!isMessagingWindowOpen()) {
+    toast(t("chats.windowClosedHint"), "error");
+    return;
+  }
+  showModal("modalLocation");
+}
+
 /* ---------- simulate ---------- */
 async function simulate() {
   const phone = $("simPhone").value.replace(/[^0-9]/g, "");
@@ -4281,14 +4328,14 @@ async function loadWorkspaceReports() {
   if (!res.ok || !box) return;
   const s = res.summary;
   const cards = [
-    [s.conversations.total, "Conversaciones"],
-    [s.conversations.active24h, "Activas 24h"],
-    [s.messages.inbound, "Msjs entrantes"],
-    [s.messages.outbound, "Msjs salientes"],
-    [s.campaigns.total, "Cargas masivas"],
-    [s.campaigns.delivered, "Entregados (cargas)"],
-    [s.templates.approved, "Plantillas aprobadas"],
-    [s.templates.pending, "Plantillas en revisión"],
+    [s.conversations.total, t("workspace.reports.conversations")],
+    [s.conversations.active24h, t("workspace.reports.active24h")],
+    [s.messages.inbound, t("workspace.reports.inbound")],
+    [s.messages.outbound, t("workspace.reports.outbound")],
+    [s.campaigns.total, t("workspace.reports.campaigns")],
+    [s.campaigns.delivered, t("workspace.reports.campaignDelivered")],
+    [s.templates.approved, t("workspace.reports.templatesApproved")],
+    [s.templates.pending, t("workspace.reports.templatesPending")],
   ];
   box.className = "ws-reports-grid";
   box.innerHTML = cards.map(([n, l]) =>
@@ -6730,11 +6777,8 @@ function switchScreen(name) {
   $("screenFlows").classList.toggle("hidden", name !== "flows");
   $("screenBilling").classList.toggle("hidden", name !== "billing");
 
-  if (prev === "chats" && name !== "chats") stopPolling();
-  if (name === "chats") {
-    loadConversations();
-    startPolling();
-  }
+  if (name === "chats") loadConversations();
+  if (!state.pollTimer) startPolling();
 
   const cache = state.screenCache;
   if (name === "templates") {
@@ -6781,9 +6825,13 @@ function switchScreen(name) {
   toggleNotifPanel(false);
 }
 
-/* ---------- polling ---------- */
+/* ---------- realtime (SSE + polling) ---------- */
 function pollIntervalMs() {
-  return document.hidden ? POLL_HIDDEN_MS : POLL_MS;
+  if (document.hidden) return POLL_HIDDEN_MS;
+  if (state.currentScreen === "chats") {
+    return state.sseConnected ? POLL_CHAT_SSE_MS : POLL_CHAT_MS;
+  }
+  return POLL_IDLE_MS;
 }
 
 function startPolling() {
@@ -6792,7 +6840,7 @@ function startPolling() {
     try {
       await loadConversations();
       await loadNotifications();
-      if (state.activePhone) {
+      if (state.activePhone && state.currentScreen === "chats") {
         await Promise.all([
           loadMessages(state.activePhone),
           loadConversationDetail(state.activePhone),
@@ -6803,9 +6851,62 @@ function startPolling() {
   };
   state.pollTimer = setTimeout(tick, pollIntervalMs());
 }
+
 function stopPolling() {
   if (state.pollTimer) clearTimeout(state.pollTimer);
   state.pollTimer = null;
+}
+
+function handleStreamPayload(payload) {
+  if (!payload || !payload.phone) return;
+  const phone = String(payload.phone);
+  const msg = payload.message;
+  if (state.currentScreen === "chats") {
+    loadConversations().catch(() => {});
+    if (phone === state.activePhone) {
+      loadMessages(phone).catch(() => {});
+      loadConversationDetail(phone).catch(() => {});
+    }
+  }
+  if (msg && msg.direction === "in") {
+    loadNotifications().catch(() => {});
+  }
+}
+
+function startRealtimeStream() {
+  stopRealtimeStream();
+  if (typeof EventSource === "undefined") return;
+  try {
+    const es = new EventSource("/api/stream");
+    state.sseSource = es;
+    es.onopen = () => { state.sseConnected = true; };
+    es.onmessage = (ev) => {
+      if (!ev.data) return;
+      try {
+        handleStreamPayload(JSON.parse(ev.data));
+      } catch (_) { /* ignore ping / comments */ }
+    };
+    es.onerror = () => {
+      state.sseConnected = false;
+      es.close();
+      state.sseSource = null;
+      window.setTimeout(() => {
+        const gate = $("loginGate");
+        if (gate && !gate.classList.contains("hidden")) return;
+        startRealtimeStream();
+      }, 5000);
+    };
+  } catch (_) {
+    state.sseConnected = false;
+  }
+}
+
+function stopRealtimeStream() {
+  state.sseConnected = false;
+  if (state.sseSource) {
+    state.sseSource.close();
+    state.sseSource = null;
+  }
 }
 
 /* ---------- events ---------- */
@@ -6867,6 +6968,10 @@ function bindEvents() {
   $("ncFields")?.addEventListener("input", () => updateNcPreview());
   $("ncSend").addEventListener("click", sendNewChat);
   $("attachBtn").addEventListener("click", () => showModal("modalMedia"));
+  const locationBtn = $("locationBtn");
+  if (locationBtn) locationBtn.addEventListener("click", openLocationModal);
+  const locSend = $("locSend");
+  if (locSend) locSend.addEventListener("click", sendLocation);
   $("detailMediaBtn").addEventListener("click", () => showModal("modalMedia"));
   $("mdFile").addEventListener("change", updateMediaPreview);
   $("mdSend").addEventListener("click", sendMedia);

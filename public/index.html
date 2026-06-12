@@ -186,6 +186,9 @@
             <button type="button" id="attachBtn" class="icon-btn ghost" data-i18n-title="chats.attach" data-i18n-aria="chats.attach">
               <svg viewBox="0 0 24 24"><path d="M21 12.5l-8.5 8.5a5 5 0 0 1-7-7l9-9a3.5 3.5 0 0 1 5 5l-9 9a2 2 0 0 1-3-3l8-8"/></svg>
             </button>
+            <button type="button" id="locationBtn" class="icon-btn ghost" data-i18n-title="chats.sendLocation" data-i18n-aria="chats.sendLocation">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a7 7 0 0 0-7 7c0 5.25 7 13 7 13s7-7.75 7-13a7 7 0 0 0-7-7zm0 9.5a2.5 2.5 0 1 1 0-5 2.5 2.5 0 0 1 0 5z"/></svg>
+            </button>
             <input id="messageInput" type="text" data-i18n-placeholder="chats.writePlaceholder" placeholder="Escribe un mensaje…" autocomplete="off" />
             <button type="submit" class="send-btn" data-i18n-title="chats.send" data-i18n-aria="chats.send">
               <svg viewBox="0 0 24 24"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>
@@ -509,8 +512,9 @@
           <p class="muted" data-i18n="workspace.reportsIntro">Resumen operativo básico. Luego ampliaremos gráficos y exportación.</p>
           <div id="wsReportsGrid" class="ws-reports-grid muted">Cargando informes…</div>
           <div class="ws-actions">
-            <button type="button" id="wsRefreshReports" class="btn-ghost sm">Actualizar</button>
-            <button type="button" class="btn-ghost sm" data-screen-jump="billing">Ver facturación</button>
+            <button type="button" id="wsRefreshReports" class="btn-ghost sm" data-i18n="workspace.reportsRefresh">Actualizar</button>
+            <a id="wsExportReports" class="btn-ghost sm" href="/api/reports/export" download data-i18n="workspace.reportsExport">Exportar CSV</a>
+            <button type="button" class="btn-ghost sm" data-screen-jump="billing" data-i18n="workspace.viewBilling">Ver facturación</button>
           </div>
         </section>
 
@@ -949,6 +953,31 @@
       <div class="modal-actions">
         <button class="btn-ghost" data-close data-i18n="common.cancel">Cancelar</button>
         <button id="ncSend" class="btn-primary" data-i18n="modals.newChat.send">Enviar</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="modalLocation" class="modal hidden">
+    <div class="modal-card">
+      <h3 data-i18n="modals.location.title">Enviar ubicación</h3>
+      <p class="muted sm" data-i18n="modals.location.hint">Solo dentro de la ventana de 24 h. El cliente verá un pin en el mapa de WhatsApp.</p>
+      <div class="row">
+        <label><span data-i18n="modals.location.lat">Latitud</span>
+          <input id="locLat" type="text" inputmode="decimal" placeholder="8.9824" required />
+        </label>
+        <label><span data-i18n="modals.location.lng">Longitud</span>
+          <input id="locLng" type="text" inputmode="decimal" placeholder="-79.5199" required />
+        </label>
+      </div>
+      <label><span data-i18n="modals.location.name">Nombre del lugar (opcional)</span>
+        <input id="locName" type="text" data-i18n-placeholder="modals.location.namePlaceholder" placeholder="Sucursal Punto Pago" />
+      </label>
+      <label><span data-i18n="modals.location.address">Dirección (opcional)</span>
+        <input id="locAddress" type="text" data-i18n-placeholder="modals.location.addressPlaceholder" placeholder="Calle 50, Ciudad de Panamá" />
+      </label>
+      <div class="modal-actions">
+        <button class="btn-ghost" data-close data-i18n="common.cancel">Cancelar</button>
+        <button type="button" id="locSend" class="btn-primary" data-i18n="common.send">Enviar</button>
       </div>
     </div>
   </div>

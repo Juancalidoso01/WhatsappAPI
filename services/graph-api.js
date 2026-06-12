@@ -113,6 +113,28 @@ module.exports = class GraphApi {
   }
 
   // --- Media (image / document / audio / video) by link or uploaded media id ---
+  static async messageWithLocation(senderPhoneNumberId, recipientPhoneNumber, {
+    latitude, longitude, name, address, replyToMessageId,
+  }) {
+    const location = {
+      latitude: Number(latitude),
+      longitude: Number(longitude),
+    };
+    if (name) location.name = String(name).slice(0, 256);
+    if (address) location.address = String(address).slice(0, 256);
+
+    const requestBody = this.#withReplyContext({
+      messaging_product: "whatsapp",
+      recipient_type: "individual",
+      to: recipientPhoneNumber,
+      type: "location",
+      location,
+    }, replyToMessageId);
+
+    const api = getApi();
+    return api.call("POST", [`${senderPhoneNumberId}`, "messages"], requestBody);
+  }
+
   static async messageWithMedia(messageId, senderPhoneNumberId, recipientPhoneNumber, { mediaType, link, mediaId, caption, filename, replyToMessageId }) {
     const type = ["image", "document", "audio", "video"].includes(mediaType) ? mediaType : "image";
     const media = mediaId ? { id: mediaId } : { link };

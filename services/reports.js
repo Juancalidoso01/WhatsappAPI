@@ -68,4 +68,27 @@ async function buildSummary({ templates = [] } = {}) {
   };
 }
 
-module.exports = { buildSummary };
+function summaryToCsv(summary) {
+  const s = summary || {};
+  const rows = [
+    ["metric", "value"],
+    ["generated_at", s.generatedAt ? new Date(s.generatedAt).toISOString() : ""],
+    ["conversations_total", s.conversations?.total ?? 0],
+    ["conversations_active_24h", s.conversations?.active24h ?? 0],
+    ["messages_inbound", s.messages?.inbound ?? 0],
+    ["messages_outbound", s.messages?.outbound ?? 0],
+    ["messages_total", s.messages?.total ?? 0],
+    ["campaigns_total", s.campaigns?.total ?? 0],
+    ["campaigns_running", s.campaigns?.running ?? 0],
+    ["campaigns_completed", s.campaigns?.completed ?? 0],
+    ["campaigns_sent", s.campaigns?.sent ?? 0],
+    ["campaigns_delivered", s.campaigns?.delivered ?? 0],
+    ["campaigns_failed", s.campaigns?.failed ?? 0],
+    ["templates_total", s.templates?.total ?? 0],
+    ["templates_approved", s.templates?.approved ?? 0],
+    ["templates_pending", s.templates?.pending ?? 0],
+  ];
+  return rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
+}
+
+module.exports = { buildSummary, summaryToCsv };

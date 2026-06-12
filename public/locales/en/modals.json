@@ -9,6 +9,16 @@
     "template": "Template",
     "send": "Send"
   },
+  "location": {
+    "title": "Send location",
+    "hint": "Only within the 24 h window. The customer will see a map pin in WhatsApp.",
+    "lat": "Latitude",
+    "lng": "Longitude",
+    "name": "Place name (optional)",
+    "namePlaceholder": "Punto Pago branch",
+    "address": "Address (optional)",
+    "addressPlaceholder": "50th Street, Panama City"
+  },
   "media": {
     "title": "Send file",
     "hint": "Attach an image, document, audio, or video from your device.",

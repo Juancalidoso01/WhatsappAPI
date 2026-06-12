@@ -46,7 +46,19 @@
   "langEs": "Español",
   "langEn": "English",
   "langRu": "Русский",
-  "reportsIntro": "Базовая операционная сводка. Графики и экспорт позже.",
+  "reportsIntro": "Операционная сводка. Экспорт CSV или раздел биллинга для деталей.",
   "reportsLoading": "Загрузка отчётов…",
-  "viewBilling": "Смотреть биллинг"
+  "reportsRefresh": "Обновить",
+  "reportsExport": "Экспорт CSV",
+  "viewBilling": "Смотреть биллинг",
+  "reports": {
+    "conversations": "Диалоги",
+    "active24h": "Активны 24ч",
+    "inbound": "Входящие",
+    "outbound": "Исходящие",
+    "campaigns": "Массовые рассылки",
+    "campaignDelivered": "Доставлено (рассылки)",
+    "templatesApproved": "Одобренные шаблоны",
+    "templatesPending": "На проверке"
+  }
 }

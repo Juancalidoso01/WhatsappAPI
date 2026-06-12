@@ -9,6 +9,8 @@
   "back": "Back to conversations",
   "details": "Details",
   "attach": "Attach image or file",
+  "sendLocation": "Send location",
+  "locationInvalid": "Enter valid latitude and longitude.",
   "writePlaceholder": "Write a message…",
   "send": "Send",
   "sendTemplate": "Send template",

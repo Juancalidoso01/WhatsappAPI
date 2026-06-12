@@ -46,7 +46,19 @@
   "langEs": "Español",
   "langEn": "English",
   "langRu": "Русский",
-  "reportsIntro": "Resumen operativo básico. Luego ampliaremos gráficos y exportación.",
+  "reportsIntro": "Resumen operativo. Exporta CSV o abre facturación para más detalle.",
   "reportsLoading": "Cargando informes…",
-  "viewBilling": "Ver facturación"
+  "reportsRefresh": "Actualizar",
+  "reportsExport": "Exportar CSV",
+  "viewBilling": "Ver facturación",
+  "reports": {
+    "conversations": "Conversaciones",
+    "active24h": "Activas 24h",
+    "inbound": "Msjs entrantes",
+    "outbound": "Msjs salientes",
+    "campaigns": "Cargas masivas",
+    "campaignDelivered": "Entregados (cargas)",
+    "templatesApproved": "Plantillas aprobadas",
+    "templatesPending": "Plantillas en revisión"
+  }
 }

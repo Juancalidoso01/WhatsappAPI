@@ -9,6 +9,8 @@
   "back": "Volver a conversaciones",
   "details": "Detalles",
   "attach": "Adjuntar imagen o archivo",
+  "sendLocation": "Enviar ubicación",
+  "locationInvalid": "Indica latitud y longitud válidas.",
   "writePlaceholder": "Escribe un mensaje…",
   "send": "Enviar",
   "sendTemplate": "Enviar plantilla",

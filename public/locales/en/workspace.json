@@ -46,7 +46,19 @@
   "langEs": "Español",
   "langEn": "English",
   "langRu": "Русский",
-  "reportsIntro": "Basic operational summary. Charts and export coming later.",
+  "reportsIntro": "Operational summary. Export CSV or open billing for more detail.",
   "reportsLoading": "Loading reports…",
-  "viewBilling": "View billing"
+  "reportsRefresh": "Refresh",
+  "reportsExport": "Export CSV",
+  "viewBilling": "View billing",
+  "reports": {
+    "conversations": "Conversations",
+    "active24h": "Active 24h",
+    "inbound": "Inbound msgs",
+    "outbound": "Outbound msgs",
+    "campaigns": "Bulk campaigns",
+    "campaignDelivered": "Delivered (bulk)",
+    "templatesApproved": "Approved templates",
+    "templatesPending": "Templates in review"
+  }
 }

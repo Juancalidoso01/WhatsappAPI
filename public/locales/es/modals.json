@@ -9,6 +9,16 @@
     "template": "Plantilla",
     "send": "Enviar"
   },
+  "location": {
+    "title": "Enviar ubicación",
+    "hint": "Solo dentro de la ventana de 24 h. El cliente verá un pin en el mapa de WhatsApp.",
+    "lat": "Latitud",
+    "lng": "Longitud",
+    "name": "Nombre del lugar (opcional)",
+    "namePlaceholder": "Sucursal Punto Pago",
+    "address": "Dirección (opcional)",
+    "addressPlaceholder": "Calle 50, Ciudad de Panamá"
+  },
   "media": {
     "title": "Enviar archivo",
     "hint": "Adjunta una imagen, documento, audio o video desde tu equipo.",
