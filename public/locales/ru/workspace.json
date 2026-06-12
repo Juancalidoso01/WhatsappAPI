@@ -74,6 +74,8 @@
   "langRu": "Русский",
   "reportsIntro": "Операционная сводка. Экспорт CSV или раздел биллинга для деталей.",
   "reportsLoading": "Загрузка отчётов…",
+  "reportsLoadFailed": "Не удалось загрузить отчёты.",
+  "loadFailed": "Не удалось загрузить рабочее пространство.",
   "reportsRefresh": "Обновить",
   "reportsExport": "Экспорт CSV",
   "viewBilling": "Смотреть биллинг",
@@ -84,8 +86,11 @@
     "outbound": "Исходящие",
     "campaigns": "Массовые рассылки",
     "campaignDelivered": "Доставлено (рассылки)",
+    "campaignsRunning": "Рассылки в процессе",
+    "campaignsFailed": "Ошибки (рассылки)",
     "templatesApproved": "Одобренные шаблоны",
     "templatesPending": "На проверке",
-    "chartTitle": "Активность сообщений"
+    "chartTitle": "Активность сообщений",
+    "generatedAt": "Сформировано {when}"
   }
 }

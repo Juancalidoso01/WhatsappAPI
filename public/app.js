@@ -99,6 +99,7 @@ const state = {
   bulkEventVariables: [],
   workspace: null,
   workspaceTab: "profile",
+  workspaceReportsSummary: null,
   flows: [],
   flowCapability: null,
   activeFlowId: null,
@@ -908,6 +909,9 @@ async function onLocaleChange() {
     if (state.activeCampaignId) refreshCampaignDetail();
   }
   if (state.workspace) renderSystemStatus(state.workspace);
+  if (state.workspaceReportsSummary && state.currentScreen === "workspace" && state.workspaceTab === "reports") {
+    renderWorkspaceReports(state.workspaceReportsSummary);
+  }
   if (state.currentScreen === "flows") {
     if (window.I18n) I18n.applyDom($("screenFlows"));
     loadFlowCapability();
@@ -4448,11 +4452,16 @@ function setWorkspaceTab(tab) {
     language: t("workspace.pageTitles.language"),
   };
   if ($("wsPageTitle")) $("wsPageTitle").textContent = titles[tab] || t("workspace.title");
+  if (tab === "reports") loadWorkspaceReports();
+  if (tab === "workspace") loadWorkspace();
 }
 
 async function loadWorkspace() {
   const res = await api("/api/workspace");
-  if (!res.ok) return;
+  if (!res.ok) {
+    toast(res.error || t("workspace.loadFailed"), "error");
+    return;
+  }
   state.workspace = res;
   if (res.metaPlatform) state.metaPlatformStatus = res.metaPlatform;
   fillWorkspaceForms(res);
@@ -4603,17 +4612,32 @@ async function removeWorkspacePhoto() {
 
 async function loadWorkspaceReports() {
   const box = $("wsReportsGrid");
-  if (box) box.textContent = t("workspace.reportsLoading");
+  if (box) {
+    box.className = "ws-reports-grid muted";
+    box.textContent = t("workspace.reportsLoading");
+  }
   const res = await api("/api/reports/summary");
-  if (!res.ok || !box) return;
-  const s = res.summary;
+  if (!res.ok || !res.summary) {
+    if (box) box.textContent = t("workspace.reportsLoadFailed");
+    toast(res.error || t("workspace.reportsLoadFailed"), "error");
+    return;
+  }
+  state.workspaceReportsSummary = res.summary;
+  renderWorkspaceReports(res.summary);
+}
+
+function renderWorkspaceReports(s) {
+  const box = $("wsReportsGrid");
+  if (!box || !s) return;
   const cards = [
     [s.conversations.total, t("workspace.reports.conversations")],
     [s.conversations.active24h, t("workspace.reports.active24h")],
     [s.messages.inbound, t("workspace.reports.inbound")],
     [s.messages.outbound, t("workspace.reports.outbound")],
     [s.campaigns.total, t("workspace.reports.campaigns")],
+    [s.campaigns.running, t("workspace.reports.campaignsRunning")],
     [s.campaigns.delivered, t("workspace.reports.campaignDelivered")],
+    [s.campaigns.failed, t("workspace.reports.campaignsFailed")],
     [s.templates.approved, t("workspace.reports.templatesApproved")],
     [s.templates.pending, t("workspace.reports.templatesPending")],
   ];
@@ -4624,7 +4648,8 @@ async function loadWorkspaceReports() {
   const chart = $("wsReportsChart");
   if (chart) {
     chart.classList.remove("hidden");
-    chart.innerHTML = `<h3 class="ws-chart-title">${escapeHtml(t("workspace.reports.chartTitle"))}</h3>${renderReportsChart(s)}`;
+    const when = s.generatedAt ? localeDateTime(s.generatedAt) : "—";
+    chart.innerHTML = `<p class="muted sm ws-reports-generated">${escapeHtml(t("workspace.reports.generatedAt", { when }))}</p><h3 class="ws-chart-title">${escapeHtml(t("workspace.reports.chartTitle"))}</h3>${renderReportsChart(s)}`;
   }
 }
 
@@ -7122,10 +7147,19 @@ function switchScreen(name) {
     }
   }
   if (name === "workspace") {
-    if (!cache.workspace) {
-      cache.workspace = true;
-      initWorkspaceScreen();
-    }
+    const bootWorkspace = () => {
+      if (!cache.workspace) {
+        cache.workspace = true;
+        initWorkspaceScreen();
+      } else {
+        Promise.all([
+          loadWorkspace(),
+          state.workspaceTab === "reports" ? loadWorkspaceReports() : Promise.resolve(),
+        ]);
+      }
+    };
+    if (window.I18n) I18n.ensureScreen("workspace").then(bootWorkspace);
+    else bootWorkspace();
   }
   if (name === "flows") {
     const bootFlows = () => {

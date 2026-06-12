@@ -10,18 +10,18 @@ async function buildSummary({ templates = [] } = {}) {
   const since24h = now - DAY_MS;
 
   const conversations = await Store.listConversations();
-  let messagesIn = 0;
-  let messagesOut = 0;
-  let active24h = 0;
-
-  for (const c of conversations) {
-    if ((c.lastActivity || 0) >= since24h) active24h++;
+  const counts = await Promise.all(conversations.map(async (c) => {
     const msgs = await Store.getMessages(c.phone);
+    let inbound = 0;
+    let outbound = 0;
     msgs.forEach((m) => {
-      if (m.direction === "in") messagesIn++;
-      else messagesOut++;
+      if (m.direction === "in") inbound++;
+      else outbound++;
     });
-  }
+    return { inbound, outbound };
+  }));
+  const messagesIn = counts.reduce((sum, c) => sum + c.inbound, 0);
+  const messagesOut = counts.reduce((sum, c) => sum + c.outbound, 0);
 
   const campaigns = await CampaignStore.listCampaigns();
   let campaignSent = 0;

@@ -74,6 +74,8 @@
   "langRu": "Русский",
   "reportsIntro": "Resumen operativo. Exporta CSV o abre facturación para más detalle.",
   "reportsLoading": "Cargando informes…",
+  "reportsLoadFailed": "No se pudieron cargar los informes.",
+  "loadFailed": "No se pudo cargar el espacio de trabajo.",
   "reportsRefresh": "Actualizar",
   "reportsExport": "Exportar CSV",
   "viewBilling": "Ver facturación",
@@ -84,8 +86,11 @@
     "outbound": "Msjs salientes",
     "campaigns": "Cargas masivas",
     "campaignDelivered": "Entregados (cargas)",
+    "campaignsRunning": "Cargas en curso",
+    "campaignsFailed": "Fallidos (cargas)",
     "templatesApproved": "Plantillas aprobadas",
     "templatesPending": "Plantillas en revisión",
-    "chartTitle": "Actividad de mensajes"
+    "chartTitle": "Actividad de mensajes",
+    "generatedAt": "Generado {when}"
   }
 }

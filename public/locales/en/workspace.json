@@ -74,6 +74,8 @@
   "langRu": "Русский",
   "reportsIntro": "Operational summary. Export CSV or open billing for more detail.",
   "reportsLoading": "Loading reports…",
+  "reportsLoadFailed": "Could not load reports.",
+  "loadFailed": "Could not load workspace.",
   "reportsRefresh": "Refresh",
   "reportsExport": "Export CSV",
   "viewBilling": "View billing",
@@ -84,8 +86,11 @@
     "outbound": "Outbound msgs",
     "campaigns": "Bulk campaigns",
     "campaignDelivered": "Delivered (bulk)",
+    "campaignsRunning": "Running campaigns",
+    "campaignsFailed": "Failed (bulk)",
     "templatesApproved": "Approved templates",
     "templatesPending": "Templates in review",
-    "chartTitle": "Message activity"
+    "chartTitle": "Message activity",
+    "generatedAt": "Generated {when}"
   }
 }
