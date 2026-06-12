@@ -177,6 +177,27 @@ function groupByCountryCategory(rows) {
   return map;
 }
 
+function summarizeLedgerAsMetaRows(ledgerRows) {
+  const map = {};
+  (ledgerRows || []).forEach((r) => {
+    const cat = String(r.category || "UTILITY").toUpperCase();
+    const cc = String(r.country || "OTHER").toUpperCase();
+    const key = `${cc}|${cat}`;
+    if (!map[key]) {
+      map[key] = {
+        country: cc,
+        category: cat,
+        volume: 0,
+        cost: 0,
+        fromLedger: true,
+      };
+    }
+    map[key].volume += 1;
+    map[key].cost += r.estimatedCost || 0;
+  });
+  return Object.values(map).sort((a, b) => b.cost - a.cost || b.volume - a.volume);
+}
+
 function enrichMetaRows(metaRows, ledgerRows) {
   const grouped = groupByCountryCategory(ledgerRows);
   return (metaRows || []).map((row) => {
@@ -196,8 +217,8 @@ function enrichMetaRows(metaRows, ledgerRows) {
       ...row,
       category: cat,
       country: cc,
-      source: "meta_pricing_analytics",
-      sourceLabel: "WhatsApp · pricing_analytics",
+      source: row.fromLedger ? "portal_ledger" : "meta_pricing_analytics",
+      sourceLabel: row.fromLedger ? "Punto Pago (estimado)" : "WhatsApp · pricing_analytics",
       portal: {
         matchCount: match.count,
         estimatedCost: match.estimatedCost,
@@ -251,6 +272,7 @@ module.exports = {
   record,
   list,
   summarize,
+  summarizeLedgerAsMetaRows,
   enrichMetaRows,
   groupByCountryCategory,
   classifyFlowBilling,

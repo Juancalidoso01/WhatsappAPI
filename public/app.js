@@ -3754,8 +3754,10 @@ function bindBillMetaRowTips(rows) {
 }
 
 async function loadBilling() {
-  const days = $("billRange").value;
+  const rangeEl = $("billRange");
   const tbody = $("billRows");
+  if (!rangeEl || !tbody) return;
+  const days = rangeEl.value;
   if ($("billSyncHint")) $("billSyncHint").textContent = t("billing.syncing");
   tbody.innerHTML = `<tr><td colspan="4" class="muted center">${escapeHtml(t("billing.syncing"))}</td></tr>`;
   let res;
@@ -3810,15 +3812,26 @@ async function loadBilling() {
 
   const alert = $("billTplAlert");
   const ts = res.templateSummary || {};
+  const alertParts = [];
+  if (res.metaError && !res.metaAvailable) {
+    alertParts.push(escapeHtml(t("billing.metaUnavailable", { error: res.metaError })));
+  } else if (res.dataSource === "portal" && !res.metaAvailable) {
+    alertParts.push(escapeHtml(t("billing.portalFallback")));
+  }
   if (ts.pendingReclass || ts.reclassified) {
-    alert.classList.remove("hidden");
-    const parts = [];
-    if (ts.pendingReclass) parts.push(`${ts.pendingReclass} plantilla(s) con reclasificación pendiente`);
-    if (ts.reclassified) parts.push(`${ts.reclassified} con categoría distinta a la solicitada`);
-    alert.innerHTML = `<strong>Plantillas:</strong> ${parts.join(" · ")}. Los costos Meta reflejan la categoría facturada; revisa Plantillas para detalle.`;
-  } else {
-    alert.classList.add("hidden");
-    alert.innerHTML = "";
+    const tplParts = [];
+    if (ts.pendingReclass) tplParts.push(t("billing.tplPendingReclass", { n: ts.pendingReclass }));
+    if (ts.reclassified) tplParts.push(t("billing.tplReclassified", { n: ts.reclassified }));
+    alertParts.push(`<strong>${escapeHtml(t("billing.tplAlertPrefix"))}</strong> ${tplParts.join(" · ")}. ${escapeHtml(t("billing.tplAlertSuffix"))}`);
+  }
+  if (alert) {
+    if (alertParts.length) {
+      alert.classList.remove("hidden");
+      alert.innerHTML = alertParts.join("<br>");
+    } else {
+      alert.classList.add("hidden");
+      alert.innerHTML = "";
+    }
   }
 
   state.billingMetaRows = res.rows || [];
@@ -3842,7 +3855,11 @@ async function loadBilling() {
       .join("");
     bindBillMetaRowTips(state.billingMetaRows);
   }
-  note.innerHTML = t("billing.metaNote");
+  if (note) {
+    note.innerHTML = res.dataSource === "portal" && !res.metaAvailable
+      ? t("billing.portalNote")
+      : t("billing.metaNote");
+  }
   state.billingLastSync = Date.now();
   state.billingRangeDirty = false;
   updateBillSyncHint();
@@ -3910,6 +3927,7 @@ function fmtUsd(n) { return "$" + (Number(n) || 0).toLocaleString("en-US", { min
 
 function initPriceCountry() {
   const sel = $("priceCountry");
+  if (!sel) return;
   if (sel.options.length) return;
   sel.innerHTML = Object.entries(RATE_CARD)
     .map(([code, v]) => `<option value="${code}">${escapeHtml(v.name)}</option>`)
@@ -3920,14 +3938,17 @@ function initPriceCountry() {
 
 function renderPrices() {
   initPriceCountry();
-  const r = RATE_CARD[$("priceCountry").value] || RATE_CARD.OTHER;
+  const priceRows = $("priceRows");
+  const countrySel = $("priceCountry");
+  if (!priceRows || !countrySel) return;
+  const r = RATE_CARD[countrySel.value] || RATE_CARD.OTHER;
   const cats = [
     { key: "marketing", label: "Marketing", rate: r.marketing },
     { key: "utility", label: "Utility (utilidad)", rate: r.utility },
     { key: "auth", label: "Authentication", rate: r.auth },
     { key: "service", label: "Service (servicio)", rate: 0 },
   ];
-  $("priceRows").innerHTML = cats
+  priceRows.innerHTML = cats
     .map((c) => `<tr>
       <td><span class="cat-tag ${c.key === "auth" ? "AUTHENTICATION" : c.key.toUpperCase()}">${escapeHtml(c.label)}</span></td>
       <td class="num">${c.key === "service" ? '<span class="price-free">Gratis</span>' : fmtUsd(c.rate)}</td>
@@ -3936,7 +3957,7 @@ function renderPrices() {
     </tr>`)
     .join("");
 
-  $("priceRows").querySelectorAll(".qty-input").forEach((inp) =>
+  priceRows.querySelectorAll(".qty-input").forEach((inp) =>
     inp.addEventListener("input", () => {
       priceQty[inp.dataset.cat] = Math.max(0, parseInt(inp.value, 10) || 0);
       recomputePrices();
@@ -3946,16 +3967,20 @@ function renderPrices() {
 }
 
 function recomputePrices() {
-  const r = RATE_CARD[$("priceCountry").value] || RATE_CARD.OTHER;
+  const countrySel = $("priceCountry");
+  const priceRows = $("priceRows");
+  const totalEl = $("priceTotal");
+  if (!countrySel || !priceRows || !totalEl) return;
+  const r = RATE_CARD[countrySel.value] || RATE_CARD.OTHER;
   const rates = { marketing: r.marketing, utility: r.utility, auth: r.auth, service: 0 };
   let total = 0;
   Object.keys(rates).forEach((k) => {
     const sub = (priceQty[k] || 0) * rates[k];
     total += sub;
-    const cell = $("priceRows").querySelector(`[data-sub="${k}"]`);
+    const cell = priceRows.querySelector(`[data-sub="${k}"]`);
     if (cell) cell.textContent = fmtUsd(sub);
   });
-  $("priceTotal").textContent = fmtUsd(total);
+  totalEl.textContent = fmtUsd(total);
 }
 
 /* ---------- bulk campaigns ---------- */
@@ -6951,11 +6976,15 @@ function switchScreen(name) {
     }
   }
   if (name === "billing") {
-    if (!cache.billing) {
-      cache.billing = true;
-      renderPrices();
-    }
-    loadBilling();
+    const bootBilling = () => {
+      if (!cache.billing) {
+        cache.billing = true;
+        renderPrices();
+      }
+      loadBilling();
+    };
+    if (window.I18n) I18n.ensureScreen("billing").then(bootBilling);
+    else bootBilling();
   }
   if (name !== "bulk") stopBulkPolling();
   toggleWorkspaceFlyout(false);

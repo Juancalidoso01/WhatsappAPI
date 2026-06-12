@@ -2285,16 +2285,19 @@ app.get('/api/billing', async (req, res) => {
   const days = Math.min(Math.max(parseInt(req.query.days, 10) || 30, 1), 90);
   const end = Math.floor(Date.now() / 1000);
   const start = end - days * 86400;
+  const since = start * 1000;
+
+  let metaRows = [];
+  let metaError = null;
+  let metaAvailable = false;
+  let totalCost = 0;
+  let totalVolume = 0;
+  const byCategory = {};
 
   try {
     const data = await GraphApi.pricingAnalytics(config.wabaId, config.accessToken, { start, end });
-    const points = [];
-    (data || []).forEach((d) => (d.data_points || []).forEach((p) => points.push(p)));
-
+    const points = GraphApi.flattenPricingPoints(data);
     const map = {};
-    let totalCost = 0;
-    let totalVolume = 0;
-    const byCategory = {};
     points.forEach((p) => {
       const key = `${p.country}|${p.pricing_category}`;
       if (!map[key]) map[key] = { country: p.country, category: p.pricing_category, volume: 0, cost: 0 };
@@ -2304,57 +2307,70 @@ app.get('/api/billing', async (req, res) => {
       totalVolume += p.volume || 0;
       byCategory[p.pricing_category] = (byCategory[p.pricing_category] || 0) + (p.cost || 0);
     });
-
-    const metaRows = Object.values(map).sort((a, b) => b.cost - a.cost || b.volume - a.volume);
-
-    let templateSummary = { total: 0, pendingReclass: 0, reclassified: 0, withBillingImpact: 0 };
-    try {
-      const tplResult = await GraphApi.listTemplates(config.wabaId);
-      const rawTpl = (tplResult && tplResult.data) || [];
-      const enriched = await enrichTemplatesList(rawTpl);
-      templateSummary = templateCategory.summarizeTemplates(enriched);
-    } catch (tplErr) {
-      console.error('billing template summary error:', tplErr.message);
-    }
-
-    let flowStats = { sends: 0, responses: 0, endpointCalls: 0 };
-    try {
-      flowStats = await FlowStore.getStats();
-    } catch (flowErr) {
-      console.error('billing flow stats error:', flowErr.message);
-    }
-
-    const since = (end - days * 86400) * 1000;
-    let ledgerRows = [];
-    let ledgerSummary = { count: 0, estimatedCost: 0, freeCount: 0, billableCount: 0, byCategory: {}, byKind: {}, flow: {} };
-    try {
-      ledgerRows = await BillingLedger.list({ since, limit: 200 });
-      ledgerSummary = BillingLedger.summarize(ledgerRows);
-    } catch (ledgerErr) {
-      console.error('billing ledger error:', ledgerErr.message);
-    }
-
-    const rows = BillingLedger.enrichMetaRows(metaRows, ledgerRows);
-
-    res.json({
-      ok: true,
-      days,
-      start,
-      end,
-      rows,
-      totals: { cost: totalCost, volume: totalVolume, byCategory },
-      templateSummary,
-      flowStats,
-      ledger: { rows: ledgerRows, summary: ledgerSummary },
-      flowBillingNote:
-        'Meta no cobra por el Flow en sí: el cargo es por el mensaje que lo abre (plantilla o interactivo). '
-        + 'Dentro de la ventana de 24 h → servicio (gratis). Fuera de 24 h con plantilla → categoría de la plantilla. '
-        + 'Completar el formulario Flow no genera cargo adicional.',
-    });
+    metaRows = Object.values(map).sort((a, b) => b.cost - a.cost || b.volume - a.volume);
+    metaAvailable = metaRows.length > 0;
   } catch (err) {
-    console.error('billing error:', err.message);
-    res.json({ ok: false, error: String(err.message || err), rows: [], totals: { cost: 0, volume: 0, byCategory: {} }, templateSummary: { total: 0 } });
+    metaError = String(err.message || err);
+    console.error('billing meta error:', metaError);
   }
+
+  let templateSummary = { total: 0, pendingReclass: 0, reclassified: 0, withBillingImpact: 0 };
+  try {
+    const tplResult = await GraphApi.listTemplates(config.wabaId);
+    const rawTpl = (tplResult && tplResult.data) || [];
+    const enriched = await enrichTemplatesList(rawTpl);
+    templateSummary = templateCategory.summarizeTemplates(enriched);
+  } catch (tplErr) {
+    console.error('billing template summary error:', tplErr.message);
+  }
+
+  let flowStats = { sends: 0, responses: 0, endpointCalls: 0 };
+  try {
+    flowStats = await FlowStore.getStats();
+  } catch (flowErr) {
+    console.error('billing flow stats error:', flowErr.message);
+  }
+
+  let ledgerRows = [];
+  let ledgerSummary = { count: 0, estimatedCost: 0, freeCount: 0, billableCount: 0, byCategory: {}, byKind: {}, flow: {} };
+  try {
+    ledgerRows = await BillingLedger.list({ since, limit: 200 });
+    ledgerSummary = BillingLedger.summarize(ledgerRows);
+  } catch (ledgerErr) {
+    console.error('billing ledger error:', ledgerErr.message);
+  }
+
+  if (!metaRows.length && ledgerRows.length) {
+    metaRows = BillingLedger.summarizeLedgerAsMetaRows(ledgerRows);
+  }
+
+  const rows = BillingLedger.enrichMetaRows(metaRows, ledgerRows);
+  const totals = metaAvailable
+    ? { cost: totalCost, volume: totalVolume, byCategory }
+    : {
+      cost: ledgerSummary.estimatedCost || 0,
+      volume: ledgerSummary.count || 0,
+      byCategory: ledgerSummary.byCategory || {},
+    };
+
+  res.json({
+    ok: true,
+    days,
+    start,
+    end,
+    rows,
+    totals,
+    metaAvailable,
+    metaError,
+    dataSource: metaAvailable ? 'meta' : (ledgerRows.length ? 'portal' : 'empty'),
+    templateSummary,
+    flowStats,
+    ledger: { rows: ledgerRows, summary: ledgerSummary },
+    flowBillingNote:
+      'Meta no cobra por el Flow en sí: el cargo es por el mensaje que lo abre (plantilla o interactivo). '
+      + 'Dentro de la ventana de 24 h → servicio (gratis). Fuera de 24 h con plantilla → categoría de la plantilla. '
+      + 'Completar el formulario Flow no genera cargo adicional.',
+  });
 });
 
 // Start a conversation (or message outside the 24h window) using a template

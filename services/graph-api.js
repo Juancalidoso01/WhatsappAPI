@@ -298,14 +298,40 @@ module.exports = class GraphApi {
 
   // --- Billing / pricing analytics (cost & volume by country + category) ---
   static async pricingAnalytics(wabaId, accessToken, { start, end, granularity = "DAILY" }) {
-    const f = `pricing_analytics.start(${start}).end(${end}).granularity(${granularity}).dimensions(PRICING_CATEGORY,PRICING_TYPE,COUNTRY)`;
-    const url = `https://graph.facebook.com/v21.0/${wabaId}?fields=${encodeURIComponent(f)}&access_token=${accessToken}`;
-    const res = await fetch(url);
-    const json = await res.json();
-    if (json.error) {
-      throw new Error(json.error.error_user_msg || json.error.message || "Error de Graph API");
+    const versions = ["v25.0", "v22.0", "v21.0"];
+    let lastMsg = "pricing_analytics no disponible";
+
+    for (const ver of versions) {
+      const qs = new URLSearchParams({
+        start: String(start),
+        end: String(end),
+        granularity,
+        access_token: accessToken,
+      });
+      ["PRICING_CATEGORY", "COUNTRY"].forEach((dim) => qs.append("dimensions", dim));
+
+      const url = `https://graph.facebook.com/${ver}/${wabaId}/pricing_analytics?${qs}`;
+      const res = await fetch(url);
+      const json = await res.json();
+      if (!json.error) return Array.isArray(json.data) ? json.data : [];
+
+      lastMsg = json.error.error_user_msg || json.error.message || lastMsg;
+      if (json.error.code === 190) break;
     }
-    return json.pricing_analytics ? json.pricing_analytics.data || [] : [];
+
+    throw new Error(lastMsg);
+  }
+
+  static flattenPricingPoints(data) {
+    const points = [];
+    (data || []).forEach((d) => {
+      if (Array.isArray(d.data_points)) {
+        d.data_points.forEach((p) => points.push(p));
+      } else if (d.pricing_category || d.country) {
+        points.push(d);
+      }
+    });
+    return points;
   }
 
   // --- WhatsApp message templates management (on the WABA) ---
