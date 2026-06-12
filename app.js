@@ -631,6 +631,7 @@ app.patch('/api/automation/ai', apiJson, async (req, res) => {
     res.json({
       ok: true,
       ai,
+      settings,
       geminiConfigured: GeminiAgent.isConfigured(),
       geminiViaFaq: GeminiAgent.isFaqProxyConfigured(),
       readiness: buildReadiness({

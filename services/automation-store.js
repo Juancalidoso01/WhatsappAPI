@@ -255,7 +255,11 @@ async function setAiSettings(patch) {
   if (!patch || !Array.isArray(patch.corrections)) {
     merged.corrections = current.corrections || [];
   }
-  return writeAiSettings(merged);
+  const saved = await writeAiSettings(merged);
+  if (patch && patch.enabled === true) {
+    await setSettings({ enabled: true });
+  }
+  return saved;
 }
 
 async function addCorrection({ when, prefer }) {

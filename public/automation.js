@@ -52,6 +52,8 @@
     aiFormDirty: false,
     aiViewMounted: false,
     readiness: null,
+    aiSaveTimer: null,
+    aiSavePending: false,
   };
 
   function loadActiveTab() {
@@ -281,6 +283,65 @@
     paint();
   }
 
+  function syncAutomationHeader() {
+    const en = document.getElementById("automationEnabled");
+    if (en && document.activeElement !== en) {
+      en.checked = Boolean(state.settings && state.settings.enabled);
+    }
+  }
+
+  function updateAiEnabledUi(enabled) {
+    const box = document.querySelector(".automation-ai-toggle-box");
+    if (box) {
+      box.classList.toggle("is-on", enabled);
+      box.classList.toggle("is-off", !enabled);
+    }
+    const pill = document.querySelector(".automation-ai-status-pill");
+    if (pill) {
+      pill.textContent = t(enabled ? "automation.ai.statusOn" : "automation.ai.statusOff");
+    }
+    const inp = document.getElementById("aiEnabled");
+    if (inp) inp.checked = enabled;
+  }
+
+  function applyAiSaveResponse(data) {
+    if (data.ai) state.ai = data.ai;
+    if (data.settings) state.settings = data.settings;
+    if (data.readiness) state.readiness = data.readiness;
+    state.aiFormDirty = false;
+    syncAutomationHeader();
+    updateAiEnabledUi(Boolean(state.ai && state.ai.enabled));
+    paintReadiness();
+  }
+
+  async function saveAiSettings(payload, { silent } = {}) {
+    state.aiSavePending = true;
+    try {
+      const data = await api("/api/automation/ai", {
+        method: "PATCH",
+        body: JSON.stringify(payload),
+      });
+      applyAiSaveResponse(data);
+      if (!silent) toastMsg(t("automation.toast.aiSaved"), "ok");
+      return data;
+    } finally {
+      state.aiSavePending = false;
+    }
+  }
+
+  function scheduleAiAutoSave() {
+    if (state.aiSaveTimer) clearTimeout(state.aiSaveTimer);
+    state.aiSaveTimer = setTimeout(async () => {
+      state.aiSaveTimer = null;
+      if (!document.getElementById("automationAiForm")) return;
+      try {
+        await saveAiSettings(collectAiPayload(), { silent: true });
+      } catch (err) {
+        toastMsg(err.message, "err");
+      }
+    }, 450);
+  }
+
   function paint() {
     const list = document.getElementById("automationRulesList");
     const log = document.getElementById("automationLogList");
@@ -309,7 +370,9 @@
       }
     }
     const en = document.getElementById("automationEnabled");
-    if (en) en.checked = Boolean(state.settings.enabled);
+    if (en && document.activeElement !== en) {
+      en.checked = Boolean(state.settings.enabled);
+    }
     paintAiWarnings();
     paintReadiness();
     bindRuleCards();
@@ -824,15 +887,22 @@
 
     document.getElementById("automationEnabled")?.addEventListener("change", async (e) => {
       const enabled = e.target.checked;
+      const prev = Boolean(state.settings && state.settings.enabled);
+      state.settings = { ...(state.settings || {}), enabled };
+      syncAutomationHeader();
       try {
         const data = await api("/api/automation/settings", {
           method: "PATCH",
           body: JSON.stringify({ enabled }),
         });
         state.settings = data.settings || { enabled };
+        syncAutomationHeader();
+        paintReadiness();
         toastMsg(enabled ? t("automation.toast.enabled") : t("automation.toast.disabled"), "ok");
       } catch (err) {
-        e.target.checked = !enabled;
+        state.settings = { enabled: prev };
+        e.target.checked = prev;
+        syncAutomationHeader();
         toastMsg(err.message, "err");
       }
     });
@@ -845,44 +915,39 @@
     if (aiView && !aiView.dataset.bound) {
       aiView.dataset.bound = "1";
       aiView.addEventListener("input", (e) => {
-        if (e.target.closest("#automationAiForm")) state.aiFormDirty = true;
+        if (!e.target.closest("#automationAiForm")) return;
+        state.aiFormDirty = true;
+        scheduleAiAutoSave();
       });
       aiView.addEventListener("change", async (e) => {
         if (e.target.id === "aiEnabled") {
           const enabled = e.target.checked;
+          const payload = collectAiPayload();
+          payload.enabled = enabled;
           try {
-            const data = await api("/api/automation/ai", {
-              method: "PATCH",
-              body: JSON.stringify({ enabled }),
-            });
-            state.ai = data.ai;
-            state.readiness = data.readiness || state.readiness;
-            toastMsg(t("automation.toast.aiSaved"), "ok");
-            renderAiView();
-            paintReadiness();
+            await saveAiSettings(payload);
           } catch (err) {
             e.target.checked = !enabled;
+            updateAiEnabledUi(!enabled);
             toastMsg(err.message, "err");
           }
           return;
         }
-        if (e.target.closest("#automationAiForm")) state.aiFormDirty = true;
+        if (e.target.closest("#automationAiForm")) {
+          state.aiFormDirty = true;
+          scheduleAiAutoSave();
+        }
       });
       aiView.addEventListener("submit", async (e) => {
         const form = e.target.closest("#automationAiForm");
         if (!form) return;
         e.preventDefault();
+        if (state.aiSaveTimer) {
+          clearTimeout(state.aiSaveTimer);
+          state.aiSaveTimer = null;
+        }
         try {
-          const data = await api("/api/automation/ai", {
-            method: "PATCH",
-            body: JSON.stringify(collectAiPayload()),
-          });
-          state.ai = data.ai;
-          state.readiness = data.readiness || state.readiness;
-          state.aiFormDirty = false;
-          toastMsg(t("automation.toast.aiSaved"), "ok");
-          renderAiView();
-          paintReadiness();
+          await saveAiSettings(collectAiPayload());
         } catch (err) {
           toastMsg(err.message, "err");
         }
@@ -935,6 +1000,7 @@
   }
 
   async function refresh() {
+    if (state.aiSavePending) return;
     const data = await api("/api/automation");
     state.rules = data.rules || [];
     state.settings = data.settings || { enabled: false };
@@ -952,8 +1018,11 @@
     state.faqSiteUrl = data.faqSiteUrl || "";
     state.readiness = data.readiness || null;
     paint();
+    syncAutomationHeader();
     if (state.activeTab === "ai" && !state.aiFormDirty) {
       renderAiView();
+    } else if (state.activeTab === "ai" && state.ai) {
+      updateAiEnabledUi(Boolean(state.ai.enabled));
     }
   }
 
