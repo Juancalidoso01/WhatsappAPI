@@ -246,12 +246,16 @@ async function getAiSettings() {
 
 async function setAiSettings(patch) {
   const current = await readAiSettings();
-  return writeAiSettings({
+  const merged = {
     ...current,
     ...patch,
     escalation: { ...current.escalation, ...(patch && patch.escalation) },
     resolution: { ...current.resolution, ...(patch && patch.resolution) },
-  });
+  };
+  if (!patch || !Array.isArray(patch.corrections)) {
+    merged.corrections = current.corrections || [];
+  }
+  return writeAiSettings(merged);
 }
 
 async function addCorrection({ when, prefer }) {

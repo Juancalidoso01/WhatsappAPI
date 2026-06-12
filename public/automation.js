@@ -49,7 +49,22 @@
     editingId: null,
     bound: false,
     activeTab: "rules",
+    aiFormDirty: false,
+    aiViewMounted: false,
   };
+
+  function loadActiveTab() {
+    try {
+      const saved = sessionStorage.getItem("automationTab");
+      if (saved === "ai" || saved === "rules") state.activeTab = saved;
+    } catch (_) { /* ignore */ }
+  }
+
+  function saveActiveTab() {
+    try {
+      sessionStorage.setItem("automationTab", state.activeTab);
+    } catch (_) { /* ignore */ }
+  }
 
   function toastMsg(msg, type) {
     if (typeof window.toast === "function") window.toast(msg, type);
@@ -295,7 +310,6 @@
     if (en) en.checked = Boolean(state.settings.enabled);
     paintAiWarnings();
     bindRuleCards();
-    if (state.activeTab === "ai") renderAiView();
   }
 
   function paintAiWarnings() {
@@ -313,6 +327,7 @@
 
   function setAutomationTab(tab) {
     state.activeTab = tab === "ai" ? "ai" : "rules";
+    saveActiveTab();
     document.querySelectorAll(".automation-main-tab").forEach((btn) => {
       const on = btn.dataset.autoTab === state.activeTab;
       btn.classList.toggle("active", on);
@@ -322,7 +337,11 @@
     $("automationAiView")?.classList.toggle("hidden", state.activeTab !== "ai");
     const newBtn = $("automationNewRule");
     if (newBtn) newBtn.classList.toggle("hidden", state.activeTab !== "rules");
-    if (state.activeTab === "ai") renderAiView();
+    if (state.activeTab === "ai") {
+      if (!state.aiViewMounted || !state.aiFormDirty) {
+        renderAiView();
+      }
+    }
   }
 
   function renderAiView() {
@@ -451,6 +470,8 @@
         </form>
       </section>`;
     if (window.I18n) I18n.applyDom(box);
+    state.aiViewMounted = true;
+    state.aiFormDirty = false;
   }
 
   function collectAiPayload() {
@@ -796,6 +817,27 @@
     const aiView = document.getElementById("automationAiView");
     if (aiView && !aiView.dataset.bound) {
       aiView.dataset.bound = "1";
+      aiView.addEventListener("input", (e) => {
+        if (e.target.closest("#automationAiForm")) state.aiFormDirty = true;
+      });
+      aiView.addEventListener("change", async (e) => {
+        if (e.target.id === "aiEnabled") {
+          const enabled = e.target.checked;
+          try {
+            const data = await api("/api/automation/ai", {
+              method: "PATCH",
+              body: JSON.stringify({ enabled }),
+            });
+            state.ai = data.ai;
+            toastMsg(t("automation.toast.aiSaved"), "ok");
+          } catch (err) {
+            e.target.checked = !enabled;
+            toastMsg(err.message, "err");
+          }
+          return;
+        }
+        if (e.target.closest("#automationAiForm")) state.aiFormDirty = true;
+      });
       aiView.addEventListener("submit", async (e) => {
         const form = e.target.closest("#automationAiForm");
         if (!form) return;
@@ -806,6 +848,7 @@
             body: JSON.stringify(collectAiPayload()),
           });
           state.ai = data.ai;
+          state.aiFormDirty = false;
           toastMsg(t("automation.toast.aiSaved"), "ok");
           renderAiView();
         } catch (err) {
@@ -823,6 +866,7 @@
               body: JSON.stringify({ when, prefer }),
             });
             state.ai = data.ai;
+            state.aiFormDirty = false;
             $("corrWhen").value = "";
             $("corrPrefer").value = "";
             toastMsg(t("automation.toast.correctionAdded"), "ok");
@@ -836,6 +880,7 @@
           try {
             const data = await api(`/api/automation/ai/corrections/${encodeURIComponent(del.dataset.id)}`, { method: "DELETE" });
             state.ai = data.ai;
+            state.aiFormDirty = false;
             toastMsg(t("automation.toast.correctionDeleted"), "ok");
             renderAiView();
           } catch (err) {
@@ -861,7 +906,12 @@
     const data = await api("/api/automation");
     state.rules = data.rules || [];
     state.settings = data.settings || { enabled: false };
-    state.ai = data.ai || defaultAi();
+    const serverAi = data.ai || defaultAi();
+    if (!state.aiFormDirty) {
+      state.ai = serverAi;
+    } else if (state.ai) {
+      state.ai = { ...serverAi, ...state.ai, corrections: serverAi.corrections || state.ai.corrections };
+    }
     state.log = data.log || [];
     state.aiFailed = data.aiFailed || [];
     state.aiResolutionLog = data.aiResolutionLog || [];
@@ -869,6 +919,9 @@
     state.geminiConfigured = Boolean(data.geminiConfigured);
     state.faqSiteUrl = data.faqSiteUrl || "";
     paint();
+    if (state.activeTab === "ai" && !state.aiFormDirty) {
+      renderAiView();
+    }
   }
 
   function setTemplates(list) {
@@ -878,9 +931,11 @@
   async function init() {
     const root = document.getElementById("screenAutomation");
     if (!root) return;
+    loadActiveTab();
     if (!root.dataset.rendered) {
       root.dataset.rendered = "1";
       renderShell();
+      setAutomationTab(state.activeTab);
     }
     try {
       await refresh();
