@@ -31,6 +31,7 @@ const { validateRowsForTemplate, extractEventVariables } = require('./services/t
 const campaignMetrics = require('./services/campaign-metrics');
 const { requireIntegrationKey } = require('./services/api-auth');
 const dashboardAuth = require('./services/dashboard-auth');
+const googleAuth = require('./services/google-auth');
 const { getOpsStatus } = require('./services/ops-status');
 const { getMetaPlatformStatus } = require('./services/meta-platform-status');
 const { attachMetaError } = require('./services/meta-error-context');
@@ -311,18 +312,61 @@ app.use(dashboardAuth.requireDashboardAuth);
 
 app.get('/api/auth/session', (req, res) => {
   const session = dashboardAuth.getSession(req);
-  res.json({ ok: true, ...session });
+  res.json({
+    ok: true,
+    ...session,
+    googleAuthEnabled: googleAuth.isEnabled(),
+    passwordAuthEnabled: Boolean(config.dashboardPassword),
+    allowedEmailDomain: config.allowedEmailDomain,
+  });
+});
+
+app.get('/api/auth/google', (req, res) => {
+  if (!googleAuth.isEnabled()) {
+    return res.status(503).json({ ok: false, error: 'Google OAuth no está configurado en el servidor.' });
+  }
+  const state = googleAuth.createOAuthState();
+  if (!state) {
+    return res.status(503).json({ ok: false, error: 'Falta DASHBOARD_SECRET o APP_SECRET para firmar la sesión.' });
+  }
+  return res.redirect(googleAuth.buildAuthorizeUrl(state));
+});
+
+app.get('/api/auth/google/callback', async (req, res) => {
+  try {
+    if (!googleAuth.isEnabled()) {
+      throw new Error('Google OAuth no está configurado.');
+    }
+    const code = req.query && req.query.code;
+    const state = req.query && req.query.state;
+    const oauthError = req.query && req.query.error;
+    if (oauthError) {
+      throw new Error(oauthError === 'access_denied' ? 'Inicio de sesión cancelado.' : String(oauthError));
+    }
+    if (!code || !googleAuth.verifyOAuthState(state)) {
+      throw new Error('Solicitud inválida. Intenta iniciar sesión de nuevo.');
+    }
+    const user = await googleAuth.authenticateCode(String(code));
+    res.setHeader('Set-Cookie', dashboardAuth.sessionCookieHeader({ ...user, authMethod: 'google' }));
+    return res.redirect('/');
+  } catch (err) {
+    const msg = encodeURIComponent(String(err.message || err));
+    return res.redirect(`/?auth_error=${msg}`);
+  }
 });
 
 app.post('/api/auth/login', apiJson, (req, res) => {
   if (!dashboardAuth.isAuthRequired()) {
     return res.json({ ok: true, authRequired: false, authenticated: true });
   }
+  if (!config.dashboardPassword) {
+    return res.status(403).json({ ok: false, error: 'Usa «Continuar con Google» para entrar.' });
+  }
   const password = req.body && req.body.password;
   if (!dashboardAuth.verifyPassword(password)) {
     return res.status(401).json({ ok: false, error: 'Contraseña incorrecta.' });
   }
-  res.setHeader('Set-Cookie', dashboardAuth.sessionCookieHeader());
+  res.setHeader('Set-Cookie', dashboardAuth.sessionCookieHeader({ authMethod: 'password' }));
   return res.json({ ok: true, authRequired: true, authenticated: true });
 });
 
@@ -357,6 +401,10 @@ app.get('/api/config', async (req, res) => {
     },
     authRequired: session.authRequired,
     authenticated: session.authenticated,
+    googleAuthEnabled: googleAuth.isEnabled(),
+    passwordAuthEnabled: Boolean(config.dashboardPassword),
+    allowedEmailDomain: config.allowedEmailDomain,
+    user: session.user || null,
     ops: getOpsStatus(),
   });
 });
@@ -3733,7 +3781,10 @@ app.get('/api/health', (req, res) => {
 config.checkEnvVariables();
 
 if (config.isProduction && !dashboardAuth.isAuthRequired()) {
-  console.warn('WARNING: DASHBOARD_PASSWORD no configurado — el panel está abierto sin login.');
+  console.warn('WARNING: Sin DASHBOARD_PASSWORD ni Google OAuth — el panel está abierto sin login.');
+}
+if (config.isProduction && dashboardAuth.isGoogleAuthConfigured() && !googleAuth.isEnabled()) {
+  console.warn('WARNING: Google OAuth incompleto — revisa GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET y PUBLIC_BASE_URL.');
 }
 if (config.isProduction && !config.integrationApiKey) {
   console.warn('WARNING: INTEGRATION_API_KEY no configurado — la API de integración está bloqueada.');
@@ -3880,7 +3931,9 @@ async function mirrorIncomingMessage(rawMessage, contactNames, senderPhoneNumber
     ? (interactivePreviewText(interactiveMeta) || extractMessageText(rawMessage))
     : extractMessageText(rawMessage);
   const ctx = rawMessage.context;
-  const replyTo = ctx && ctx.id ? { messageId: String(ctx.id), from: ctx.from || null } : null;
+  const replyTo = ctx && (ctx.id || ctx.message_id)
+    ? { messageId: String(ctx.id || ctx.message_id), from: ctx.from || null }
+    : null;
 
   let location = null;
   if (rawMessage.type === 'location' && rawMessage.location) {

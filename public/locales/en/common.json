@@ -23,10 +23,15 @@
   "auth": {
     "title": "Panel access",
     "subtitle": "Enter the dashboard password to continue.",
+    "subtitleGoogle": "Sign in with your corporate Google account.",
+    "domainOnly": "{domain} accounts only",
+    "google": "Continue with Google",
+    "orPassword": "or with dashboard password",
     "password": "Password",
     "passwordPlaceholder": "Dashboard password",
     "login": "Sign in",
     "logout": "Sign out",
+    "logoutAs": "Sign out ({name})",
     "loginFailed": "Incorrect password."
   }
 }

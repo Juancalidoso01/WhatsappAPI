@@ -23,10 +23,15 @@
   "auth": {
     "title": "Доступ к панели",
     "subtitle": "Введите пароль панели управления.",
+    "subtitleGoogle": "Войдите через корпоративный аккаунт Google.",
+    "domainOnly": "Только {domain}",
+    "google": "Войти через Google",
+    "orPassword": "или пароль панели",
     "password": "Пароль",
     "passwordPlaceholder": "Пароль панели",
     "login": "Войти",
     "logout": "Выйти",
+    "logoutAs": "Выйти ({name})",
     "loginFailed": "Неверный пароль."
   }
 }

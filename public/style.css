@@ -59,7 +59,19 @@ html, body { height: 100%; margin: 0; }
   font: inherit;
 }
 .login-gate-form .btn-primary { width: 100%; margin-top: 4px; }
-.login-gate-error { color: var(--red); font-size: 13px; margin: 0 0 8px; }
+.login-gate-error { color: var(--red); font-size: 13px; margin: 12px 0 0; }
+.login-domain-hint { margin: 6px 0 0; }
+.login-google-wrap { margin-top: 18px; }
+.btn-google {
+  display: inline-flex; align-items: center; justify-content: center; gap: 10px;
+  width: 100%; padding: 11px 16px; border-radius: 10px; border: 1px solid var(--border);
+  background: #fff; color: var(--text); font-weight: 600; font-size: 14px;
+  text-decoration: none; cursor: pointer; transition: background 0.15s, box-shadow 0.15s;
+}
+.btn-google:hover { background: #f8fafc; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+.btn-google-icon { display: inline-flex; }
+.login-divider { text-align: center; margin: 16px 0 10px; }
+.login-password-wrap .login-gate-form { margin-top: 0; }
 
 body {
   font-family: var(--font);
@@ -551,51 +563,67 @@ input, textarea, select { font-family: inherit; }
   opacity: .75;
   margin-bottom: 6px;
 }
-.msg-interactive-body { margin: 0 0 8px; font-size: 13.5px; line-height: 1.4; }
-.msg-interactive-chips { display: flex; flex-wrap: wrap; gap: 6px; }
-.msg-interactive-chip {
-  display: inline-flex;
-  align-items: center;
-  padding: 6px 12px;
-  border-radius: 18px;
-  border: 1px solid var(--border);
-  background: var(--surface-2);
-  font-size: 12px;
-  font-weight: 600;
-}
-.msg-row.out .msg-interactive-chip {
-  border-color: rgba(255,255,255,.35);
-  background: rgba(255,255,255,.14);
-  color: #fff;
-}
-.msg-interactive-chip.selected {
-  border-color: var(--brand);
-  background: var(--brand-50);
-  color: var(--brand-700, var(--brand));
-}
-.msg-row.out .msg-interactive-chip.selected {
-  border-color: rgba(255,255,255,.55);
-  background: rgba(255,255,255,.22);
-  color: #fff;
-}
-.msg-interactive-sub { display: block; margin-top: 4px; font-size: 12px; opacity: .85; }
-.msg-interactive-list-btn {
-  display: inline-block;
+.msg-interactive-body { margin: 0 0 4px; font-size: 13.5px; line-height: 1.4; }
+.msg-interactive-footer { margin: 0 0 6px; font-size: 11.5px; opacity: .75; }
+.msg-interactive-hint { margin: 6px 0 0; font-size: 11px; }
+.wa-btn-stack {
+  display: flex;
+  flex-direction: column;
   margin-top: 8px;
-  padding: 6px 12px;
-  border-radius: 8px;
-  border: 1px dashed var(--border);
-  font-size: 12px;
-  font-weight: 600;
+  border-top: 1px solid var(--border);
 }
-.msg-list-sec-title { font-size: 11px; font-weight: 700; margin: 8px 0 4px; opacity: .8; }
-.msg-list-rows { list-style: none; margin: 0; padding: 0; }
-.msg-list-rows li {
-  padding: 6px 0;
+.wa-btn-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 4px;
   border-bottom: 1px solid var(--border);
-  font-size: 12.5px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--brand);
 }
-.msg-list-rows li:last-child { border-bottom: none; }
+.wa-btn-row:last-child { border-bottom: none; }
+.wa-btn-icon {
+  display: inline-flex;
+  width: 18px;
+  justify-content: center;
+  opacity: .55;
+  font-size: 14px;
+  flex-shrink: 0;
+}
+.wa-btn-label { flex: 1; text-align: center; }
+.msg-row.out .wa-btn-stack { border-top-color: rgba(255,255,255,.28); }
+.msg-row.out .wa-btn-row {
+  border-bottom-color: rgba(255,255,255,.22);
+  color: #fff;
+}
+.msg-row.out .wa-btn-icon { opacity: .75; }
+.wa-list-opener {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 8px;
+  padding: 10px 12px;
+  border-top: 1px solid var(--border);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--brand);
+}
+.msg-row.out .wa-list-opener {
+  border-top-color: rgba(255,255,255,.28);
+  color: #fff;
+}
+.msg-quote-inner { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.msg-quote-author {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--brand);
+  line-height: 1.2;
+}
+.msg-row.out .msg-quote-author { color: rgba(255,255,255,.92); }
+.msg-row.in .msg-quote-author { color: var(--brand); }
+.iv-tab-desc { margin: -6px 0 12px; line-height: 1.45; }
 .msg-flow-fields { display: grid; gap: 4px; margin-top: 4px; }
 .msg-flow-field {
   display: grid;

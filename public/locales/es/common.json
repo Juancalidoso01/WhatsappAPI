@@ -23,10 +23,15 @@
   "auth": {
     "title": "Acceso al panel",
     "subtitle": "Ingresa la contraseña del dashboard para continuar.",
+    "subtitleGoogle": "Inicia sesión con tu cuenta corporativa de Google.",
+    "domainOnly": "Solo cuentas {domain}",
+    "google": "Continuar con Google",
+    "orPassword": "o con contraseña del panel",
     "password": "Contraseña",
     "passwordPlaceholder": "Contraseña del panel",
     "login": "Entrar",
     "logout": "Cerrar sesión",
+    "logoutAs": "Salir ({name})",
     "loginFailed": "Contraseña incorrecta."
   }
 }

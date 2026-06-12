@@ -72,6 +72,13 @@ module.exports = Object.freeze({
     || process.env.DASHBOARD_PASSWORD
     || null,
 
+  // Google OAuth (Sign in with Google) — free; restrict by email domain
+  googleClientId: process.env.GOOGLE_CLIENT_ID || null,
+  googleClientSecret: process.env.GOOGLE_CLIENT_SECRET || null,
+  allowedEmailDomain: (process.env.ALLOWED_EMAIL_DOMAIN || "puntopago.net")
+    .toLowerCase()
+    .replace(/^@/, ""),
+
   // Vercel Cron: Authorization Bearer CRON_SECRET
   cronSecret: process.env.CRON_SECRET || null,
 

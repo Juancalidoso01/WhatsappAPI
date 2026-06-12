@@ -18,6 +18,10 @@ function signPayload(payload) {
   return `${body}.${sig}`;
 }
 
+function verifyPayload(token) {
+  return verifyToken(token);
+}
+
 function verifyToken(token) {
   const secret = dashboardSecret();
   if (!token || !secret) return null;
@@ -41,8 +45,16 @@ function verifyToken(token) {
   }
 }
 
+function isGoogleAuthConfigured() {
+  return Boolean(
+    config.googleClientId
+    && config.googleClientSecret
+    && config.publicBaseUrl,
+  );
+}
+
 function isAuthRequired() {
-  return Boolean(config.dashboardPassword);
+  return Boolean(config.dashboardPassword) || isGoogleAuthConfigured();
 }
 
 function verifyPassword(password) {
@@ -53,12 +65,20 @@ function verifyPassword(password) {
   return crypto.timingSafeEqual(a, b);
 }
 
-function createSessionToken() {
-  return signPayload({
-    v: 1,
+function createSessionToken(user) {
+  const payload = {
+    v: 2,
     iat: Date.now(),
     exp: Date.now() + SESSION_MS,
-  });
+    authMethod: (user && user.authMethod) || "password",
+  };
+  if (user && user.email) {
+    payload.email = String(user.email);
+    payload.name = String(user.name || user.email);
+    if (user.picture) payload.picture = String(user.picture);
+    if (user.sub) payload.sub = String(user.sub);
+  }
+  return signPayload(payload);
 }
 
 function parseCookies(req) {
@@ -71,17 +91,38 @@ function parseCookies(req) {
   return out;
 }
 
+function sessionUserFromPayload(payload) {
+  if (!payload) return null;
+  if (payload.email) {
+    return {
+      email: payload.email,
+      name: payload.name || payload.email,
+      picture: payload.picture || null,
+      authMethod: payload.authMethod || "google",
+    };
+  }
+  if (payload.authMethod === "password") {
+    return { authMethod: "password" };
+  }
+  return null;
+}
+
 function getSession(req) {
   if (!isAuthRequired()) {
-    return { authRequired: false, authenticated: true };
+    return { authRequired: false, authenticated: true, user: null };
   }
   const token = parseCookies(req)[COOKIE_NAME];
   const payload = verifyToken(token);
-  return { authRequired: true, authenticated: Boolean(payload) };
+  const authenticated = Boolean(payload);
+  return {
+    authRequired: true,
+    authenticated,
+    user: authenticated ? sessionUserFromPayload(payload) : null,
+  };
 }
 
-function sessionCookieHeader() {
-  const token = createSessionToken();
+function sessionCookieHeader(user) {
+  const token = createSessionToken(user);
   const parts = [
     `${COOKIE_NAME}=${token}`,
     "Path=/",
@@ -107,6 +148,8 @@ function isPublicApiPath(req) {
   if (path === "/api/config" && method === "GET") return true;
   if (path === "/api/auth/login" && method === "POST") return true;
   if (path === "/api/auth/session" && method === "GET") return true;
+  if (path === "/api/auth/google" && method === "GET") return true;
+  if (path === "/api/auth/google/callback" && method === "GET") return true;
   if (path === "/api/campaigns/cron/tick" && method === "POST") return true;
 
   // Meta Flow data endpoint (signed by Meta, not dashboard session)
@@ -137,7 +180,10 @@ function requireDashboardAuth(req, res, next) {
 module.exports = {
   COOKIE_NAME,
   isAuthRequired,
+  isGoogleAuthConfigured,
   verifyPassword,
+  signPayload,
+  verifyPayload,
   getSession,
   sessionCookieHeader,
   clearSessionCookieHeader,

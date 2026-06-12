@@ -756,6 +756,36 @@ async function requestBrowserNotifications() {
 }
 
 /* ---------- dashboard auth ---------- */
+function applyLoginGateMode() {
+  const cfg = state.config || {};
+  const googleOn = Boolean(cfg.googleAuthEnabled);
+  const passwordOn = Boolean(cfg.passwordAuthEnabled);
+  const domain = cfg.allowedEmailDomain || "puntopago.net";
+  const googleWrap = $("loginGoogleWrap");
+  const passwordWrap = $("loginPasswordWrap");
+  const domainHint = $("loginDomainHint");
+  const subtitle = $("loginGateSubtitle");
+  const passwordInput = $("loginPassword");
+
+  if (googleWrap) googleWrap.classList.toggle("hidden", !googleOn);
+  if (passwordWrap) passwordWrap.classList.toggle("hidden", !passwordOn);
+  if (domainHint) {
+    if (googleOn) {
+      domainHint.textContent = t("auth.domainOnly", { domain: `@${domain}` });
+      domainHint.classList.remove("hidden");
+    } else {
+      domainHint.classList.add("hidden");
+      domainHint.textContent = "";
+    }
+  }
+  if (subtitle) {
+    subtitle.textContent = googleOn
+      ? t("auth.subtitleGoogle")
+      : t("auth.subtitle");
+  }
+  if (passwordInput) passwordInput.required = passwordOn && !googleOn;
+}
+
 function showLoginGate(message) {
   const gate = $("loginGate");
   const app = document.querySelector(".app");
@@ -764,12 +794,15 @@ function showLoginGate(message) {
   stopBulkPolling();
   gate.classList.remove("hidden");
   if (app) app.classList.add("hidden");
+  applyLoginGateMode();
   const err = $("loginError");
   if (err) {
     err.textContent = message || "";
     err.classList.toggle("hidden", !message);
   }
-  $("loginPassword")?.focus();
+  if (state.config && state.config.passwordAuthEnabled && !state.config.googleAuthEnabled) {
+    $("loginPassword")?.focus();
+  }
 }
 
 function hideLoginGate() {
@@ -810,10 +843,24 @@ async function logoutDashboard() {
 }
 
 /* ---------- init ---------- */
+function consumeAuthErrorFromUrl() {
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const authError = params.get("auth_error");
+    if (!authError) return null;
+    const clean = window.location.pathname + window.location.hash;
+    window.history.replaceState({}, "", clean);
+    return decodeURIComponent(authError);
+  } catch (_) {
+    return null;
+  }
+}
+
 async function init() {
   state.readThrough = loadReadThrough();
   state.soundEnabled = loadSoundPref();
   ensureKnownEventIds();
+  const authError = consumeAuthErrorFromUrl();
   try {
     state.config = await api("/api/config");
   } catch (_) {
@@ -823,7 +870,7 @@ async function init() {
 
   const session = await api("/api/auth/session");
   if (session.authRequired && !session.authenticated) {
-    showLoginGate();
+    showLoginGate(authError || "");
     if (window.I18n) I18n.applyDom();
     bindLoginEvents();
     return;
@@ -866,6 +913,14 @@ function updateLogoutVisibility() {
   if (!btn) return;
   const show = Boolean(state.config && state.config.authRequired);
   btn.classList.toggle("hidden", !show);
+  const user = state.config && state.config.user;
+  if (user && user.email) {
+    btn.title = user.email;
+    btn.textContent = t("auth.logoutAs", { name: user.name || user.email });
+  } else if (window.I18n) {
+    btn.textContent = t("auth.logout");
+    btn.title = "";
+  }
 }
 
 function bindLoginEvents() {
@@ -1533,6 +1588,8 @@ function messageQuotePreview(m) {
   if (!m) return "";
   if (m.interactiveMeta) {
     const im = m.interactiveMeta;
+    if (im.kind === "buttons" && im.body) return im.body;
+    if (im.kind === "list" && im.body) return im.body;
     if (im.kind === "button_reply") return im.title || t("chats.interactive.button");
     if (im.kind === "list_reply") return im.title || t("chats.interactive.list");
     if (im.kind === "flow_reply") return t("chats.interactive.flowReply");
@@ -1692,7 +1749,15 @@ function renderQuoteBlock(m) {
   if (!refId) return "";
   const ref = state.messages.find((x) => x.id === refId);
   const preview = ref ? messageQuotePreview(ref) : t("chats.quotedMessage");
-  return `<div class="msg-quote"><span class="msg-quote-bar"></span><span class="msg-quote-text">${escapeHtml(String(preview).slice(0, 140))}</span></div>`;
+  const author = ref
+    ? (ref.direction === "out"
+      ? (state.config?.brandName || t("chats.interactive.quotedBusiness"))
+      : (state.conversationDetail?.name || state.activePhone || t("chats.interactive.quotedContact")))
+    : "";
+  const authorHtml = author
+    ? `<span class="msg-quote-author">${escapeHtml(author)}</span>`
+    : "";
+  return `<div class="msg-quote"><span class="msg-quote-bar"></span><div class="msg-quote-inner">${authorHtml}<span class="msg-quote-text">${escapeHtml(String(preview).slice(0, 140))}</span></div></div>`;
 }
 
 function renderReactionBlock(m) {
@@ -1701,24 +1766,21 @@ function renderReactionBlock(m) {
   return `<div class="msg-reaction-out">${escapeHtml(emoji)}</div>`;
 }
 
+function renderWaButtonStack(buttons) {
+  return (buttons || []).map((b) =>
+    `<div class="wa-btn-row" aria-hidden="true">
+      <span class="wa-btn-icon">↩</span>
+      <span class="wa-btn-label">${escapeHtml(b.title || b.id)}</span>
+    </div>`
+  ).join("");
+}
+
 function renderInteractiveBlock(m) {
   const meta = m.interactiveMeta;
   if (!meta || !meta.kind) return "";
 
-  if (meta.kind === "button_reply") {
-    return `<div class="msg-interactive inbound">
-      <span class="msg-interactive-label">${escapeHtml(t("chats.interactive.selectedButton"))}</span>
-      <span class="msg-interactive-chip selected">${escapeHtml(meta.title || meta.id || "—")}</span>
-    </div>`;
-  }
-
-  if (meta.kind === "list_reply") {
-    const sub = meta.description ? `<span class="msg-interactive-sub">${escapeHtml(meta.description)}</span>` : "";
-    return `<div class="msg-interactive inbound">
-      <span class="msg-interactive-label">${escapeHtml(t("chats.interactive.selectedList"))}</span>
-      <span class="msg-interactive-chip selected">${escapeHtml(meta.title || "—")}</span>
-      ${sub}
-    </div>`;
+  if (meta.kind === "button_reply" || meta.kind === "list_reply") {
+    return "";
   }
 
   if (meta.kind === "flow_reply") {
@@ -1732,24 +1794,22 @@ function renderInteractiveBlock(m) {
   }
 
   if (meta.kind === "buttons" && meta.buttons && meta.buttons.length) {
-    const chips = meta.buttons.map((b) =>
-      `<span class="msg-interactive-chip">${escapeHtml(b.title || b.id)}</span>`
-    ).join("");
     const body = meta.body ? `<p class="msg-interactive-body">${escapeHtml(meta.body)}</p>` : "";
-    return `<div class="msg-interactive outbound">${body}<div class="msg-interactive-chips">${chips}</div></div>`;
+    const footer = meta.footer ? `<p class="msg-interactive-footer">${escapeHtml(meta.footer)}</p>` : "";
+    return `<div class="msg-interactive outbound wa-buttons">${body}${footer}<div class="wa-btn-stack">${renderWaButtonStack(meta.buttons)}</div></div>`;
   }
 
   if (meta.kind === "list" && meta.sections && meta.sections.length) {
+    const rowCount = meta.sections.reduce((n, s) => n + (s.rows || []).length, 0);
     const body = meta.body ? `<p class="msg-interactive-body">${escapeHtml(meta.body)}</p>` : "";
-    const sections = meta.sections.map((sec) => {
-      const rows = (sec.rows || []).map((r) =>
-        `<li><strong>${escapeHtml(r.title)}</strong>${r.description ? `<span class="muted sm">${escapeHtml(r.description)}</span>` : ""}</li>`
-      ).join("");
-      const title = sec.title ? `<div class="msg-list-sec-title">${escapeHtml(sec.title)}</div>` : "";
-      return `${title}<ul class="msg-list-rows">${rows}</ul>`;
-    }).join("");
-    const btn = meta.button ? `<span class="msg-interactive-list-btn">${escapeHtml(meta.button)}</span>` : "";
-    return `<div class="msg-interactive outbound list">${body}${sections}${btn}</div>`;
+    const footer = meta.footer ? `<p class="msg-interactive-footer">${escapeHtml(meta.footer)}</p>` : "";
+    const opener = meta.button
+      ? `<div class="wa-list-opener" aria-hidden="true"><span class="wa-btn-icon">☰</span><span>${escapeHtml(meta.button)}</span></div>`
+      : "";
+    const hint = rowCount
+      ? `<p class="msg-interactive-hint muted sm">${escapeHtml(t("chats.interactive.listPreviewHint", { count: rowCount }))}</p>`
+      : "";
+    return `<div class="msg-interactive outbound wa-list">${body}${footer}${opener}${hint}</div>`;
   }
 
   return "";
@@ -1920,8 +1980,9 @@ function renderMessageRowHtml(m, hi) {
   const interactive = renderInteractiveBlock(m);
   const quote = renderQuoteBlock(m);
   const imKind = m.interactiveMeta && m.interactiveMeta.kind;
+  const isInteractiveSelection = imKind === "button_reply" || imKind === "list_reply";
   const showCaption = m.text && !isReaction && m.type !== "contacts"
-    && !["button_reply", "list_reply", "flow_reply", "buttons", "list"].includes(imKind);
+    && (isInteractiveSelection || !["flow_reply", "buttons", "list"].includes(imKind));
   const caption = showCaption ? escapeHtml(m.text) : "";
   const time = messageTimeLabel(m.timestamp);
   const isHi = hi && (m.id === hi);
@@ -3949,6 +4010,12 @@ function setInteractiveTab(variant) {
   });
   $("ivButtonsPanel")?.classList.toggle("hidden", ivState.variant !== "buttons");
   $("ivListPanel")?.classList.toggle("hidden", ivState.variant !== "list");
+  const desc = $("ivTabDesc");
+  if (desc) {
+    desc.textContent = t(ivState.variant === "list"
+      ? "modals.interactive.tabListDesc"
+      : "modals.interactive.tabButtonsDesc");
+  }
 }
 
 function renderInteractiveListRows(count) {

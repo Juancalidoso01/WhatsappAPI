@@ -76,7 +76,10 @@
     "list": "List",
     "selectedButton": "Selected option",
     "selectedList": "Selected list item",
-    "flowReply": "Flow response"
+    "flowReply": "Flow response",
+    "quotedBusiness": "Business",
+    "quotedContact": "Contact",
+    "listPreviewHint": "{count} options · opens on tap in WhatsApp"
   },
   "msgStatus": {
     "pending": "Sending…",

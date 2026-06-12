@@ -76,7 +76,10 @@
     "list": "Список",
     "selectedButton": "Выбранная опция",
     "selectedList": "Выбранный пункт списка",
-    "flowReply": "Ответ Flow"
+    "flowReply": "Ответ Flow",
+    "quotedBusiness": "Компания",
+    "quotedContact": "Контакт",
+    "listPreviewHint": "{count} вариантов · открывается по нажатию в WhatsApp"
   },
   "msgStatus": {
     "pending": "Отправка…",
