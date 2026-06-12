@@ -53,7 +53,17 @@
     "noDashboardAuth": "No DASHBOARD_PASSWORD: the dashboard is open without login.",
     "noIntegrationKey": "No INTEGRATION_API_KEY: the CRM/ERP integration API is blocked in production.",
     "line": "Line",
-    "updated": "Last updated"
+    "updated": "Last updated",
+    "metaPlatform": "Meta Cloud API (global)",
+    "metaPlatformBanner": "Meta incident in progress",
+    "metaPlatformLink": "View metastatus.com",
+    "metaPlatformStale": "cached data",
+    "metaPlatformSt": {
+      "operational": "No known issues",
+      "major": "Major disruption",
+      "degraded": "Degraded",
+      "unknown": "Unknown"
+    }
   },
   "languageTitle": "Portal language",
   "languageHint": "Choose the interface language. Does not affect WhatsApp template languages sent to Meta.",

@@ -32,6 +32,7 @@ const campaignMetrics = require('./services/campaign-metrics');
 const { requireIntegrationKey } = require('./services/api-auth');
 const dashboardAuth = require('./services/dashboard-auth');
 const { getOpsStatus } = require('./services/ops-status');
+const { getMetaPlatformStatus } = require('./services/meta-platform-status');
 const WorkspaceStore = require('./services/workspace-store');
 const reports = require('./services/reports');
 const templateBuilder = require('./services/template-builder');
@@ -364,6 +365,7 @@ app.get('/api/workspace', async (req, res) => {
       },
       whatsapp,
       line,
+      metaPlatform: await getMetaPlatformStatus(),
       portalLanguageEnabled: true,
     });
   } catch (err) {
@@ -2979,9 +2981,24 @@ app.get('/api/line-health', async (req, res) => {
   }
   try {
     const raw = await GraphApi.getPhoneLineHealth(config.phoneNumberId);
-    res.json({ ok: true, line: parseLineHealth(raw) });
+    res.json({
+      ok: true,
+      line: parseLineHealth(raw),
+      metaPlatform: await getMetaPlatformStatus(),
+    });
   } catch (err) {
     console.error('line-health error:', err.message);
+    res.json({ ok: false, error: String(err.message || err) });
+  }
+});
+
+// Meta platform status (metastatus.com — Cloud API, Flows, etc.)
+app.get('/api/meta-platform-status', async (req, res) => {
+  try {
+    const data = await getMetaPlatformStatus({ force: req.query.refresh === '1' });
+    res.json(data);
+  } catch (err) {
+    console.error('meta-platform-status error:', err.message);
     res.json({ ok: false, error: String(err.message || err) });
   }
 });

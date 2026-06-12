@@ -601,6 +601,24 @@ input, textarea, select { font-family: inherit; }
 .lh-card.quality-green .lh-value { color: var(--green); }
 .lh-card.quality-yellow .lh-value { color: #8a6300; }
 .lh-card.quality-red .lh-value { color: var(--red); }
+.meta-status-banner {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px 12px;
+  padding: 10px 12px;
+  margin-bottom: 12px;
+  border-radius: 10px;
+  font-size: 12px;
+  line-height: 1.45;
+  border: 1px solid var(--border);
+  background: var(--surface);
+}
+.meta-status-banner.warn { border-color: #f59e0b; background: #fffbeb; }
+.meta-status-banner.error { border-color: var(--red); background: #fef2f2; }
+.meta-status-banner strong { font-size: 12px; }
+.meta-status-banner a { font-weight: 600; white-space: nowrap; }
 .bulk-grid { display: grid; grid-template-columns: 340px 1fr; gap: 16px; align-items: start; }
 .bulk-panel { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 16px 18px; }
 .bulk-panel label { display: block; margin-bottom: 12px; font-size: 12px; font-weight: 600; color: var(--muted); }

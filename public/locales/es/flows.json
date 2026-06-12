@@ -165,6 +165,7 @@
   "credsNotConfigured": "Credenciales no configuradas.",
   "connectedMeta": "Conectado con Meta. Los formularios dinámicos (como autorización de pago) se configuran solos.",
   "connected": "Conectado · {count}",
+  "metaPlatformDegraded": "Meta reporta incidencias · {status}",
   "connectedPartial": "Conexión parcial. Revisa Configuración.",
   "flowCountOne": "1 Flow en tu cuenta",
   "flowCountMany": "{count} Flows en tu cuenta",

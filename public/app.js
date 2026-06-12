@@ -93,6 +93,7 @@ const state = {
   campaigns: [],
   activeCampaignId: null,
   lineHealth: null,
+  metaPlatformStatus: null,
   bulkPollTimer: null,
   campaignRunnerTimer: null,
   bulkEventVariables: [],
@@ -4043,19 +4044,43 @@ function bulkRowStatusLabel(status) {
 async function loadLineHealth() {
   const res = await api("/api/line-health");
   state.lineHealth = res.ok ? res.line : null;
+  if (res.metaPlatform) state.metaPlatformStatus = res.metaPlatform;
   renderLineHealth();
   return state.lineHealth;
+}
+
+function metaPlatformOverallLabel(mp) {
+  if (!mp) return "";
+  const key = `workspace.ops.metaPlatformSt.${mp.overall}`;
+  const label = t(key);
+  return label !== key ? label : mp.overall;
+}
+
+function metaPlatformBannerHtml(mp) {
+  if (!mp || !mp.ok || mp.overall === "operational") return "";
+  const cls = mp.overallLevel === "error" ? "error" : "warn";
+  const affected = (mp.services || []).filter((s) => s.level !== "ok").map((s) => s.name).join(", ");
+  const outage = mp.outages && mp.outages[0] && mp.outages[0].description;
+  const detail = outage
+    ? (outage.length > 220 ? outage.slice(0, 217) + "…" : outage)
+    : affected;
+  return `<div class="meta-status-banner ${cls}" role="status">
+    <strong>${escapeHtml(t("workspace.ops.metaPlatformBanner"))}</strong>
+    <span>${escapeHtml(metaPlatformOverallLabel(mp))}${detail ? ` — ${escapeHtml(detail)}` : ""}</span>
+    <a href="${escapeHtml(mp.pageUrl)}" target="_blank" rel="noopener noreferrer">${escapeHtml(t("workspace.ops.metaPlatformLink"))}</a>
+  </div>`;
 }
 
 function renderLineHealth() {
   const box = $("lineHealthCards");
   const l = state.lineHealth;
+  const banner = metaPlatformBannerHtml(state.metaPlatformStatus);
   if (!l) {
-    box.innerHTML = `<div class="lh-card"><span class="lh-label">${escapeHtml(t("bulk.lineWhatsapp"))}</span><span class="lh-value">—</span><span class="lh-sub">${escapeHtml(t("bulk.configureLine"))}</span></div>`;
+    box.innerHTML = `${banner}<div class="lh-card"><span class="lh-label">${escapeHtml(t("bulk.lineWhatsapp"))}</span><span class="lh-value">—</span><span class="lh-sub">${escapeHtml(t("bulk.configureLine"))}</span></div>`;
     return;
   }
   const qClass = l.qualityColor || "muted";
-  box.innerHTML = `
+  box.innerHTML = `${banner}
     <div class="lh-card"><span class="lh-label">${escapeHtml(t("bulk.lineNumber"))}</span><span class="lh-value" style="font-size:15px">${escapeHtml(l.displayPhone || "—")}</span><span class="lh-sub">${escapeHtml(l.verifiedName || "")}</span></div>
     <div class="lh-card ${qClass}"><span class="lh-label">${escapeHtml(t("bulk.lineIntegrity"))}</span><span class="lh-value">${escapeHtml(l.qualityLabel)}</span><span class="lh-sub">${escapeHtml(l.qualityHint || "")}</span></div>
     <div class="lh-card"><span class="lh-label">${escapeHtml(t("bulk.lineDailyLimit"))}</span><span class="lh-value">${escapeHtml(l.dailyUniqueLimitLabel)}</span><span class="lh-sub">${escapeHtml(t("bulk.lineDailySub", { tier: l.messagingTier || "" }))}</span></div>
@@ -4429,6 +4454,7 @@ async function loadWorkspace() {
   const res = await api("/api/workspace");
   if (!res.ok) return;
   state.workspace = res;
+  if (res.metaPlatform) state.metaPlatformStatus = res.metaPlatform;
   fillWorkspaceForms(res);
   updateWorkspaceHubPreview(
     res.workspace.displayName || res.workspace.workspaceName,
@@ -4476,6 +4502,22 @@ function renderSystemStatus(wsRes) {
   const rows = (ops.items || []).map((item) =>
     `<li class="ws-ops-${escapeHtml(item.level)}">${levelMark(item.level)} ${escapeHtml(t(`workspace.ops.items.${item.key}`))}</li>`
   );
+  const mp = state.metaPlatformStatus || (wsRes && wsRes.metaPlatform);
+  if (mp && mp.ok) {
+    const mpLevel = mp.overallLevel || "info";
+    const mpMark = mpLevel === "ok" ? "ok" : mpLevel === "error" ? "error" : "warn";
+    rows.unshift(`<li class="ws-ops-${escapeHtml(mpMark)}">${levelMark(mpMark)} ${escapeHtml(t("workspace.ops.metaPlatform"))}: ${escapeHtml(metaPlatformOverallLabel(mp))}${mp.stale ? ` (${escapeHtml(t("workspace.ops.metaPlatformStale"))})` : ""}</li>`);
+    (mp.services || []).filter((s) => s.level !== "ok").forEach((s) => {
+      rows.push(`<li class="ws-ops-warn-detail">${escapeHtml(s.name)} — ${escapeHtml(s.statusRaw || s.status)}</li>`);
+    });
+    if (mp.overall !== "operational" && mp.outages && mp.outages.length) {
+      const d = mp.outages[0].description;
+      if (d) {
+        rows.push(`<li class="ws-ops-warn-detail">${escapeHtml(d.length > 180 ? d.slice(0, 177) + "…" : d)}</li>`);
+      }
+    }
+    rows.push(`<li class="ws-ops-info"><a href="${escapeHtml(mp.pageUrl)}" target="_blank" rel="noopener noreferrer">${escapeHtml(t("workspace.ops.metaPlatformLink"))}</a>${mp.fetchedAt ? ` · ${escapeHtml(localeDateTime(mp.fetchedAt))}` : ""}</li>`);
+  }
   (ops.warnings || []).forEach((warn) => {
     rows.push(`<li class="ws-ops-warn-detail">${escapeHtml(t(warn.messageKey))}</li>`);
   });
@@ -6429,6 +6471,11 @@ async function loadFlowCapability() {
     ? (res.flowCount === 1 ? t("flows.flowCountOne") : t("flows.flowCountMany", { count: res.flowCount }))
     : t("flows.flowsAvailable");
   text.textContent = ok ? t("flows.connected", { count }) : t("flows.connectedPartial");
+  const mp = state.metaPlatformStatus;
+  if (ok && mp && mp.ok && mp.overall !== "operational") {
+    dot.className = "flows-status-dot warn";
+    text.textContent = t("flows.metaPlatformDegraded", { status: metaPlatformOverallLabel(mp) });
+  }
   if (cfgStatus) {
     cfgStatus.textContent = ok
       ? t("flows.serverReady", { count })
@@ -6969,6 +7016,11 @@ async function initFlowsScreen() {
     loadFlows(),
     loadFlowActivity(),
   ]);
+  const mpRes = await api("/api/meta-platform-status");
+  if (mpRes && mpRes.ok) {
+    state.metaPlatformStatus = mpRes;
+    loadFlowCapability();
+  }
 }
 
 /* ---------- modals & nav ---------- */
@@ -7081,7 +7133,17 @@ function switchScreen(name) {
         cache.flows = true;
         initFlowsScreen();
       } else {
-        Promise.all([loadFlowCapability(), loadFlows(), loadFlowActivity()]);
+        Promise.all([
+          loadFlowCapability(),
+          loadFlows(),
+          loadFlowActivity(),
+          api("/api/meta-platform-status").then((mp) => {
+            if (mp && mp.ok) {
+              state.metaPlatformStatus = mp;
+              loadFlowCapability();
+            }
+          }),
+        ]);
       }
     };
     if (window.I18n) I18n.ensureScreen("flows").then(bootFlows);

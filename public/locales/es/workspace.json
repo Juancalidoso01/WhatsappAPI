@@ -53,7 +53,17 @@
     "noDashboardAuth": "Sin DASHBOARD_PASSWORD: el panel está abierto sin login.",
     "noIntegrationKey": "Sin INTEGRATION_API_KEY: la API de integración CRM/ERP está bloqueada en producción.",
     "line": "Línea",
-    "updated": "Última actualización"
+    "updated": "Última actualización",
+    "metaPlatform": "Meta Cloud API (global)",
+    "metaPlatformBanner": "Incidencia Meta en curso",
+    "metaPlatformLink": "Ver metastatus.com",
+    "metaPlatformStale": "datos en caché",
+    "metaPlatformSt": {
+      "operational": "Sin incidencias",
+      "major": "Interrupción grave",
+      "degraded": "Degradado",
+      "unknown": "Desconocido"
+    }
   },
   "languageTitle": "Idioma del portal",
   "languageHint": "Elige el idioma de la interfaz. No afecta el idioma de las plantillas de WhatsApp enviadas a Meta.",

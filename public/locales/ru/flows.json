@@ -145,6 +145,7 @@
   "credsNotConfigured": "Учётные данные не настроены.",
   "connectedMeta": "Подключено к Meta. Динамические формы настраиваются автоматически.",
   "connected": "Подключено · {count}",
+  "metaPlatformDegraded": "Meta сообщает о сбоях · {status}",
   "connectedPartial": "Частичное подключение. Проверьте настройки.",
   "flowCountOne": "1 Flow в аккаунте",
   "flowCountMany": "{count} Flows в аккаунте",

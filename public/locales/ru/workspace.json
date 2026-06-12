@@ -53,7 +53,17 @@
     "noDashboardAuth": "Нет DASHBOARD_PASSWORD: панель открыта без входа.",
     "noIntegrationKey": "Нет INTEGRATION_API_KEY: API интеграции CRM/ERP заблокирован в продакшене.",
     "line": "Линия",
-    "updated": "Обновлено"
+    "updated": "Обновлено",
+    "metaPlatform": "Meta Cloud API (глобально)",
+    "metaPlatformBanner": "Инцидент Meta",
+    "metaPlatformLink": "Открыть metastatus.com",
+    "metaPlatformStale": "кэш",
+    "metaPlatformSt": {
+      "operational": "Без сбоев",
+      "major": "Серьёзный сбой",
+      "degraded": "Деградация",
+      "unknown": "Неизвестно"
+    }
   },
   "languageTitle": "Язык портала",
   "languageHint": "Выберите язык интерфейса. Не влияет на язык шаблонов WhatsApp, отправляемых в Meta.",
