@@ -1921,11 +1921,19 @@ async function sendText(text) {
 }
 
 /* ---------- templates ---------- */
+function templatesMetaErrorMessage(msg) {
+  const raw = String(msg || "");
+  if (/unexpected error has occurred/i.test(raw)) {
+    return t("templates.metaTransientError");
+  }
+  return raw || t("templates.metaLoadFailed");
+}
+
 async function loadTemplates() {
   const res = await api("/api/templates");
   state.templates = (res && res.data) || [];
-  if (res && res.warning) toast(res.warning, "error");
-  if (res && res.error) toast(res.error, "error");
+  if (res && res.warning) toast(res.warning, res.stale ? "info" : "error");
+  if (res && res.error) toast(templatesMetaErrorMessage(res.error), "error");
   return state.templates;
 }
 
@@ -2514,8 +2522,9 @@ async function syncTemplatesWithMeta() {
   const res = await post("/api/templates/sync-meta", {});
   if (btn) btn.disabled = false;
   if (!res.ok) {
-    if (hint) hint.textContent = res.error || t("templates.syncFailed");
-    toast(res.error || t("toast.syncMetaError"), "error");
+    const errMsg = templatesMetaErrorMessage(res.error);
+    if (hint) hint.textContent = errMsg || t("templates.syncFailed");
+    toast(errMsg || t("toast.syncMetaError"), "error");
     return;
   }
   state.templates = res.data || [];

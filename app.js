@@ -1944,6 +1944,18 @@ app.get('/api/templates', async (req, res) => {
     });
   } catch (err) {
     console.error('listTemplates error:', err.message);
+    const cached = GraphApi.getCachedTemplates(config.wabaId);
+    if (cached && cached.data.length) {
+      const data = (await enrichTemplatesList(cached.data))
+        .sort((a, b) => (b.displayAt || 0) - (a.displayAt || 0) || String(a.name).localeCompare(String(b.name)));
+      return res.json({
+        data,
+        total: data.length,
+        summary: templateCategory.summarizeTemplates(data),
+        stale: true,
+        warning: 'Meta no respondió; mostrando la última copia guardada. Vuelve a sincronizar en unos minutos.',
+      });
+    }
     res.status(200).json({ data: [], total: 0, summary: { total: 0 }, error: String(err.message || err) });
   }
 });

@@ -334,26 +334,89 @@ module.exports = class GraphApi {
     return points;
   }
 
+  static #templatesCache = { wabaId: null, at: 0, data: [] };
+  static #TEMPLATES_CACHE_MS = 3 * 60 * 1000;
+
+  static #metaErrorMessage(json) {
+    const err = json && json.error;
+    if (!err) return "Error al consultar plantillas en Meta.";
+    return err.error_user_msg || err.message || "Error al consultar plantillas en Meta.";
+  }
+
+  static #isTransientMetaError(json) {
+    const code = json && json.error && Number(json.error.code);
+    return [1, 2, 4, 17, 32, 613, 80007].includes(code);
+  }
+
+  static async #fetchTemplatePage(wabaId, { fields, limit, after, version }) {
+    const qs = new URLSearchParams({
+      fields,
+      limit: String(limit),
+      access_token: config.accessToken,
+    });
+    if (after) qs.set("after", after);
+    const url = `https://graph.facebook.com/${version}/${wabaId}/message_templates?${qs}`;
+    const res = await fetch(url);
+    const json = await res.json();
+    if (json.error) {
+      const err = new Error(GraphApi.#metaErrorMessage(json));
+      err.meta = json.error;
+      throw err;
+    }
+    return json;
+  }
+
+  static async #fetchTemplatesPageWithFallbacks(wabaId, { limit, after }) {
+    const fieldSets = [
+      "id,name,status,category,correct_category,language,components,quality_score,last_updated_time",
+      "id,name,status,category,language,components,quality_score,last_updated_time",
+      "id,name,status,category,language,components,last_updated_time",
+      "id,name,status,category,language,components",
+    ];
+    const versions = ["v22.0", "v21.0"];
+    let lastErr = new Error("No se pudieron cargar las plantillas desde Meta.");
+
+    for (const version of versions) {
+      for (const fields of fieldSets) {
+        for (let attempt = 0; attempt < 2; attempt++) {
+          try {
+            return await GraphApi.#fetchTemplatePage(wabaId, { fields, limit, after, version });
+          } catch (err) {
+            lastErr = err;
+            const transient = err.meta && GraphApi.#isTransientMetaError({ error: err.meta });
+            if (transient && attempt === 0) {
+              await new Promise((r) => setTimeout(r, 600));
+              continue;
+            }
+            break;
+          }
+        }
+      }
+    }
+
+    throw lastErr;
+  }
+
   // --- WhatsApp message templates management (on the WABA) ---
   static async listTemplates(wabaId, pageSize = 100) {
-    const api = getApi();
-    const fields = "id,name,status,category,correct_category,language,components,quality_score,last_updated_time";
     const seen = new Set();
     const all = [];
     let after = null;
     let pages = 0;
 
     while (pages < 50) {
-      const params = { limit: pageSize, fields };
-      if (after) params.after = after;
-
       let page;
       try {
-        page = await api.call("GET", [`${wabaId}`, "message_templates"], params);
+        page = await GraphApi.#fetchTemplatesPageWithFallbacks(wabaId, {
+          limit: pageSize,
+          after,
+        });
       } catch (err) {
-        if (all.length) break;
-        const fallbackFields = "id,name,status,category,language,components,quality_score,last_updated_time";
-        page = await api.call("GET", [`${wabaId}`, "message_templates"], { ...params, fields: fallbackFields });
+        if (all.length) {
+          GraphApi.#templatesCache = { wabaId: String(wabaId), at: Date.now(), data: all };
+          return { data: all, partial: true };
+        }
+        throw err;
       }
 
       ((page && page.data) || []).forEach((tpl) => {
@@ -369,7 +432,15 @@ module.exports = class GraphApi {
       pages++;
     }
 
+    GraphApi.#templatesCache = { wabaId: String(wabaId), at: Date.now(), data: all };
     return { data: all };
+  }
+
+  static getCachedTemplates(wabaId) {
+    const cache = GraphApi.#templatesCache;
+    if (!cache || cache.wabaId !== String(wabaId) || !cache.data.length) return null;
+    if (Date.now() - cache.at > GraphApi.#TEMPLATES_CACHE_MS) return null;
+    return { data: cache.data, cachedAt: cache.at };
   }
 
   static async createTemplate(wabaId, { name, category, language, components }) {

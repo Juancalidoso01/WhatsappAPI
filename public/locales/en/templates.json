@@ -17,6 +17,8 @@
   "varCatalogSummaryHint": "· operator reference",
   "varCatalogIntro": "Human guide only: what goes in each field and correct format. Does not change templates already approved on Meta. «Future» items are for upcoming approval requests.",
   "configureAccess": "Set ACCESS_TOKEN and WABA_ID to manage templates.",
+  "metaTransientError": "Meta did not respond (temporary error). Wait a minute and tap Sync.",
+  "metaLoadFailed": "Could not load templates from Meta.",
   "noTemplates": "No templates yet. Click Create.",
   "countOne": "1 template in your account",
   "countMany": "{count} templates in your account",

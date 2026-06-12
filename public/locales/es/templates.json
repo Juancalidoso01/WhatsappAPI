@@ -17,6 +17,8 @@
   "varCatalogSummaryHint": "· referencia para operadores",
   "varCatalogIntro": "Solo guía humana: qué dato va en cada campo y formato correcto. No cambia las plantillas ya aprobadas en Meta. Las marcadas «Futuro» son para cuando pidamos nuevas aprobaciones.",
   "configureAccess": "Configura ACCESS_TOKEN y WABA_ID para gestionar plantillas.",
+  "metaTransientError": "Meta no respondió (error temporal). Espera un minuto y pulsa Sincronizar.",
+  "metaLoadFailed": "No se pudieron cargar las plantillas desde Meta.",
   "noTemplates": "No hay plantillas. Pulsa “Crear”.",
   "countOne": "1 plantilla en tu cuenta",
   "countMany": "{count} plantillas en tu cuenta",
