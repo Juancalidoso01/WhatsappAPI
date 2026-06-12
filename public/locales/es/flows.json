@@ -178,6 +178,9 @@
   "viewDetails": "Ver →",
   "emptySends": "Aún no hay envíos registrados.",
   "emptyResponses": "Aún no hay respuestas. Cuando alguien complete el Flow, aparecerá aquí.",
+  "detailLoadFailed": "No se pudo cargar el detalle del Flow.",
+  "listLoadFailed": "No se pudo cargar la lista de Flows.",
+  "integrityBlocked": "Meta bloqueó el envío (Integrity). Verifica el negocio y el nombre del número, o prueba con Flow en borrador a un número en ventana 24 h.",
   "detailPreviewHint": "Así ve el cliente el mensaje y el formulario.",
   "configModal": {
     "title": "Configuración de Flows",

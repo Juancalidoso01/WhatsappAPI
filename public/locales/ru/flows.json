@@ -158,6 +158,9 @@
   "viewDetails": "Смотреть →",
   "emptySends": "Отправок пока нет.",
   "emptyResponses": "Ответов пока нет. Когда кто-то завершит Flow, они появятся здесь.",
+  "detailLoadFailed": "Не удалось загрузить детали Flow.",
+  "listLoadFailed": "Не удалось загрузить список Flow.",
+  "integrityBlocked": "Meta заблокировала отправку (Integrity). Проверьте бизнес и имя номера или отправьте черновик Flow номеру в окне 24 ч.",
   "detailPreviewHint": "Как клиент видит сообщение и форму.",
   "configModal": {
     "title": "Настройки Flows",

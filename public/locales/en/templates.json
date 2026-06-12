@@ -123,6 +123,7 @@
   "deleteOk": "Template «{name}» deleted.",
   "deleteFailed": "Could not delete the template.",
   "submittingMeta": "Submitting to Meta…",
+  "requestMetaFlow": "Submit tour variant",
   "submitMetaOk": "Template «{name}» submitted for Meta review.",
   "submitMetaFailed": "Could not submit the template to Meta.",
   "presetAlreadySubmitted": "All variants already submitted. Sync to see status."

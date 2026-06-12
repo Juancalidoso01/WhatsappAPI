@@ -178,6 +178,9 @@
   "viewDetails": "View →",
   "emptySends": "No sends recorded yet.",
   "emptyResponses": "No responses yet. When someone completes the Flow, it will appear here.",
+  "detailLoadFailed": "Could not load Flow details.",
+  "listLoadFailed": "Could not load the Flow list.",
+  "integrityBlocked": "Meta blocked the send (Integrity). Verify business and display name, or try a draft Flow to a number within the 24 h window.",
   "detailPreviewHint": "How the customer sees the message and form.",
   "configModal": {
     "title": "Flow settings",

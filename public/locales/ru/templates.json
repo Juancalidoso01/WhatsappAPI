@@ -122,6 +122,7 @@
   "deleteOk": "Шаблон «{name}» удалён.",
   "deleteFailed": "Не удалось удалить шаблон.",
   "submittingMeta": "Отправка в Meta…",
+  "requestMetaFlow": "Запросить вариант с туром",
   "submitMetaOk": "Шаблон «{name}» отправлен на проверку Meta.",
   "submitMetaFailed": "Не удалось отправить шаблон в Meta.",
   "presetAlreadySubmitted": "Все варианты уже отправлены. Синхронизируйте для статуса."

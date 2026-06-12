@@ -1740,6 +1740,7 @@ async function loadTemplates() {
   const res = await api("/api/templates");
   state.templates = (res && res.data) || [];
   if (res && res.warning) toast(res.warning, "error");
+  if (res && res.error) toast(res.error, "error");
   return state.templates;
 }
 
@@ -2341,6 +2342,23 @@ async function syncTemplatesWithMeta() {
   toast(t("toast.syncMetaOk", { total: res.total || 0 }), "ok");
 }
 
+function updateTplDraftSubmitBtn(key) {
+  const btn = $("tplDraftCreateBtn");
+  if (!btn) return;
+  const preset = state.templatePresets.find((p) => p.key === key);
+  const action = preset ? nextPresetSubmitAction(preset, presetMetaForKey(key)) : null;
+  if (!action) {
+    btn.classList.add("hidden");
+    btn.disabled = true;
+    return;
+  }
+  btn.classList.remove("hidden");
+  btn.disabled = false;
+  btn.textContent = action.variant === "flow"
+    ? t("templates.requestMetaFlow")
+    : t("modals.draftModal.requestMeta");
+}
+
 function renderTplDraftMetaBar(key) {
   const el = $("tplDraftMetaBar");
   if (!el) return;
@@ -2348,13 +2366,17 @@ function renderTplDraftMetaBar(key) {
   const ms = presetMetaForKey(key);
   if (!preset) {
     el.innerHTML = "";
+    updateTplDraftSubmitBtn(key);
     return;
   }
   if (!ms) {
     el.innerHTML = `<p class="muted sm tpl-draft-meta-hint">${escapeHtml(t("templates.draftMetaSyncHint"))}</p>`;
+    updateTplDraftSubmitBtn(key);
     return;
   }
   el.innerHTML = presetVariantRowsHtml(preset, ms);
+  bindTemplateDeleteButtons(el);
+  updateTplDraftSubmitBtn(key);
 }
 
 function updateTplSyncHint() {
@@ -2392,7 +2414,6 @@ async function submitPresetToMeta(key) {
     return;
   }
   const btn = $("tplDraftCreateBtn");
-  const prevLabel = btn ? btn.textContent : "";
   if (btn) {
     btn.disabled = true;
     btn.textContent = t("templates.submittingMeta");
@@ -2402,7 +2423,7 @@ async function submitPresetToMeta(key) {
   });
   if (btn) {
     btn.disabled = false;
-    btn.textContent = prevLabel || t("modals.draftModal.requestMeta");
+    updateTplDraftSubmitBtn(key);
   }
   if (!res.ok) {
     toast(res.error || t("templates.submitMetaFailed"), "error");
@@ -2471,9 +2492,12 @@ async function updatePayAuthPreview() {
   });
 }
 
-async function initTemplateStudio() {
+async function initTemplateStudio(opts = {}) {
   await Promise.all([loadTemplates(), loadTemplatePresets(), loadTplVariableCatalog()]);
   renderTemplatesScreen();
+  const highlightName = opts.highlightName || state.pendingTemplateHighlight || null;
+  state.pendingTemplateHighlight = null;
+  if (highlightName) highlightTemplateInTable(highlightName);
 }
 
 async function refreshTemplatesScreen(opts = {}) {
@@ -4892,7 +4916,10 @@ async function createFlowTemplate(opts = {}) {
 
 async function loadFlowDetail(id) {
   const perfRes = await api(`/api/flows/${encodeURIComponent(id)}/performance`);
-  if (!perfRes.ok) return;
+  if (!perfRes.ok) {
+    toast(perfRes.error || t("flows.detailLoadFailed"), "error");
+    return;
+  }
   state.activeFlowPerformance = perfRes;
   const f = state.flows.find((x) => x.id === id) || perfRes.flow || {};
   $("flowsDetailName").textContent = f.name || id;
@@ -6267,7 +6294,10 @@ async function confirmFlowSend() {
     flowAction: profile.flowAction,
   });
   if (!res.ok) {
-    toast(res.error || res.hint || t("toast.sendFailedGeneric"), "error");
+    const msg = res.integrity
+      ? t("flows.integrityBlocked")
+      : (res.error || res.hint || t("toast.sendFailedGeneric"));
+    toast(msg, "error");
     return;
   }
   toast(t("toast.flowSent", { mode: res.mode || "published" }), "ok");
@@ -6528,6 +6558,7 @@ async function setupFlowEndpoint() {
 async function loadFlows() {
   const res = await api("/api/flows");
   state.flows = (res && res.data) || [];
+  if (res && res.error) toast(res.error || t("flows.listLoadFailed"), "error");
   if (res && res.cleaned > 0) {
     toast(t("toast.draftsCleaned", { count: res.cleaned }), "ok");
   }
@@ -6760,6 +6791,7 @@ async function selectFlow(id) {
   setFlowsTab("mis");
   const detail = await api(`/api/flows/${encodeURIComponent(id)}`);
   state.activeFlowDetail = detail.ok ? detail.flow : null;
+  if (!detail.ok) toast(detail.error || t("flows.detailLoadFailed"), "error");
   if (detail.ok && detail.flow && detail.flow.preview && detail.flow.preview.preview_url) {
     const a = $("flowPreviewLink");
     a.href = detail.flow.preview.preview_url;
@@ -7005,7 +7037,16 @@ function switchScreen(name) {
   const cache = state.screenCache;
   if (name === "templates") {
     markTemplateNotificationsRead();
-    refreshTemplatesScreen({ highlightName: state.pendingTemplateHighlight });
+    const bootTemplates = () => {
+      if (!cache.templates) {
+        cache.templates = true;
+        initTemplateStudio({ highlightName: state.pendingTemplateHighlight });
+      } else {
+        refreshTemplatesScreen({ highlightName: state.pendingTemplateHighlight });
+      }
+    };
+    if (window.I18n) I18n.ensureScreen("templates").then(bootTemplates);
+    else bootTemplates();
   }
   if (name === "bulk") {
     const bootBulk = () => {
@@ -7035,10 +7076,16 @@ function switchScreen(name) {
     }
   }
   if (name === "flows") {
-    if (!cache.flows) {
-      cache.flows = true;
-      initFlowsScreen();
-    }
+    const bootFlows = () => {
+      if (!cache.flows) {
+        cache.flows = true;
+        initFlowsScreen();
+      } else {
+        Promise.all([loadFlowCapability(), loadFlows(), loadFlowActivity()]);
+      }
+    };
+    if (window.I18n) I18n.ensureScreen("flows").then(bootFlows);
+    else bootFlows();
   }
   if (name === "billing") {
     const bootBilling = () => {

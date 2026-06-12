@@ -123,6 +123,7 @@
   "deleteOk": "Plantilla «{name}» eliminada.",
   "deleteFailed": "No se pudo eliminar la plantilla.",
   "submittingMeta": "Enviando a Meta…",
+  "requestMetaFlow": "Solicitar variante con tour",
   "submitMetaOk": "Plantilla «{name}» enviada a revisión de Meta.",
   "submitMetaFailed": "No se pudo enviar la plantilla a Meta.",
   "presetAlreadySubmitted": "Todas las variantes ya fueron enviadas. Sincroniza para ver el estado."
