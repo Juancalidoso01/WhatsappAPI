@@ -90,6 +90,7 @@
     "interactive": "Interactive",
     "location": "Location",
     "contacts": "Contact",
-    "reaction": "Reaction"
+    "reaction": "Reaction",
+    "flow": "Flow"
   }
 }

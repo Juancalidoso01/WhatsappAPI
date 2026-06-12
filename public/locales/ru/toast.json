@@ -1,6 +1,7 @@
 {
   "sendFailed": "Не удалось отправить: {error}",
   "messagesLoadFailed": "Не удалось загрузить сообщения: {error}",
+  "conversationsLoadFailed": "Не удалось загрузить диалоги: {error}",
   "detailLoadFailed": "Не удалось загрузить детали диалога: {error}",
   "varKeyReady": "Ключ «{key}» готов в переменной {index}.",
   "syncMetaError": "Ошибка синхронизации с Meta.",

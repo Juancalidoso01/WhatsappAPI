@@ -35,6 +35,32 @@
   "location": "Ubicación",
   "contact": "Contacto",
   "reaction": "Reacción",
+  "flow": "Flow",
+  "listLoadFailed": "No se pudieron cargar las conversaciones.",
+  "metaIncidentHint": "Meta reporta incidencias en Cloud API; los envíos pueden fallar aunque tu línea esté activa.",
+  "preview": {
+    "image": "Imagen",
+    "audio": "Audio",
+    "voice": "Nota de voz",
+    "video": "Video",
+    "document": "Documento",
+    "flow": "Flow interactivo"
+  },
+  "msgStatus": {
+    "pending": "Enviando…",
+    "sent": "Enviado",
+    "delivered": "Entregado",
+    "read": "Leído",
+    "failed": "Error al enviar"
+  },
+  "received": {
+    "default": "Recibido",
+    "audio": "Audio recibido",
+    "voice": "Nota de voz recibida",
+    "image": "Imagen recibida",
+    "video": "Video recibido",
+    "document": "Documento recibido"
+  },
   "origin": "Origen de conversación",
   "country": "País (inferido)",
   "statsTitle": "Resumen de mensajes",

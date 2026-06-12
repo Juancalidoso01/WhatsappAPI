@@ -90,6 +90,7 @@
     "interactive": "Интерактив",
     "location": "Местоположение",
     "contacts": "Контакт",
-    "reaction": "Реакция"
+    "reaction": "Реакция",
+    "flow": "Flow"
   }
 }

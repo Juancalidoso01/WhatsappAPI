@@ -843,7 +843,10 @@ async function bootDashboard() {
   document.addEventListener("visibilitychange", () => {
     if (!document.hidden) {
       loadConversations().then(() => loadNotifications());
-      if (state.activePhone) loadMessages(state.activePhone);
+      if (state.activePhone) {
+        loadMessages(state.activePhone);
+        loadConversationDetail(state.activePhone);
+      }
     }
     startPolling();
   });
@@ -892,6 +895,11 @@ async function onLocaleChange() {
     updateWindow();
   }
   renderConversations();
+  if (state.currentScreen === "chats") {
+    renderConversations();
+    if (state.messages.length) renderMessages();
+    updateWindow();
+  }
   if (state.currentScreen === "templates") {
     renderTemplatesScreen();
     renderTpMetaRules();
@@ -981,6 +989,14 @@ async function loadConversations() {
   try {
     const prev = state.conversations;
     const data = await api("/api/conversations");
+    if (data && data.error) {
+      toast(t("toast.conversationsLoadFailed", { error: data.error }), "error");
+      const list = $("conversationList");
+      if (list && !state.conversations.length) {
+        list.innerHTML = `<li class="muted" style="padding:24px;text-align:center">${escapeHtml(t("chats.listLoadFailed"))}</li>`;
+      }
+      return;
+    }
     if (!Array.isArray(data)) return;
     if (state.convSnapshotReady) {
       const inbound = detectInboundChanges(prev, data);
@@ -997,7 +1013,9 @@ async function loadConversations() {
     state.conversations = data;
     renderConversations();
     updateUnreadBadges();
-  } catch (_) {}
+  } catch (_) {
+    toast(t("chats.listLoadFailed"), "error");
+  }
 }
 
 function renderConversations() {
@@ -1099,7 +1117,7 @@ async function loadMessages(phone) {
       }
     }
   } catch (_) {
-    toast(t("toast.messagesLoadFailed", { error: "red" }), "error");
+    toast(t("toast.messagesLoadFailed", { error: t("chats.listLoadFailed") }), "error");
   }
 }
 
@@ -1116,7 +1134,7 @@ async function loadConversationDetail(phone) {
       updateWindow();
     }
   } catch (_) {
-    toast(t("toast.detailLoadFailed", { error: "red" }), "error");
+    toast(t("toast.detailLoadFailed", { error: t("chats.listLoadFailed") }), "error");
   }
 }
 
@@ -1133,6 +1151,7 @@ const TYPE_LABELS = {
   contacts: "modals.msgTypes.contacts",
   reaction: "modals.msgTypes.reaction",
   campaign: "chats.campaignSend",
+  flow: "modals.msgTypes.flow",
 };
 
 function msgTypeLabel(type) {
@@ -1273,7 +1292,10 @@ async function saveLeadProfile() {
   if (same) return;
 
   const res = await patch(`/api/conversations/${encodeURIComponent(phone)}`, payload);
-  if (!res.ok) return;
+  if (!res.ok) {
+    toast(res.error || t("toast.saveFailed"), "error");
+    return;
+  }
 
   if (payload.name) {
     d.name = payload.name;
@@ -1353,20 +1375,25 @@ async function saveNotes() {
   const notes = $("detailNotes").value;
   if (state.conversationDetail && state.conversationDetail.notes === notes) return;
   const res = await patch(`/api/conversations/${encodeURIComponent(phone)}`, { notes });
-  if (res.ok && state.conversationDetail) state.conversationDetail.notes = notes;
+  if (!res.ok) {
+    toast(res.error || t("toast.saveFailed"), "error");
+    return;
+  }
+  if (state.conversationDetail) state.conversationDetail.notes = notes;
 }
 
 function previewText(m) {
   if (!m) return "";
   if (m.type === "reaction") return m.reactionEmoji ? `${m.reactionEmoji}` : t("chats.reaction");
   if (m.text) return m.text;
-  if (m.type === "image") return "[imagen]";
-  if (m.type === "audio") return m.voice ? "[nota de voz]" : "[audio]";
-  if (m.type === "video") return "[video]";
-  if (m.type === "document") return "[documento]";
-  if (m.type === "sticker") return "[sticker]";
+  if (m.type === "image") return `[${t("chats.preview.image")}]`;
+  if (m.type === "audio") return m.voice ? `[${t("chats.preview.voice")}]` : `[${t("chats.preview.audio")}]`;
+  if (m.type === "video") return `[${t("chats.preview.video")}]`;
+  if (m.type === "document") return `[${t("chats.preview.document")}]`;
+  if (m.type === "sticker") return `[${t("modals.msgTypes.sticker")}]`;
   if (m.type === "location") return m.location?.name || t("chats.location");
   if (m.type === "contacts") return t("chats.contact");
+  if (m.type === "flow") return m.text || `[${t("chats.preview.flow")}]`;
   if (m.type === "campaign") return t("chats.campaignPreview", { name: m.campaignMeta?.campaignName || m.text || "" });
   return "";
 }
@@ -1466,7 +1493,7 @@ function renderMedia(m) {
     return `<img src="${escapeHtml(src)}" alt="" loading="lazy" />`;
   }
   if (m.type === "audio") {
-    const label = m.voice ? "Nota de voz" : "Audio";
+    const label = m.voice ? t("chats.preview.voice") : t("chats.preview.audio");
     return `<div class="audio-wrap">
       <span class="audio-kind">${escapeHtml(label)} <span class="audio-duration" data-audio-dur>--:--</span></span>
       <audio controls preload="metadata" src="${escapeHtml(src)}"></audio>
@@ -1476,7 +1503,7 @@ function renderMedia(m) {
     return `<video controls preload="metadata" src="${escapeHtml(src)}"></video>`;
   }
   if (m.type === "document") {
-    const label = m.text || "Documento";
+    const label = m.text || t("chats.preview.document");
     return `<a class="doc-link" href="${escapeHtml(src)}" target="_blank" rel="noopener">${escapeHtml(label)}</a>`;
   }
   return "";
@@ -1582,12 +1609,20 @@ function updateMediaPreview() {
 }
 
 const STATUS_LABELS = {
-  pending: "Enviando…",
-  sent: "Enviado",
-  delivered: "Entregado",
-  read: "Leído",
-  failed: "Error al enviar",
+  pending: "chats.msgStatus.pending",
+  sent: "chats.msgStatus.sent",
+  delivered: "chats.msgStatus.delivered",
+  read: "chats.msgStatus.read",
+  failed: "chats.msgStatus.failed",
 };
+
+function inboundStatusLabel(m) {
+  if (m.type === "audio") return m.voice ? t("chats.received.voice") : t("chats.received.audio");
+  if (m.type === "image") return t("chats.received.image");
+  if (m.type === "video") return t("chats.received.video");
+  if (m.type === "document") return t("chats.received.document");
+  return t("chats.received.default");
+}
 
 function messageErrorLabel(m) {
   const e = m && m.error;
@@ -1597,14 +1632,11 @@ function messageErrorLabel(m) {
 
 function statusTick(m) {
   if (m.direction === "in") {
-    let label = "Recibido";
-    if (m.type === "audio") label = m.voice ? "Nota de voz recibida" : "Audio recibido";
-    else if (m.type === "image") label = "Imagen recibida";
-    else if (m.type === "video") label = "Video recibido";
-    else if (m.type === "document") label = "Documento recibido";
+    const label = inboundStatusLabel(m);
     return `<span class="recv-badge" title="${escapeHtml(label)}">${escapeHtml(label)}</span>`;
   }
-  let label = STATUS_LABELS[m.status] || "";
+  const statusKey = STATUS_LABELS[m.status];
+  let label = statusKey ? t(statusKey) : "";
   const err = messageErrorLabel(m);
   if (m.status === "failed" && err) label = `${label}: ${err}`;
   const map = {
@@ -1716,7 +1748,12 @@ function updateWindow() {
       expiryEl.textContent = t("chats.windowNoRecent");
     }
     banner.classList.remove("hidden");
-    banner.innerHTML = t("chats.windowClosedBanner");
+    let bannerHtml = t("chats.windowClosedBanner");
+    const mp = state.metaPlatformStatus;
+    if (mp && mp.ok && mp.overall !== "operational") {
+      bannerHtml += ` <span class="muted sm">${escapeHtml(t("chats.metaIncidentHint"))}</span>`;
+    }
+    banner.innerHTML = bannerHtml;
   }
   syncComposerState();
 }
@@ -7108,7 +7145,19 @@ function switchScreen(name) {
   $("screenFlows").classList.toggle("hidden", name !== "flows");
   $("screenBilling").classList.toggle("hidden", name !== "billing");
 
-  if (name === "chats") loadConversations();
+  if (name === "chats") {
+    const bootChats = () => {
+      loadConversations();
+      if (state.activePhone) {
+        Promise.all([
+          loadMessages(state.activePhone),
+          loadConversationDetail(state.activePhone),
+        ]);
+      }
+    };
+    if (window.I18n) I18n.ensureScreen("chats").then(bootChats);
+    else bootChats();
+  }
   if (!state.pollTimer) startPolling();
 
   const cache = state.screenCache;

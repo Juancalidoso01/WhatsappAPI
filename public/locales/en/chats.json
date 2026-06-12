@@ -35,6 +35,32 @@
   "location": "Location",
   "contact": "Contact",
   "reaction": "Reaction",
+  "flow": "Flow",
+  "listLoadFailed": "Could not load conversations.",
+  "metaIncidentHint": "Meta reports Cloud API incidents; sends may fail even if your line is active.",
+  "preview": {
+    "image": "Image",
+    "audio": "Audio",
+    "voice": "Voice note",
+    "video": "Video",
+    "document": "Document",
+    "flow": "Interactive Flow"
+  },
+  "msgStatus": {
+    "pending": "Sending…",
+    "sent": "Sent",
+    "delivered": "Delivered",
+    "read": "Read",
+    "failed": "Send failed"
+  },
+  "received": {
+    "default": "Received",
+    "audio": "Audio received",
+    "voice": "Voice note received",
+    "image": "Image received",
+    "video": "Video received",
+    "document": "Document received"
+  },
   "origin": "Conversation origin",
   "country": "Country (inferred)",
   "statsTitle": "Message summary",

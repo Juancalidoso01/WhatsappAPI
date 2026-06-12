@@ -1,6 +1,7 @@
 {
   "sendFailed": "No se pudo enviar: {error}",
   "messagesLoadFailed": "No se pudieron cargar los mensajes: {error}",
+  "conversationsLoadFailed": "No se pudieron cargar las conversaciones: {error}",
   "detailLoadFailed": "No se pudo cargar el detalle: {error}",
   "varKeyReady": "Clave «{key}» lista en variable {index}.",
   "syncMetaError": "Error al sincronizar con Meta.",
