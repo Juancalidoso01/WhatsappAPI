@@ -1892,10 +1892,8 @@ function updateWindow() {
     }
     banner.classList.remove("hidden");
     let bannerHtml = t("chats.windowClosedBanner");
-    const mp = state.metaPlatformStatus;
-    if (mp && mp.ok && mp.overall !== "operational") {
-      bannerHtml += ` <span class="muted sm">${escapeHtml(t("chats.metaIncidentHint"))}</span>`;
-    }
+    const mpBanner = metaPlatformBannerHtml(state.metaPlatformStatus, "messaging");
+    if (mpBanner) bannerHtml += mpBanner;
     banner.innerHTML = bannerHtml;
   }
   syncComposerState();
@@ -1920,20 +1918,106 @@ async function sendText(text) {
   await loadConversations();
 }
 
-/* ---------- templates ---------- */
-function templatesMetaErrorMessage(msg) {
-  const raw = String(msg || "");
-  if (/unexpected error has occurred/i.test(raw)) {
-    return t("templates.metaTransientError");
-  }
-  return raw || t("templates.metaLoadFailed");
+/* ---------- Meta health & errors (metastatus.com + Graph API) ---------- */
+const META_OP_KEYS = {
+  templates: ["cloudApi", "waba", "graphApi"],
+  flows: ["flows", "cloudApi"],
+  messaging: ["cloudApi"],
+  campaigns: ["cloudApi", "marketing"],
+  billing: ["cloudApi"],
+  line_health: ["cloudApi"],
+  workspace: null,
+};
+
+function metaServiceLabel(svc) {
+  const key = `meta.services.${svc.key}`;
+  const label = t(key);
+  return label !== key ? label : svc.name;
 }
 
+function metaStatusLabel(status) {
+  const key = `meta.status.${status}`;
+  const label = t(key);
+  return label !== key ? label : status;
+}
+
+function metaAffectedForOperation(mp, operation) {
+  if (!mp || !mp.ok) return [];
+  const keys = META_OP_KEYS[operation];
+  return (mp.services || []).filter((s) => {
+    if (s.level === "ok" || s.status === "operational") return false;
+    if (!keys) return true;
+    return keys.includes(s.key);
+  });
+}
+
+function formatMetaError(res, fallbackKey) {
+  const ctx = res && res.metaContext;
+  if (ctx && ctx.i18nKey) {
+    const main = t(ctx.i18nKey, ctx.i18nParams || {});
+    const hint = ctx.hintKey ? t(ctx.hintKey) : "";
+    return hint ? `${main} ${hint}` : main;
+  }
+  const raw = String((res && res.error) || "");
+  if (raw && state.metaPlatformStatus) {
+    const affected = metaAffectedForOperation(state.metaPlatformStatus, (ctx && ctx.operation) || "messaging");
+    if (affected.length) {
+      const services = affected.map((s) => metaServiceLabel(s)).join(", ");
+      const status = metaStatusLabel(affected[0].status);
+      return `${t("meta.errors.platformOutage", { services, status, detail: "" })} ${t("meta.errors.platformOutageHint")}`;
+    }
+  }
+  if (/unexpected error|retry your request/i.test(raw)) {
+    return `${t("meta.errors.transient")} ${t("meta.errors.transientHint")}`;
+  }
+  return raw || (fallbackKey ? t(fallbackKey) : "");
+}
+
+function metaPlatformOverallLabel(mp) {
+  if (!mp) return "";
+  return metaStatusLabel(mp.overall);
+}
+
+function metaPlatformBannerHtml(mp, operation) {
+  if (!mp || !mp.ok) return "";
+  const affected = metaAffectedForOperation(mp, operation);
+  if (!affected.length) return "";
+  const cls = affected.some((s) => s.level === "error") ? "error" : "warn";
+  const servicesLine = affected.map((s) => `${metaServiceLabel(s)} (${metaStatusLabel(s.status)})`).join(" · ");
+  const affectedIds = new Set(affected.map((s) => s.id));
+  const outage = (mp.outages || []).find((o) => affectedIds.has(o.serviceId));
+  const detail = outage && outage.description
+    ? (outage.description.length > 200 ? outage.description.slice(0, 197) + "…" : outage.description)
+    : "";
+  return `<div class="meta-status-banner ${cls}" role="status">
+    <strong>${escapeHtml(t("meta.bannerTitle"))}</strong>
+    <span>${escapeHtml(servicesLine)}${detail ? ` — ${escapeHtml(detail)}` : ""}${mp.stale ? ` (${escapeHtml(t("meta.bannerStale"))})` : ""}</span>
+    <a href="${escapeHtml(mp.pageUrl)}" target="_blank" rel="noopener noreferrer">${escapeHtml(t("meta.bannerLink"))}</a>
+  </div>`;
+}
+
+function renderMetaStatusBanner(slotId, operation) {
+  const el = $(slotId);
+  if (!el) return;
+  el.innerHTML = metaPlatformBannerHtml(state.metaPlatformStatus, operation);
+}
+
+async function ensureMetaPlatformStatus(force) {
+  if (!force && state.metaPlatformStatus && state.metaPlatformStatus.ok) return state.metaPlatformStatus;
+  const url = force ? "/api/meta-platform-status?refresh=1" : "/api/meta-platform-status";
+  const mp = await api(url);
+  if (mp && mp.ok) state.metaPlatformStatus = mp;
+  return mp;
+}
+
+/* ---------- templates ---------- */
 async function loadTemplates() {
+  await ensureMetaPlatformStatus();
   const res = await api("/api/templates");
   state.templates = (res && res.data) || [];
+  renderMetaStatusBanner("tplMetaStatusBanner", "templates");
   if (res && res.warning) toast(res.warning, res.stale ? "info" : "error");
-  if (res && res.error) toast(templatesMetaErrorMessage(res.error), "error");
+  if (res && res.error) toast(formatMetaError(res, "templates.metaLoadFailed"), res.metaContext && res.metaContext.severity === "warn" ? "info" : "error");
   return state.templates;
 }
 
@@ -2119,6 +2203,7 @@ function renderTplOtherList() {
 }
 
 function renderTemplatesScreen() {
+  renderMetaStatusBanner("tplMetaStatusBanner", "templates");
   renderTplProductGrid();
   renderTplOtherList();
 }
@@ -2522,9 +2607,9 @@ async function syncTemplatesWithMeta() {
   const res = await post("/api/templates/sync-meta", {});
   if (btn) btn.disabled = false;
   if (!res.ok) {
-    const errMsg = templatesMetaErrorMessage(res.error);
+    const errMsg = formatMetaError(res, "templates.syncFailed");
     if (hint) hint.textContent = errMsg || t("templates.syncFailed");
-    toast(errMsg || t("toast.syncMetaError"), "error");
+    toast(errMsg || t("toast.syncMetaError"), res.metaContext && res.metaContext.severity === "warn" ? "info" : "error");
     return;
   }
   state.templates = res.data || [];
@@ -2687,6 +2772,7 @@ async function updatePayAuthPreview() {
 }
 
 async function initTemplateStudio(opts = {}) {
+  await ensureMetaPlatformStatus();
   await Promise.all([loadTemplates(), loadTemplatePresets(), loadTplVariableCatalog()]);
   renderTemplatesScreen();
   const highlightName = opts.highlightName || state.pendingTemplateHighlight || null;
@@ -4242,32 +4328,10 @@ async function loadLineHealth() {
   return state.lineHealth;
 }
 
-function metaPlatformOverallLabel(mp) {
-  if (!mp) return "";
-  const key = `workspace.ops.metaPlatformSt.${mp.overall}`;
-  const label = t(key);
-  return label !== key ? label : mp.overall;
-}
-
-function metaPlatformBannerHtml(mp) {
-  if (!mp || !mp.ok || mp.overall === "operational") return "";
-  const cls = mp.overallLevel === "error" ? "error" : "warn";
-  const affected = (mp.services || []).filter((s) => s.level !== "ok").map((s) => s.name).join(", ");
-  const outage = mp.outages && mp.outages[0] && mp.outages[0].description;
-  const detail = outage
-    ? (outage.length > 220 ? outage.slice(0, 217) + "…" : outage)
-    : affected;
-  return `<div class="meta-status-banner ${cls}" role="status">
-    <strong>${escapeHtml(t("workspace.ops.metaPlatformBanner"))}</strong>
-    <span>${escapeHtml(metaPlatformOverallLabel(mp))}${detail ? ` — ${escapeHtml(detail)}` : ""}</span>
-    <a href="${escapeHtml(mp.pageUrl)}" target="_blank" rel="noopener noreferrer">${escapeHtml(t("workspace.ops.metaPlatformLink"))}</a>
-  </div>`;
-}
-
 function renderLineHealth() {
   const box = $("lineHealthCards");
   const l = state.lineHealth;
-  const banner = metaPlatformBannerHtml(state.metaPlatformStatus);
+  const banner = metaPlatformBannerHtml(state.metaPlatformStatus, "campaigns");
   if (!l) {
     box.innerHTML = `${banner}<div class="lh-card"><span class="lh-label">${escapeHtml(t("bulk.lineWhatsapp"))}</span><span class="lh-value">—</span><span class="lh-sub">${escapeHtml(t("bulk.configureLine"))}</span></div>`;
     return;
@@ -4706,7 +4770,7 @@ function renderSystemStatus(wsRes) {
     const mpMark = mpLevel === "ok" ? "ok" : mpLevel === "error" ? "error" : "warn";
     rows.unshift(`<li class="ws-ops-${escapeHtml(mpMark)}">${levelMark(mpMark)} ${escapeHtml(t("workspace.ops.metaPlatform"))}: ${escapeHtml(metaPlatformOverallLabel(mp))}${mp.stale ? ` (${escapeHtml(t("workspace.ops.metaPlatformStale"))})` : ""}</li>`);
     (mp.services || []).filter((s) => s.level !== "ok").forEach((s) => {
-      rows.push(`<li class="ws-ops-warn-detail">${escapeHtml(s.name)} — ${escapeHtml(s.statusRaw || s.status)}</li>`);
+      rows.push(`<li class="ws-ops-warn-detail">${escapeHtml(metaServiceLabel(s))} — ${escapeHtml(s.statusRaw || metaStatusLabel(s.status))}</li>`);
     });
     if (mp.overall !== "operational" && mp.outages && mp.outages.length) {
       const d = mp.outages[0].description;
@@ -6685,10 +6749,13 @@ async function loadFlowCapability() {
     ? (res.flowCount === 1 ? t("flows.flowCountOne") : t("flows.flowCountMany", { count: res.flowCount }))
     : t("flows.flowsAvailable");
   text.textContent = ok ? t("flows.connected", { count }) : t("flows.connectedPartial");
-  const mp = state.metaPlatformStatus;
-  if (ok && mp && mp.ok && mp.overall !== "operational") {
+  const affected = metaAffectedForOperation(state.metaPlatformStatus, "flows");
+  if (ok && affected.length) {
     dot.className = "flows-status-dot warn";
-    text.textContent = t("flows.metaPlatformDegraded", { status: metaPlatformOverallLabel(mp) });
+    const services = affected.map((s) => metaServiceLabel(s)).join(", ");
+    text.textContent = t("flows.metaPlatformDegraded", {
+      status: `${metaStatusLabel(affected[0].status)} · ${services}`,
+    });
   }
   if (cfgStatus) {
     cfgStatus.textContent = ok
@@ -7230,11 +7297,8 @@ async function initFlowsScreen() {
     loadFlows(),
     loadFlowActivity(),
   ]);
-  const mpRes = await api("/api/meta-platform-status");
-  if (mpRes && mpRes.ok) {
-    state.metaPlatformStatus = mpRes;
-    loadFlowCapability();
-  }
+  await ensureMetaPlatformStatus();
+  loadFlowCapability();
 }
 
 /* ---------- modals & nav ---------- */

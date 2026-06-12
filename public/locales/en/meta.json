@@ -1,0 +1,36 @@
+{
+  "bannerTitle": "Meta incident",
+  "bannerLink": "View metastatus.com",
+  "bannerStale": "cached data",
+  "status": {
+    "operational": "No known issues",
+    "major": "Major outage",
+    "degraded": "Degraded",
+    "unknown": "Unknown"
+  },
+  "services": {
+    "cloudApi": "Cloud API",
+    "cloudApiCalling": "Cloud API (Calling)",
+    "flows": "WhatsApp Flows",
+    "marketing": "Marketing Messages API",
+    "waba": "WABA account management",
+    "graphApi": "Graph API",
+    "embeddedSignup": "Embedded Signup"
+  },
+  "errors": {
+    "authToken": "The Meta token (ACCESS_TOKEN) expired or is invalid.",
+    "authTokenHint": "Generate a new token in Meta Business and update the Vercel variable.",
+    "permission": "Meta rejected the operation due to insufficient permissions.",
+    "permissionHint": "Ensure the token has WhatsApp Business access for the correct WABA.",
+    "rateLimit": "Meta rate-limited requests.",
+    "rateLimitHint": "Wait a few minutes before retrying.",
+    "transient": "Meta did not respond (temporary error). This is not a panel failure.",
+    "transientWithStatus": "Meta did not respond. Global status: {status}.",
+    "transientHint": "Retry in 1–2 minutes or tap Sync.",
+    "platformOutage": "Meta reports {status} on {services}.",
+    "platformOutageHint": "This is a global Meta incident, not your account. Track status on metastatus.com.",
+    "requestError": "Meta rejected the request: {detail}",
+    "unknown": "Could not complete the operation on Meta.",
+    "unknownWithOutage": "Meta failed while {status} affects {services}."
+  }
+}

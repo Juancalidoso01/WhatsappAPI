@@ -1,0 +1,36 @@
+{
+  "bannerTitle": "Инцидент Meta",
+  "bannerLink": "Открыть metastatus.com",
+  "bannerStale": "кэш",
+  "status": {
+    "operational": "Без сбоев",
+    "major": "Серьёзный сбой",
+    "degraded": "Деградация",
+    "unknown": "Неизвестно"
+  },
+  "services": {
+    "cloudApi": "Cloud API",
+    "cloudApiCalling": "Cloud API (звонки)",
+    "flows": "WhatsApp Flows",
+    "marketing": "Marketing Messages API",
+    "waba": "Управление WABA",
+    "graphApi": "Graph API",
+    "embeddedSignup": "Embedded Signup"
+  },
+  "errors": {
+    "authToken": "Токен Meta (ACCESS_TOKEN) истёк или недействителен.",
+    "authTokenHint": "Создайте новый токен в Meta Business и обновите переменную в Vercel.",
+    "permission": "Meta отклонила операцию из‑за недостаточных прав.",
+    "permissionHint": "Проверьте доступ токена к WhatsApp Business и нужному WABA.",
+    "rateLimit": "Meta ограничила число запросов.",
+    "rateLimitHint": "Подождите несколько минут перед повтором.",
+    "transient": "Meta не ответила (временная ошибка). Это не сбой панели.",
+    "transientWithStatus": "Meta не ответила. Глобальный статус: {status}.",
+    "transientHint": "Повторите через 1–2 минуты или нажмите «Синхронизировать».",
+    "platformOutage": "Meta сообщает о {status} в {services}.",
+    "platformOutageHint": "Это глобальный инцидент Meta, не ваша учётная запись. Следите на metastatus.com.",
+    "requestError": "Meta отклонила запрос: {detail}",
+    "unknown": "Не удалось выполнить операцию в Meta.",
+    "unknownWithOutage": "Сбой Meta при {status} в {services}."
+  }
+}

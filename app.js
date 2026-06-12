@@ -33,6 +33,7 @@ const { requireIntegrationKey } = require('./services/api-auth');
 const dashboardAuth = require('./services/dashboard-auth');
 const { getOpsStatus } = require('./services/ops-status');
 const { getMetaPlatformStatus } = require('./services/meta-platform-status');
+const { attachMetaError } = require('./services/meta-error-context');
 const WorkspaceStore = require('./services/workspace-store');
 const reports = require('./services/reports');
 const templateBuilder = require('./services/template-builder');
@@ -1948,15 +1949,20 @@ app.get('/api/templates', async (req, res) => {
     if (cached && cached.data.length) {
       const data = (await enrichTemplatesList(cached.data))
         .sort((a, b) => (b.displayAt || 0) - (a.displayAt || 0) || String(a.name).localeCompare(String(b.name)));
-      return res.json({
+      return res.json(await attachMetaError({
         data,
         total: data.length,
         summary: templateCategory.summarizeTemplates(data),
         stale: true,
         warning: 'Meta no respondió; mostrando la última copia guardada. Vuelve a sincronizar en unos minutos.',
-      });
+      }, 'templates', err));
     }
-    res.status(200).json({ data: [], total: 0, summary: { total: 0 }, error: String(err.message || err) });
+    res.status(200).json(await attachMetaError({
+      data: [],
+      total: 0,
+      summary: { total: 0 },
+      error: String(err.message || err),
+    }, 'templates', err));
   }
 });
 
@@ -2105,7 +2111,7 @@ app.post('/api/templates/sync-meta', async (req, res) => {
     });
   } catch (err) {
     console.error('sync-meta error:', err.message);
-    res.status(500).json({ ok: false, error: String(err.message || err) });
+    res.status(500).json(await attachMetaError({ ok: false, error: String(err.message || err) }, 'templates', err));
   }
 });
 
@@ -3038,7 +3044,7 @@ app.get('/api/line-health', async (req, res) => {
     });
   } catch (err) {
     console.error('line-health error:', err.message);
-    res.json({ ok: false, error: String(err.message || err) });
+    res.json(await attachMetaError({ ok: false, error: String(err.message || err) }, 'line_health', err));
   }
 });
 
