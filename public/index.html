@@ -141,6 +141,10 @@
           </button>
           </div>
         </header>
+        <div class="conv-filter-tabs" role="tablist">
+          <button type="button" class="conv-filter active" data-conv-filter="active" role="tab" aria-selected="true" data-i18n="chats.filterActive">Activas</button>
+          <button type="button" class="conv-filter" data-conv-filter="archived" role="tab" aria-selected="false" data-i18n="chats.filterArchived">Archivadas</button>
+        </div>
         <div class="search">
           <svg viewBox="0 0 24 24" class="ic-search"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg>
           <input id="searchInput" type="text" data-i18n-placeholder="chats.searchPlaceholder" placeholder="Buscar…" />
@@ -300,6 +304,8 @@
         </div>
         <div class="detail-section">
           <span class="detail-label" data-i18n="chats.actions">Acciones</span>
+          <button type="button" class="btn-ghost block" id="detailMarkUnreadBtn" data-i18n="chats.markUnread">Marcar como no leída</button>
+          <button type="button" class="btn-ghost block" id="detailArchiveBtn" data-i18n="chats.archive">Archivar</button>
           <button class="btn-ghost block" id="detailTemplateBtn" data-i18n="chats.sendTemplate">Enviar plantilla</button>
           <button class="btn-ghost block" id="detailMediaBtn" data-i18n="chats.sendMedia">Enviar imagen/archivo</button>
           <button type="button" class="btn-ghost block danger-text" id="detailDeleteChatBtn" data-i18n="chats.deleteConversation">Eliminar conversación</button>

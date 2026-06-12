@@ -122,6 +122,7 @@ const state = {
   messages: [],
   conversationDetail: null,
   filter: "",
+  chatsFilter: "active",
   pollTimer: null,
   notesTimer: null,
   leadTimer: null,
@@ -247,12 +248,13 @@ function ensureKnownEventIds() {
 function conversationUnread(c) {
   const last = c && c.lastMessage;
   if (!last || last.direction !== "in") return false;
-  const seen = state.readThrough[phoneKey(c.phone)] || 0;
+  const pk = phoneKey(c.phone);
+  const seen = Math.max(Number(c.lastReadAt) || 0, state.readThrough[pk] || 0);
   return last.timestamp > seen;
 }
 
 function totalUnreadChats() {
-  return state.conversations.filter(conversationUnread).length;
+  return state.conversations.filter((c) => !c.archived && conversationUnread(c)).length;
 }
 
 function markConversationRead(phone, minTimestamp = 0) {
@@ -268,9 +270,16 @@ function markConversationRead(phone, minTimestamp = 0) {
       if (m.timestamp) ts = Math.max(ts, m.timestamp);
     }
   }
-  state.readThrough[pk] = Math.max(state.readThrough[pk] || 0, ts);
+  const prev = Math.max(state.readThrough[pk] || 0, Number(c && c.lastReadAt) || 0);
+  ts = Math.max(prev, ts);
+  state.readThrough[pk] = ts;
   saveReadThrough();
+  if (c) c.lastReadAt = ts;
+  if (state.conversationDetail && phoneKey(state.conversationDetail.phone) === pk) {
+    state.conversationDetail.lastReadAt = ts;
+  }
   updateUnreadBadges();
+  patch(`/api/conversations/${encodeURIComponent(pk)}`, { lastReadAt: ts }).catch(() => {});
 }
 
 function notifLabel(ev) {
@@ -1017,15 +1026,81 @@ async function loadConversations() {
   }
 }
 
+function setChatsFilter(filter) {
+  state.chatsFilter = filter === "archived" ? "archived" : "active";
+  document.querySelectorAll(".conv-filter").forEach((btn) => {
+    const on = btn.dataset.convFilter === state.chatsFilter;
+    btn.classList.toggle("active", on);
+    btn.setAttribute("aria-selected", on ? "true" : "false");
+  });
+  renderConversations();
+}
+
+function updateDetailArchiveBtn() {
+  const btn = $("detailArchiveBtn");
+  if (!btn) return;
+  const archived = Boolean(state.conversationDetail && state.conversationDetail.archived);
+  btn.textContent = t(archived ? "chats.unarchive" : "chats.archive");
+  btn.dataset.archived = archived ? "1" : "0";
+}
+
+async function setConversationArchived(phone, archived) {
+  if (!phone) return;
+  const pk = phoneKey(phone);
+  const res = await patch(`/api/conversations/${encodeURIComponent(pk)}`, { archived });
+  if (!res.ok) {
+    toast(res.error || t("chats.archiveFailed"), "error");
+    return;
+  }
+  const conv = state.conversations.find((c) => phoneKey(c.phone) === pk);
+  if (conv) conv.archived = archived;
+  if (state.conversationDetail && phoneKey(state.conversationDetail.phone) === pk) {
+    state.conversationDetail.archived = archived;
+    updateDetailArchiveBtn();
+  }
+  toast(t(archived ? "chats.archiveOk" : "chats.unarchiveOk"), "ok");
+  if (archived && phoneKey(state.activePhone) === pk) closeChatView();
+  renderConversations();
+  updateUnreadBadges();
+}
+
+async function markConversationUnread(phone) {
+  if (!phone) return;
+  const pk = phoneKey(phone);
+  const res = await post(`/api/conversations/${encodeURIComponent(pk)}/mark-unread`);
+  if (!res.ok) {
+    toast(res.error || t("chats.markUnreadFailed"), "error");
+    return;
+  }
+  const ts = Number(res.lastReadAt) || 0;
+  const conv = state.conversations.find((c) => phoneKey(c.phone) === pk);
+  if (conv) conv.lastReadAt = ts;
+  if (state.conversationDetail && phoneKey(state.conversationDetail.phone) === pk) {
+    state.conversationDetail.lastReadAt = ts;
+  }
+  const local = state.readThrough[pk] || 0;
+  if (local > ts) {
+    state.readThrough[pk] = ts;
+    saveReadThrough();
+  }
+  toast(t("chats.markUnreadOk"), "ok");
+  renderConversations();
+  updateUnreadBadges();
+}
+
 function renderConversations() {
   const list = $("conversationList");
   if (!list) return;
   const q = state.filter.toLowerCase();
-  const items = state.conversations.filter(
-    (c) => !q || String(c.name).toLowerCase().includes(q) || String(c.phone).includes(q)
-  );
+  const tab = state.chatsFilter || "active";
+  const items = state.conversations.filter((c) => {
+    const isArchived = Boolean(c.archived);
+    if (tab === "archived" ? !isArchived : isArchived) return false;
+    return !q || String(c.name).toLowerCase().includes(q) || String(c.phone).includes(q);
+  });
   if (!items.length) {
-    list.innerHTML = `<li class="muted" style="padding:24px;text-align:center">${escapeHtml(t("chats.emptyList"))}</li>`;
+    const emptyKey = tab === "archived" ? "chats.emptyArchived" : "chats.emptyList";
+    list.innerHTML = `<li class="muted" style="padding:24px;text-align:center">${escapeHtml(t(emptyKey))}</li>`;
     return;
   }
   list.innerHTML = items
@@ -1399,6 +1474,7 @@ function renderDetailPanel() {
   if (document.activeElement !== notesEl) {
     notesEl.value = d.notes || "";
   }
+  updateDetailArchiveBtn();
 }
 
 async function saveNotes() {
@@ -7451,6 +7527,9 @@ function bindEvents() {
       toggleWorkspaceFlyout();
     });
   }
+  document.querySelectorAll(".conv-filter").forEach((btn) =>
+    btn.addEventListener("click", () => setChatsFilter(btn.dataset.convFilter))
+  );
   $("searchInput").addEventListener("input", (e) => { state.filter = e.target.value; renderConversations(); });
   $("composer").addEventListener("submit", (e) => { e.preventDefault(); sendText($("messageInput").value); });
   $("replyCancel")?.addEventListener("click", clearReplyTo);
@@ -7481,6 +7560,17 @@ function bindEvents() {
     }
     showModal("modalMedia");
   });
+  const detailMarkUnreadBtn = $("detailMarkUnreadBtn");
+  if (detailMarkUnreadBtn) {
+    detailMarkUnreadBtn.addEventListener("click", () => markConversationUnread(state.activePhone));
+  }
+  const detailArchiveBtn = $("detailArchiveBtn");
+  if (detailArchiveBtn) {
+    detailArchiveBtn.addEventListener("click", () => {
+      const archived = detailArchiveBtn.dataset.archived === "1";
+      setConversationArchived(state.activePhone, !archived);
+    });
+  }
   const detailDeleteChatBtn = $("detailDeleteChatBtn");
   if (detailDeleteChatBtn) {
     detailDeleteChatBtn.addEventListener("click", () => {

@@ -358,6 +358,30 @@ input, textarea, select { font-family: inherit; }
 .btn-ghost:hover { background: var(--brand-100); }
 .btn-ghost.block { display: block; width: 100%; margin-top: 8px; text-align: left; }
 
+.conv-filter-tabs {
+  display: flex;
+  gap: 6px;
+  padding: 0 16px 10px;
+}
+.conv-filter {
+  flex: 1;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  border-radius: 9px;
+  padding: 7px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  cursor: pointer;
+  transition: background .15s, color .15s, border-color .15s;
+}
+.conv-filter:hover { color: var(--text); }
+.conv-filter.active {
+  background: var(--brand-50);
+  border-color: var(--brand);
+  color: var(--brand);
+}
+
 .search {
   position: relative; padding: 0 16px 12px;
 }

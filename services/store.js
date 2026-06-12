@@ -194,6 +194,8 @@ function parseConvoMeta(meta, phone) {
     windowExpiresAt: meta.windowExpiresAt ? Number(meta.windowExpiresAt) : null,
     notes: meta.notes || "",
     leadProfile: leadProfile.parse(meta.leadProfile),
+    archived: meta.archived === "1" || meta.archived === true,
+    lastReadAt: meta.lastReadAt != null && meta.lastReadAt !== "" ? Number(meta.lastReadAt) : 0,
   };
 }
 
@@ -201,7 +203,9 @@ async function updateConversationMeta(phone, fields) {
   const p = String(phone);
   const clean = {};
   Object.entries(fields || {}).forEach(([k, v]) => {
-    if (v != null && v !== "") clean[k] = String(v);
+    if (v == null) return;
+    if (v === "" && k !== "notes") return;
+    clean[k] = String(v);
   });
   if (!Object.keys(clean).length) return;
 
@@ -213,6 +217,8 @@ async function updateConversationMeta(phone, fields) {
   Object.assign(convo, clean);
   if (clean.firstSeen && !convo.firstSeen) convo.firstSeen = Number(clean.firstSeen);
   if (clean.windowExpiresAt) convo.windowExpiresAt = Number(clean.windowExpiresAt);
+  if (clean.lastReadAt != null) convo.lastReadAt = Number(clean.lastReadAt);
+  if (clean.archived != null) convo.archived = clean.archived;
 }
 
 function computeMessageStats(messages) {
@@ -292,6 +298,10 @@ async function listConversations() {
           name: String((meta && meta.name) || phone),
           lastActivity: Number(score) || (lastMessage && lastMessage.timestamp) || 0,
           lastMessage,
+          archived: Boolean(meta && meta.archived === "1"),
+          lastReadAt: meta && meta.lastReadAt != null && meta.lastReadAt !== ""
+            ? Number(meta.lastReadAt)
+            : 0,
         };
       })
     );
@@ -305,6 +315,8 @@ async function listConversations() {
       name: c.name,
       lastActivity: c.lastActivity,
       lastMessage: c.messages[c.messages.length - 1] || null,
+      archived: c.archived === "1" || c.archived === true,
+      lastReadAt: c.lastReadAt != null ? Number(c.lastReadAt) : 0,
     }));
 }
 

@@ -2725,6 +2725,22 @@ async function resolveLastInboundWaId(phone) {
   return null;
 }
 
+// Marcar conversación como no leída en el panel (estado compartido vía Redis)
+app.post('/api/conversations/:phone/mark-unread', apiJson, async (req, res) => {
+  const phone = String(req.params.phone || '').replace(/\D/g, '');
+  if (!phone) return res.status(400).json({ ok: false, error: 'Teléfono inválido.' });
+  try {
+    const msgs = await Store.getMessages(phone);
+    const lastIn = [...msgs].reverse().find((m) => m.direction === 'in');
+    const lastReadAt = lastIn ? Math.max(0, lastIn.timestamp - 1) : 0;
+    await Store.updateConversationMeta(phone, { lastReadAt: String(lastReadAt) });
+    res.json({ ok: true, lastReadAt });
+  } catch (err) {
+    console.error('mark-unread error:', err.message);
+    res.status(500).json({ ok: false, error: String(err.message || err) });
+  }
+});
+
 // Mark customer messages as read on WhatsApp (blue ticks for the customer)
 app.post('/api/conversations/:phone/mark-read', apiJson, async (req, res) => {
   const phone = req.params.phone;
@@ -2850,10 +2866,14 @@ app.delete('/api/conversations/:phone', async (req, res) => {
 
 // Actualizar notas y perfil de lead (calificación CRM)
 app.patch('/api/conversations/:phone', apiJson, async (req, res) => {
-  const { notes, name, lead } = req.body || {};
+  const { notes, name, lead, archived, lastReadAt } = req.body || {};
   const fields = {};
   if (typeof notes === 'string') fields.notes = notes;
   if (typeof name === 'string' && name.trim()) fields.name = name.trim();
+  if (typeof archived === 'boolean') fields.archived = archived ? '1' : '0';
+  if (lastReadAt != null && !Number.isNaN(Number(lastReadAt))) {
+    fields.lastReadAt = String(Math.max(0, Number(lastReadAt)));
+  }
   if (lead && typeof lead === 'object') {
     const meta = await Store.getConversationMeta(req.params.phone);
     const merged = leadProfile.merge(meta && meta.leadProfile, leadProfile.sanitizePatch(lead));
