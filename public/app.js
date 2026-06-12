@@ -896,7 +896,6 @@ async function onLocaleChange() {
   }
   renderConversations();
   if (state.currentScreen === "chats") {
-    renderConversations();
     if (state.messages.length) renderMessages();
     updateWindow();
   }
@@ -1044,12 +1043,42 @@ function renderConversations() {
           <div class="conv-last">${escapeHtml(prefix + previewText(last))}</div>
         </div>
         ${unread ? '<span class="conv-unread-dot" aria-hidden="true"></span>' : ""}
+        <button type="button" class="conv-delete-btn" data-phone="${escapeHtml(c.phone)}" data-name="${escapeHtml(c.name)}" aria-label="${escapeHtml(t("chats.deleteConversationAria", { name: c.name }))}" title="${escapeHtml(t("chats.deleteConversation"))}">×</button>
       </li>`;
     })
     .join("");
   list.querySelectorAll(".conv").forEach((el) =>
     el.addEventListener("click", () => openConversation(el.dataset.phone, el.dataset.name))
   );
+  list.querySelectorAll(".conv-delete-btn").forEach((btn) =>
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      deleteConversationByPhone(btn.dataset.phone, btn.dataset.name);
+    })
+  );
+}
+
+async function deleteConversationByPhone(phone, name) {
+  if (!phone) return;
+  const displayName = name || phone;
+  if (!window.confirm(t("chats.deleteConversationConfirm", { name: displayName }))) return;
+  const res = await del(`/api/conversations/${encodeURIComponent(phone)}`);
+  if (!res.ok) {
+    toast(res.error || t("chats.deleteConversationFailed"), "error");
+    return;
+  }
+  const pk = phoneKey(phone);
+  delete state.readThrough[pk];
+  saveReadThrough();
+  if (phoneKey(state.activePhone) === pk) {
+    state.conversationDetail = null;
+    state.messages = [];
+    closeChatView();
+    setDetailPaneOpen(false);
+  }
+  toast(t("chats.deleteConversationOk"), "ok");
+  await loadConversations();
+  loadNotifications().catch(() => {});
 }
 
 function closeChatView() {
@@ -1076,11 +1105,14 @@ async function openConversation(phone, name, highlightMessageId = null, opts = {
   $("detailPhone").textContent = "+" + state.activePhone;
   $("detailAvatar").textContent = initials(name);
   document.querySelector("#screenChats").classList.add("show-chat");
+  const msgBox = $("messages");
+  if (msgBox) msgBox.innerHTML = `<div class="messages-loading muted">${escapeHtml(t("chats.loadingMessages"))}</div>`;
   await Promise.all([
     loadConversations(),
     loadMessages(state.activePhone),
     loadConversationDetail(state.activePhone),
   ]);
+  $("messageInput")?.focus();
   markConversationRead(state.activePhone, opts.minTimestamp);
   markChatNotificationsRead(state.activePhone);
   markWhatsAppRead(state.activePhone);
@@ -1665,34 +1697,69 @@ function bindAudioDurations() {
   });
 }
 
+function sameCalendarDay(a, b) {
+  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+}
+
+function formatMessageDayLabel(ts) {
+  const d = new Date(ts);
+  const now = new Date();
+  const yest = new Date(now);
+  yest.setDate(yest.getDate() - 1);
+  if (sameCalendarDay(d, now)) return t("chats.dayToday");
+  if (sameCalendarDay(d, yest)) return t("chats.dayYesterday");
+  const tag = localeCode() === "ru" ? "ru" : localeCode() === "en" ? "en-US" : "es";
+  return d.toLocaleDateString(tag, { weekday: "short", day: "numeric", month: "short" });
+}
+
+function messageDayKey(ts) {
+  const d = new Date(ts);
+  return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+}
+
+function messageTimeLabel(ts) {
+  const tag = localeCode() === "ru" ? "ru" : localeCode() === "en" ? "en-US" : "es";
+  return new Date(ts).toLocaleTimeString(tag, { hour: "2-digit", minute: "2-digit" });
+}
+
+function renderMessageRowHtml(m, hi) {
+  if (m.type === "campaign") {
+    const time = messageTimeLabel(m.timestamp);
+    return `<div class="msg-row system campaign" data-msg-id="${escapeHtml(m.id)}">
+      <div class="bubble campaign-bubble">${renderCampaignBlock(m)}<div class="bubble-meta">${time}${statusTick(m)}</div></div>
+    </div>`;
+  }
+  const tplClass = m.type === "template" ? " tpl" : "";
+  const isReaction = m.type === "reaction";
+  const media = isReaction ? renderReactionBlock(m) : renderMedia(m);
+  const location = renderLocationBlock(m);
+  const contacts = renderContactsBlock(m);
+  const quote = renderQuoteBlock(m);
+  const caption = m.text && !isReaction && m.type !== "contacts" ? escapeHtml(m.text) : "";
+  const time = messageTimeLabel(m.timestamp);
+  const isHi = hi && (m.id === hi);
+  return `<div class="msg-row ${m.direction}${isReaction ? " reaction" : ""}" data-msg-id="${escapeHtml(m.id)}"${isHi ? ' id="billHighlightMsg"' : ""}>
+    <div class="bubble${tplClass}${isHi ? " msg-highlight" : ""}${isReaction ? " reaction-bubble" : ""}">
+      ${quote}${media}${location}${contacts}${caption}
+      <div class="bubble-meta">${time}${statusTick(m)}${renderMsgActions(m)}</div>
+    </div>
+  </div>`;
+}
+
 function renderMessages() {
   const box = $("messages");
   const hi = state.highlightMessageId;
-  box.innerHTML = state.messages
-    .map((m) => {
-      if (m.type === "campaign") {
-        const time = new Date(m.timestamp).toLocaleTimeString(localeCode() === "ru" ? "ru" : localeCode() === "en" ? "en-US" : "es", { hour: "2-digit", minute: "2-digit" });
-        return `<div class="msg-row system campaign" data-msg-id="${escapeHtml(m.id)}">
-          <div class="bubble campaign-bubble">${renderCampaignBlock(m)}<div class="bubble-meta">${time}${statusTick(m)}</div></div>
-        </div>`;
-      }
-      const tplClass = m.type === "template" ? " tpl" : "";
-      const isReaction = m.type === "reaction";
-      const media = isReaction ? renderReactionBlock(m) : renderMedia(m);
-      const location = renderLocationBlock(m);
-      const contacts = renderContactsBlock(m);
-      const quote = renderQuoteBlock(m);
-      const caption = m.text && !isReaction && m.type !== "contacts" ? escapeHtml(m.text) : "";
-      const time = new Date(m.timestamp).toLocaleTimeString(localeCode() === "ru" ? "ru" : localeCode() === "en" ? "en-US" : "es", { hour: "2-digit", minute: "2-digit" });
-      const isHi = hi && (m.id === hi);
-      return `<div class="msg-row ${m.direction}${isReaction ? " reaction" : ""}" data-msg-id="${escapeHtml(m.id)}"${isHi ? ' id="billHighlightMsg"' : ""}>
-        <div class="bubble${tplClass}${isHi ? " msg-highlight" : ""}${isReaction ? " reaction-bubble" : ""}">
-          ${quote}${media}${location}${contacts}${caption}
-          <div class="bubble-meta">${time}${statusTick(m)}${renderMsgActions(m)}</div>
-        </div>
-      </div>`;
-    })
-    .join("");
+  let lastDay = null;
+  const parts = [];
+  state.messages.forEach((m) => {
+    const day = messageDayKey(m.timestamp);
+    if (day !== lastDay) {
+      lastDay = day;
+      parts.push(`<div class="msg-day-sep" role="separator"><span>${escapeHtml(formatMessageDayLabel(m.timestamp))}</span></div>`);
+    }
+    parts.push(renderMessageRowHtml(m, hi));
+  });
+  box.innerHTML = parts.join("");
   box.querySelectorAll(".msg-action-btn").forEach((btn) => {
     btn.addEventListener("click", (e) => {
       e.stopPropagation();
@@ -7148,6 +7215,14 @@ function switchScreen(name) {
   if (name === "chats") {
     const bootChats = () => {
       loadConversations();
+      if (!state.metaPlatformStatus) {
+        api("/api/meta-platform-status").then((mp) => {
+          if (mp && mp.ok) {
+            state.metaPlatformStatus = mp;
+            if (state.activePhone) updateWindow();
+          }
+        });
+      }
       if (state.activePhone) {
         Promise.all([
           loadMessages(state.activePhone),
@@ -7399,7 +7474,22 @@ function bindEvents() {
   if (contactsBtn) contactsBtn.addEventListener("click", openContactModal);
   const ctSend = $("ctSend");
   if (ctSend) ctSend.addEventListener("click", sendContact);
-  $("detailMediaBtn").addEventListener("click", () => showModal("modalMedia"));
+  $("detailMediaBtn").addEventListener("click", () => {
+    if (!isMessagingWindowOpen()) {
+      toast(t("chats.windowClosedHint"), "error");
+      return;
+    }
+    showModal("modalMedia");
+  });
+  const detailDeleteChatBtn = $("detailDeleteChatBtn");
+  if (detailDeleteChatBtn) {
+    detailDeleteChatBtn.addEventListener("click", () => {
+      const d = state.conversationDetail || {};
+      deleteConversationByPhone(state.activePhone, d.name || $("chatName")?.textContent);
+    });
+  }
+  const emptyNewChatBtn = $("emptyNewChatBtn");
+  if (emptyNewChatBtn) emptyNewChatBtn.addEventListener("click", () => $("newChatBtn")?.click());
   $("mdFile").addEventListener("change", updateMediaPreview);
   $("mdSend").addEventListener("click", sendMedia);
   $("simBtn").addEventListener("click", () => showModal("modalSim"));

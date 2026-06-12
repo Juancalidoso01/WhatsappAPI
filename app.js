@@ -2830,6 +2830,24 @@ app.get('/api/conversations/:phone/detail', async (req, res) => {
   }
 });
 
+// Eliminar conversación del panel (historial local; no borra datos en Meta/WhatsApp)
+app.delete('/api/conversations/:phone', async (req, res) => {
+  const phone = String(req.params.phone || '').replace(/\D/g, '');
+  if (!phone) return res.status(400).json({ ok: false, error: 'Teléfono inválido.' });
+  try {
+    const existed = await Store.getConversationMeta(phone);
+    if (!existed) {
+      const msgs = await Store.getMessages(phone);
+      if (!msgs.length) return res.status(404).json({ ok: false, error: 'Conversación no encontrada.' });
+    }
+    await Store.deleteConversation(phone);
+    res.json({ ok: true, phone });
+  } catch (err) {
+    console.error('deleteConversation error:', err.message);
+    res.status(500).json({ ok: false, error: String(err.message || err) });
+  }
+});
+
 // Actualizar notas y perfil de lead (calificación CRM)
 app.patch('/api/conversations/:phone', apiJson, async (req, res) => {
   const { notes, name, lead } = req.body || {};

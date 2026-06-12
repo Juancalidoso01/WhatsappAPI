@@ -317,6 +317,22 @@ async function getMessages(phone) {
   return convo ? convo.messages : [];
 }
 
+async function deleteConversation(phone) {
+  const p = String(phone || "").trim();
+  if (!p) return false;
+  if (redis) {
+    const zremOps = [redis.zrem(`${PREFIX}convos`, p)];
+    if (/^\d+$/.test(p)) zremOps.push(redis.zrem(`${PREFIX}convos`, Number(p)));
+    await Promise.all([
+      ...zremOps,
+      redis.del(`${PREFIX}convo:${p}`),
+      redis.del(`${PREFIX}msgs:${p}`),
+    ]);
+    return true;
+  }
+  return memConversations.delete(p);
+}
+
 function subscribe(listener) {
   emitter.on("message", listener);
   return () => emitter.off("message", listener);
@@ -421,6 +437,7 @@ module.exports = {
   getConversationDetail,
   listConversations,
   getMessages,
+  deleteConversation,
   subscribe,
   isPersistent,
   setTemplateRequestedCategory,
