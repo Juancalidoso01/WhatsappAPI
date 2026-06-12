@@ -94,6 +94,7 @@ const state = {
   activeCampaignId: null,
   lineHealth: null,
   bulkPollTimer: null,
+  campaignRunnerTimer: null,
   workspace: null,
   workspaceTab: "profile",
   flows: [],
@@ -828,6 +829,7 @@ async function bootDashboard() {
   await loadConversations();
   await loadNotifications();
   startPolling();
+  startCampaignRunner();
   startRealtimeStream();
   requestBrowserNotifications();
   updateSoundBtn();
@@ -900,6 +902,7 @@ async function onLocaleChange() {
     renderCampaignList();
     if (state.activeCampaignId) refreshCampaignDetail();
   }
+  if (state.workspace) renderSystemStatus(state.workspace);
   if (state.currentScreen === "flows") {
     if (window.I18n) I18n.applyDom($("screenFlows"));
     loadFlowCapability();
@@ -4233,6 +4236,37 @@ function stopBulkPolling() {
   state.bulkPollTimer = null;
 }
 
+const CAMPAIGN_RUNNER_MS = 20000;
+
+async function tickRunningCampaigns() {
+  const list = await api("/api/campaigns");
+  if (!list.ok) return false;
+  const running = (list.campaigns || []).filter((c) => c.status === "running");
+  if (!running.length) return false;
+  const res = await api("/api/campaigns/cron/tick", { method: "POST" });
+  if (res.ok) {
+    if (state.activeCampaignId) refreshCampaignDetail();
+    if (state.currentScreen === "bulk") loadCampaigns();
+  }
+  return true;
+}
+
+function startCampaignRunner() {
+  stopCampaignRunner();
+  const loop = async () => {
+    try {
+      await tickRunningCampaigns();
+    } catch (_) { /* keep runner alive */ }
+    state.campaignRunnerTimer = setTimeout(loop, CAMPAIGN_RUNNER_MS);
+  };
+  state.campaignRunnerTimer = setTimeout(loop, 8000);
+}
+
+function stopCampaignRunner() {
+  if (state.campaignRunnerTimer) clearTimeout(state.campaignRunnerTimer);
+  state.campaignRunnerTimer = null;
+}
+
 async function initBulkScreen() {
   await Promise.all([loadLineHealth(), loadTemplates(), loadCampaigns()]);
   fillBulkTemplates();
@@ -4315,16 +4349,32 @@ function fillWorkspaceForms(res) {
       $("wsWaPhotoHint").textContent = t("workspace.waPhotoHintConnect");
     }
   }
+  renderSystemStatus(res);
+}
+
+function renderSystemStatus(wsRes) {
   const status = $("wsSystemStatus");
-  if (status) {
-    const line = res.line;
-    status.innerHTML = [
-      `<li>Persistencia: ${state.config.persistent ? "Redis activo" : "Memoria local"}</li>`,
-      `<li>WhatsApp API: ${state.config.hasCredentials ? "Conectada" : "Sin credenciales"}</li>`,
-      line ? `<li>Línea: ${escapeHtml(line.displayPhone || "—")} · ${escapeHtml(line.qualityLabel || "")}</li>` : "",
-      `<li>Última actualización: ${w.updatedAt ? new Date(w.updatedAt).toLocaleString("es") : "—"}</li>`,
-    ].filter(Boolean).join("");
+  if (!status) return;
+  const ops = (state.config && state.config.ops) || {};
+  const line = wsRes && wsRes.line;
+  const w = (wsRes && wsRes.workspace) || (state.workspace && state.workspace.workspace) || {};
+  const levelMark = (level) => {
+    if (level === "ok") return "✓";
+    if (level === "error") return "✗";
+    if (level === "warn") return "⚠";
+    return "·";
+  };
+  const rows = (ops.items || []).map((item) =>
+    `<li class="ws-ops-${escapeHtml(item.level)}">${levelMark(item.level)} ${escapeHtml(t(`workspace.ops.items.${item.key}`))}</li>`
+  );
+  (ops.warnings || []).forEach((warn) => {
+    rows.push(`<li class="ws-ops-warn-detail">${escapeHtml(t(warn.messageKey))}</li>`);
+  });
+  if (line) {
+    rows.push(`<li>${escapeHtml(t("workspace.ops.line"))}: ${escapeHtml(line.displayPhone || "—")} · ${escapeHtml(line.qualityLabel || "")}</li>`);
   }
+  rows.push(`<li>${escapeHtml(t("workspace.ops.updated"))}: ${w.updatedAt ? new Date(w.updatedAt).toLocaleString() : "—"}</li>`);
+  status.innerHTML = rows.join("");
 }
 
 async function savePortalLanguage() {
@@ -4426,6 +4476,9 @@ async function loadWorkspaceReports() {
 
 async function initWorkspaceScreen() {
   setWorkspaceTab(state.workspaceTab || "profile");
+  try {
+    state.config = await api("/api/config");
+  } catch (_) { /* keep cached config */ }
   await Promise.all([loadWorkspace(), loadWorkspaceReports()]);
 }
 

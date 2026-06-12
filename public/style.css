@@ -686,6 +686,10 @@ input, textarea, select { font-family: inherit; }
 .ws-check { display: flex; align-items: center; gap: 8px; font-size: 12px; margin: 12px 0 0; }
 .ws-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
 .ws-status-list { margin: 0; padding-left: 18px; font-size: 12px; line-height: 1.6; }
+.ws-status-list .ws-ops-ok { color: var(--green); }
+.ws-status-list .ws-ops-warn, .ws-status-list .ws-ops-warn-detail { color: #b45309; }
+.ws-status-list .ws-ops-error { color: var(--red); }
+.ws-status-list .ws-ops-info { color: var(--muted); }
 .ws-reports-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 12px 0; }
 .ws-report-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 14px; text-align: center; }
 .ws-report-card .n { display: block; font-size: 22px; font-weight: 700; color: var(--text); }

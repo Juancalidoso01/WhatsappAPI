@@ -39,6 +39,21 @@
   "displayNameHint": "The display name appears in the portal title and green dot menu.",
   "saveWorkspace": "Save workspace",
   "systemStatusTitle": "System status",
+  "ops": {
+    "items": {
+      "persistence": "Persistence (Redis)",
+      "whatsapp": "WhatsApp API",
+      "cron": "Bulk campaign cron",
+      "dashboardAuth": "Dashboard login",
+      "integrationApi": "Integration API"
+    },
+    "noRedis": "No Redis: chats and campaigns may be lost between Vercel restarts. Connect Upstash/KV.",
+    "noCronSecret": "No CRON_SECRET: Vercel cron won't process campaigns in the background. Campaigns advance while the dashboard is open with a session.",
+    "noDashboardAuth": "No DASHBOARD_PASSWORD: the dashboard is open without login.",
+    "noIntegrationKey": "No INTEGRATION_API_KEY: the CRM/ERP integration API is blocked in production.",
+    "line": "Line",
+    "updated": "Last updated"
+  },
   "languageTitle": "Portal language",
   "languageHint": "Choose the interface language. Does not affect WhatsApp template languages sent to Meta.",
   "languageLabel": "Preferred language",

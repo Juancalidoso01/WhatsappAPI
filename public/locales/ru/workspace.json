@@ -39,6 +39,21 @@
   "displayNameHint": "Отображаемое имя показывается в заголовке портала и в меню зелёной точки.",
   "saveWorkspace": "Сохранить пространство",
   "systemStatusTitle": "Состояние системы",
+  "ops": {
+    "items": {
+      "persistence": "Хранение (Redis)",
+      "whatsapp": "WhatsApp API",
+      "cron": "Cron массовых рассылок",
+      "dashboardAuth": "Вход в панель",
+      "integrationApi": "API интеграции"
+    },
+    "noRedis": "Нет Redis: чаты и рассылки могут теряться при перезапусках Vercel. Подключите Upstash/KV.",
+    "noCronSecret": "Нет CRON_SECRET: cron Vercel не обработает рассылки в фоне. Рассылки идут, пока панель открыта с сессией.",
+    "noDashboardAuth": "Нет DASHBOARD_PASSWORD: панель открыта без входа.",
+    "noIntegrationKey": "Нет INTEGRATION_API_KEY: API интеграции CRM/ERP заблокирован в продакшене.",
+    "line": "Линия",
+    "updated": "Обновлено"
+  },
   "languageTitle": "Язык портала",
   "languageHint": "Выберите язык интерфейса. Не влияет на язык шаблонов WhatsApp, отправляемых в Meta.",
   "languageLabel": "Предпочитаемый язык",

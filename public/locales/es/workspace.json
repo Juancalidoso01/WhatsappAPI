@@ -39,6 +39,21 @@
   "displayNameHint": "El nombre para mostrar aparece en el título del portal y en el menú del punto verde.",
   "saveWorkspace": "Guardar espacio",
   "systemStatusTitle": "Estado del sistema",
+  "ops": {
+    "items": {
+      "persistence": "Persistencia (Redis)",
+      "whatsapp": "WhatsApp API",
+      "cron": "Cron de cargas masivas",
+      "dashboardAuth": "Login del panel",
+      "integrationApi": "API de integración"
+    },
+    "noRedis": "Sin Redis: los chats y cargas pueden perderse entre reinicios en Vercel. Conecta Upstash/KV.",
+    "noCronSecret": "Sin CRON_SECRET: el cron de Vercel no procesará cargas en segundo plano. Las cargas avanzan mientras el panel esté abierto con sesión.",
+    "noDashboardAuth": "Sin DASHBOARD_PASSWORD: el panel está abierto sin login.",
+    "noIntegrationKey": "Sin INTEGRATION_API_KEY: la API de integración CRM/ERP está bloqueada en producción.",
+    "line": "Línea",
+    "updated": "Última actualización"
+  },
   "languageTitle": "Idioma del portal",
   "languageHint": "Elige el idioma de la interfaz. No afecta el idioma de las plantillas de WhatsApp enviadas a Meta.",
   "languageLabel": "Idioma preferido",

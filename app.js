@@ -31,6 +31,7 @@ const { validateRowsForTemplate, extractEventVariables } = require('./services/t
 const campaignMetrics = require('./services/campaign-metrics');
 const { requireIntegrationKey } = require('./services/api-auth');
 const dashboardAuth = require('./services/dashboard-auth');
+const { getOpsStatus } = require('./services/ops-status');
 const WorkspaceStore = require('./services/workspace-store');
 const reports = require('./services/reports');
 const templateBuilder = require('./services/template-builder');
@@ -334,6 +335,7 @@ app.get('/api/config', async (req, res) => {
     },
     authRequired: session.authRequired,
     authenticated: session.authenticated,
+    ops: getOpsStatus(),
   });
 });
 
@@ -3109,12 +3111,17 @@ app.post('/api/campaigns/:id/pause', async (req, res) => {
   res.json({ ok: true, campaign: enrichCampaign(await CampaignStore.getCampaign(campaign.id)) });
 });
 
-app.post('/api/campaigns/cron/tick', async (req, res) => {
+function isCronTickAuthorized(req) {
   const secret = config.cronSecret;
   const auth = req.get('Authorization') || '';
   const bearer = auth.replace(/^Bearer\s+/i, '').trim();
   const headerSecret = req.get('X-Cron-Secret') || bearer;
-  if (!secret || headerSecret !== secret) {
+  if (secret && headerSecret === secret) return true;
+  return dashboardAuth.getSession(req).authenticated;
+}
+
+app.post('/api/campaigns/cron/tick', async (req, res) => {
+  if (!isCronTickAuthorized(req)) {
     return res.status(401).json({ ok: false, error: 'No autorizado.' });
   }
   if (!config.phoneNumberId || !config.accessToken) {
@@ -3382,6 +3389,9 @@ if (config.isProduction && !dashboardAuth.isAuthRequired()) {
 }
 if (config.isProduction && !config.integrationApiKey) {
   console.warn('WARNING: INTEGRATION_API_KEY no configurado — la API de integración está bloqueada.');
+}
+if (config.isProduction && !config.cronSecret) {
+  console.warn('WARNING: CRON_SECRET no configurado — el cron de Vercel no procesará cargas masivas en segundo plano.');
 }
 
 // Verify that the callback came from Facebook.
