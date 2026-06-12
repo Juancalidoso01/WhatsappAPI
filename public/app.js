@@ -4370,6 +4370,9 @@ function renderSystemStatus(wsRes) {
   (ops.warnings || []).forEach((warn) => {
     rows.push(`<li class="ws-ops-warn-detail">${escapeHtml(t(warn.messageKey))}</li>`);
   });
+  if (ops.cronConfigured) {
+    rows.push(`<li class="ws-ops-info">${escapeHtml(t("workspace.ops.cronExternalHint"))}</li>`);
+  }
   if (line) {
     rows.push(`<li>${escapeHtml(t("workspace.ops.line"))}: ${escapeHtml(line.displayPhone || "—")} · ${escapeHtml(line.qualityLabel || "")}</li>`);
   }

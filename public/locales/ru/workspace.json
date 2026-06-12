@@ -48,7 +48,8 @@
       "integrationApi": "API интеграции"
     },
     "noRedis": "Нет Redis: чаты и рассылки могут теряться при перезапусках Vercel. Подключите Upstash/KV.",
-    "noCronSecret": "Нет CRON_SECRET: cron Vercel не обработает рассылки в фоне. Рассылки идут, пока панель открыта с сессией.",
+    "noCronSecret": "Нет CRON_SECRET: внешний cron не сможет обрабатывать рассылки. Рассылки идут, пока панель открыта с сессией.",
+    "cronExternalHint": "CRON_SECRET настроен. На Vercel Hobby используйте внешний cron (каждые 5 мин) на POST /api/campaigns/cron/tick с Authorization: Bearer CRON_SECRET или держите панель открытой.",
     "noDashboardAuth": "Нет DASHBOARD_PASSWORD: панель открыта без входа.",
     "noIntegrationKey": "Нет INTEGRATION_API_KEY: API интеграции CRM/ERP заблокирован в продакшене.",
     "line": "Линия",

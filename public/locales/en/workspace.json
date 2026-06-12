@@ -48,7 +48,8 @@
       "integrationApi": "Integration API"
     },
     "noRedis": "No Redis: chats and campaigns may be lost between Vercel restarts. Connect Upstash/KV.",
-    "noCronSecret": "No CRON_SECRET: Vercel cron won't process campaigns in the background. Campaigns advance while the dashboard is open with a session.",
+    "noCronSecret": "No CRON_SECRET: external cron cannot process campaigns. Campaigns advance while the dashboard is open with a session.",
+    "cronExternalHint": "CRON_SECRET is set. On Vercel Hobby use an external cron (every 5 min) to POST /api/campaigns/cron/tick with Authorization: Bearer CRON_SECRET, or keep the dashboard open.",
     "noDashboardAuth": "No DASHBOARD_PASSWORD: the dashboard is open without login.",
     "noIntegrationKey": "No INTEGRATION_API_KEY: the CRM/ERP integration API is blocked in production.",
     "line": "Line",

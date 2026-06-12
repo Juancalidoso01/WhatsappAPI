@@ -48,7 +48,8 @@
       "integrationApi": "API de integración"
     },
     "noRedis": "Sin Redis: los chats y cargas pueden perderse entre reinicios en Vercel. Conecta Upstash/KV.",
-    "noCronSecret": "Sin CRON_SECRET: el cron de Vercel no procesará cargas en segundo plano. Las cargas avanzan mientras el panel esté abierto con sesión.",
+    "noCronSecret": "Sin CRON_SECRET: ningún cron externo podrá procesar cargas. Las cargas avanzan mientras el panel esté abierto con sesión.",
+    "cronExternalHint": "CRON_SECRET configurado. En plan Vercel Hobby usa un cron externo (cada 5 min) a POST /api/campaigns/cron/tick con Authorization: Bearer CRON_SECRET, o deja el panel abierto.",
     "noDashboardAuth": "Sin DASHBOARD_PASSWORD: el panel está abierto sin login.",
     "noIntegrationKey": "Sin INTEGRATION_API_KEY: la API de integración CRM/ERP está bloqueada en producción.",
     "line": "Línea",
