@@ -1,5 +1,7 @@
 {
   "sendFailed": "Could not send: {error}",
+  "messagesLoadFailed": "Could not load messages: {error}",
+  "detailLoadFailed": "Could not load conversation details: {error}",
   "varKeyReady": "Key «{key}» ready in variable {index}.",
   "syncMetaError": "Error syncing with Meta.",
   "syncMetaOk": "Synced: {total} template(s) on Meta.",
@@ -12,6 +14,7 @@
   "campaignCreateFailed": "Could not create campaign.",
   "campaignCreated": "Campaign created.",
   "campaignStartFailed": "Could not start.",
+  "campaignLoadFailed": "Could not load campaign details.",
   "campaignStarted": "Campaign started.",
   "languageSaveFailed": "Could not save language.",
   "saveFailed": "Could not save.",

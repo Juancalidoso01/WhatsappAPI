@@ -17,6 +17,7 @@
   "apiLinkBtn": "Интеграция API",
   "apiLinkSuffix": "(события переменных в две фазы).",
   "start": "Запустить",
+  "startBlockedAwaitingVars": "У части получателей нет переменных. Заполните их через API перед запуском.",
   "pause": "Пауза",
   "export": "Экспорт",
   "noApprovedTemplates": "— нет одобренных шаблонов —",

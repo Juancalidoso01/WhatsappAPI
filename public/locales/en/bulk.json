@@ -17,6 +17,7 @@
   "apiLinkBtn": "API Integration",
   "apiLinkSuffix": "(variable events in two phases).",
   "start": "Start",
+  "startBlockedAwaitingVars": "Some recipients are missing variables. Complete them via API before starting.",
   "pause": "Pause",
   "export": "Export",
   "noApprovedTemplates": "— no approved templates —",

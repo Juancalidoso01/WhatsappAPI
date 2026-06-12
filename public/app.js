@@ -95,6 +95,7 @@ const state = {
   lineHealth: null,
   bulkPollTimer: null,
   campaignRunnerTimer: null,
+  bulkEventVariables: [],
   workspace: null,
   workspaceTab: "profile",
   flows: [],
@@ -748,6 +749,8 @@ function showLoginGate(message) {
   const gate = $("loginGate");
   const app = document.querySelector(".app");
   if (!gate) return;
+  stopCampaignRunner();
+  stopBulkPolling();
   gate.classList.remove("hidden");
   if (app) app.classList.add("hidden");
   const err = $("loginError");
@@ -792,6 +795,7 @@ async function logoutDashboard() {
   stopPolling();
   stopRealtimeStream();
   stopBulkPolling();
+  stopCampaignRunner();
 }
 
 /* ---------- init ---------- */
@@ -1074,6 +1078,10 @@ async function openConversation(phone, name, highlightMessageId = null, opts = {
 async function loadMessages(phone) {
   try {
     const data = await api(`/api/conversations/${encodeURIComponent(phone)}/messages`);
+    if (data && data.error) {
+      toast(t("toast.messagesLoadFailed", { error: data.error }), "error");
+      return;
+    }
     if (Array.isArray(data)) {
       state.messages = data;
       renderMessages();
@@ -1085,18 +1093,26 @@ async function loadMessages(phone) {
         renderConversations();
       }
     }
-  } catch (_) {}
+  } catch (_) {
+    toast(t("toast.messagesLoadFailed", { error: "red" }), "error");
+  }
 }
 
 async function loadConversationDetail(phone) {
   try {
     const data = await api(`/api/conversations/${encodeURIComponent(phone)}/detail`);
-    if (data && !data.error) {
+    if (data && data.error) {
+      toast(t("toast.detailLoadFailed", { error: data.error }), "error");
+      return;
+    }
+    if (data) {
       state.conversationDetail = data;
       renderDetailPanel();
       updateWindow();
     }
-  } catch (_) {}
+  } catch (_) {
+    toast(t("toast.detailLoadFailed", { error: "red" }), "error");
+  }
 }
 
 const TYPE_LABELS = {
@@ -1111,6 +1127,7 @@ const TYPE_LABELS = {
   location: "modals.msgTypes.location",
   contacts: "modals.msgTypes.contacts",
   reaction: "modals.msgTypes.reaction",
+  campaign: "chats.campaignSend",
 };
 
 function msgTypeLabel(type) {
@@ -3512,6 +3529,10 @@ function openContactModal() {
 async function sendContact() {
   const phone = state.activePhone;
   if (!phone) return;
+  if (!isMessagingWindowOpen()) {
+    toast(t("chats.windowClosedHint"), "error");
+    return;
+  }
   const name = ($("ctName") || {}).value.trim();
   const ctPhone = String(($("ctPhone") || {}).value || "").replace(/\D/g, "");
   const email = ($("ctEmail") || {}).value.trim();
@@ -4037,8 +4058,13 @@ function fillBulkTemplates() {
 async function loadBulkTemplateVars() {
   const box = $("bulkEventVars");
   const tpl = selectedBulkTemplate();
-  if (!tpl.name) { box.classList.add("hidden"); return; }
+  if (!tpl.name) {
+    state.bulkEventVariables = [];
+    box.classList.add("hidden");
+    return;
+  }
   const res = await api(`/api/templates/${encodeURIComponent(tpl.name)}/variables?language=${encodeURIComponent(tpl.language)}`);
+  state.bulkEventVariables = (res.ok && res.eventVariables) ? res.eventVariables : [];
   if (!res.ok || !res.eventVariables || !res.eventVariables.length) {
     box.innerHTML = `<span class="muted">${escapeHtml(t("bulk.noEventVars"))}</span>`;
     box.classList.remove("hidden");
@@ -4058,7 +4084,9 @@ async function loadCampaigns() {
 
 function renderCampaignList() {
   const box = $("bulkCampaignList");
-  $("bulkListHint").textContent = state.campaigns.length ? `(${state.campaigns.length})` : "";
+  if (!box) return;
+  const hint = $("bulkListHint");
+  if (hint) hint.textContent = state.campaigns.length ? `(${state.campaigns.length})` : "";
   if (!state.campaigns.length) {
     box.innerHTML = `<p class="muted">${escapeHtml(t("bulk.noCampaigns"))}</p>`;
     return;
@@ -4145,7 +4173,18 @@ async function createBulkCampaign() {
 }
 
 function downloadBulkSampleCsv() {
-  const sample = "telefono,nombre,var1,var2\n50761234567,Juan,100.00,15 mar\n50769876543,Ana,250.00,20 mar\n";
+  const evs = state.bulkEventVariables || [];
+  const varCols = evs.length ? evs.map((ev) => ev.key) : ["var1", "var2"];
+  const sampleVars = varCols.map((key, i) => {
+    const ev = evs[i];
+    if (ev && ev.mediaFormat) return "https://ejemplo.com/archivo.jpg";
+    if (key.includes("fecha") || key.includes("date")) return "15 mar";
+    return i === 0 ? "100.00" : "dato";
+  });
+  const header = ["telefono", "nombre", ...varCols].join(",");
+  const row1 = ["50761234567", "Juan", ...sampleVars].join(",");
+  const row2 = ["50769876543", "Ana", ...sampleVars.map((v, i) => (i === 0 && !String(v).startsWith("http") ? "250.00" : v))].join(",");
+  const sample = `${header}\n${row1}\n${row2}\n`;
   const blob = new Blob([sample], { type: "text/csv;charset=utf-8" });
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
@@ -4170,11 +4209,26 @@ function closeCampaignDetail() {
   renderCampaignList();
 }
 
+function updateBulkDetailActions(c) {
+  const startBtn = $("bulkStartBtn");
+  const pauseBtn = $("bulkPauseBtn");
+  if (!startBtn || !pauseBtn || !c) return;
+  const totals = c.totals || {};
+  const awaiting = (totals.awaiting_vars || 0) > 0;
+  const running = c.status === "running";
+  startBtn.disabled = running || awaiting || c.status === "completed";
+  startBtn.title = awaiting ? t("bulk.startBlockedAwaitingVars") : "";
+  pauseBtn.disabled = !running;
+}
+
 async function refreshCampaignDetail() {
   const id = state.activeCampaignId;
   if (!id) return;
   let metaRes = await api(`/api/campaigns/${encodeURIComponent(id)}`);
-  if (!metaRes.ok) return;
+  if (!metaRes.ok) {
+    toast(metaRes.error || t("toast.campaignLoadFailed"), "error");
+    return;
+  }
   if (metaRes.campaign.status === "running") {
     await api(`/api/campaigns/${encodeURIComponent(id)}/tick`, { method: "POST" });
     metaRes = await api(`/api/campaigns/${encodeURIComponent(id)}`);
@@ -4217,8 +4271,12 @@ async function refreshCampaignDetail() {
       .join(", ")}`;
   } else schemaBox.classList.add("hidden");
 
+  updateBulkDetailActions(c);
+
   const rows = (rowsRes && rowsRes.rows) || [];
-  $("bulkRowsBody").innerHTML = rows.map((r) => `<tr>
+  const rowsBody = $("bulkRowsBody");
+  if (!rowsBody) return;
+  rowsBody.innerHTML = rows.map((r) => `<tr>
     <td>+${escapeHtml(r.phone)}</td>
     <td class="muted">${escapeHtml(r.externalId || "—")}</td>
     <td>${escapeHtml(r.name || "—")}</td>
@@ -4227,7 +4285,8 @@ async function refreshCampaignDetail() {
     <td>${r.sentAt ? escapeHtml(new Date(r.sentAt).toLocaleString("es", { dateStyle: "short", timeStyle: "short" })) : "—"}</td>
   </tr>`).join("");
 
-  if (c.status !== "running") stopBulkPolling();
+  if (c.status === "running") startBulkPolling();
+  else stopBulkPolling();
 }
 
 async function startBulkCampaign() {
@@ -4266,7 +4325,8 @@ const CAMPAIGN_RUNNER_MS = 20000;
 async function tickRunningCampaigns() {
   const list = await api("/api/campaigns");
   if (!list.ok) return false;
-  const running = (list.campaigns || []).filter((c) => c.status === "running");
+  const campaigns = list.data || list.campaigns || [];
+  const running = campaigns.filter((c) => c.status === "running");
   if (!running.length) return false;
   const res = await api("/api/campaigns/cron/tick", { method: "POST" });
   if (res.ok) {
@@ -6948,12 +7008,17 @@ function switchScreen(name) {
     refreshTemplatesScreen({ highlightName: state.pendingTemplateHighlight });
   }
   if (name === "bulk") {
-    if (!cache.bulk) {
-      cache.bulk = true;
-      initBulkScreen();
-    } else {
-      fillBulkTemplates();
-    }
+    const bootBulk = () => {
+      if (!cache.bulk) {
+        cache.bulk = true;
+        initBulkScreen();
+      } else {
+        Promise.all([loadLineHealth(), loadTemplates(), loadCampaigns()]).then(() => fillBulkTemplates());
+      }
+      if (state.activeCampaignId) refreshCampaignDetail();
+    };
+    if (window.I18n) I18n.ensureScreen("bulk").then(bootBulk);
+    else bootBulk();
   }
   if (name === "integration") {
     if (!cache.integration) {

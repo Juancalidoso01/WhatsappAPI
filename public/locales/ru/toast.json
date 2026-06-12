@@ -1,5 +1,7 @@
 {
   "sendFailed": "Не удалось отправить: {error}",
+  "messagesLoadFailed": "Не удалось загрузить сообщения: {error}",
+  "detailLoadFailed": "Не удалось загрузить детали диалога: {error}",
   "varKeyReady": "Ключ «{key}» готов в переменной {index}.",
   "syncMetaError": "Ошибка синхронизации с Meta.",
   "syncMetaOk": "Синхронизировано: {total} шаблон(ов) в Meta.",
@@ -12,6 +14,7 @@
   "campaignCreateFailed": "Не удалось создать рассылку.",
   "campaignCreated": "Рассылка создана.",
   "campaignStartFailed": "Не удалось запустить.",
+  "campaignLoadFailed": "Не удалось загрузить детали рассылки.",
   "campaignStarted": "Рассылка запущена.",
   "languageSaveFailed": "Не удалось сохранить язык.",
   "saveFailed": "Не удалось сохранить.",

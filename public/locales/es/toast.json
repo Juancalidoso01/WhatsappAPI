@@ -1,5 +1,7 @@
 {
   "sendFailed": "No se pudo enviar: {error}",
+  "messagesLoadFailed": "No se pudieron cargar los mensajes: {error}",
+  "detailLoadFailed": "No se pudo cargar el detalle: {error}",
   "varKeyReady": "Clave «{key}» lista en variable {index}.",
   "syncMetaError": "Error al sincronizar con Meta.",
   "syncMetaOk": "Sincronizado: {total} plantilla(s) en Meta.",
@@ -12,6 +14,7 @@
   "campaignCreateFailed": "No se pudo crear la carga.",
   "campaignCreated": "Carga creada.",
   "campaignStartFailed": "No se pudo iniciar.",
+  "campaignLoadFailed": "No se pudo cargar el detalle de la carga.",
   "campaignStarted": "Carga iniciada.",
   "languageSaveFailed": "No se pudo guardar el idioma.",
   "saveFailed": "No se pudo guardar.",
