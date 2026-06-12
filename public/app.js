@@ -966,6 +966,14 @@ function applyBranding() {
   if ($("sidebarBrandName")) $("sidebarBrandName").textContent = name;
   updateWorkspaceHubPreview(name, ws.hasProfilePhoto);
   updateMetaTemplatesLink();
+  updateSimulateButton();
+}
+
+function updateSimulateButton() {
+  const btn = $("simBtn");
+  if (!btn) return;
+  const show = !state.config.isProduction || state.config.allowSimulate;
+  btn.classList.toggle("hidden", !show);
 }
 
 function updateMetaTemplatesLink() {
@@ -1492,6 +1500,13 @@ async function saveNotes() {
 
 function previewText(m) {
   if (!m) return "";
+  if (m.interactiveMeta) {
+    const im = m.interactiveMeta;
+    if (im.kind === "button_reply") return `▸ ${im.title || t("chats.interactive.button")}`;
+    if (im.kind === "list_reply") return `▸ ${im.title || t("chats.interactive.list")}`;
+    if (im.kind === "flow_reply") return t("chats.interactive.flowReply");
+    if (im.body) return im.body;
+  }
   if (m.type === "reaction") return m.reactionEmoji ? `${m.reactionEmoji}` : t("chats.reaction");
   if (m.text) return m.text;
   if (m.type === "image") return `[${t("chats.preview.image")}]`;
@@ -1508,6 +1523,12 @@ function previewText(m) {
 
 function messageQuotePreview(m) {
   if (!m) return "";
+  if (m.interactiveMeta) {
+    const im = m.interactiveMeta;
+    if (im.kind === "button_reply") return im.title || t("chats.interactive.button");
+    if (im.kind === "list_reply") return im.title || t("chats.interactive.list");
+    if (im.kind === "flow_reply") return t("chats.interactive.flowReply");
+  }
   const p = previewText(m);
   return p || msgTypeLabel(m.type);
 }
@@ -1671,6 +1692,60 @@ function renderReactionBlock(m) {
   return `<div class="msg-reaction-out">${escapeHtml(emoji)}</div>`;
 }
 
+function renderInteractiveBlock(m) {
+  const meta = m.interactiveMeta;
+  if (!meta || !meta.kind) return "";
+
+  if (meta.kind === "button_reply") {
+    return `<div class="msg-interactive inbound">
+      <span class="msg-interactive-label">${escapeHtml(t("chats.interactive.selectedButton"))}</span>
+      <span class="msg-interactive-chip selected">${escapeHtml(meta.title || meta.id || "—")}</span>
+    </div>`;
+  }
+
+  if (meta.kind === "list_reply") {
+    const sub = meta.description ? `<span class="msg-interactive-sub">${escapeHtml(meta.description)}</span>` : "";
+    return `<div class="msg-interactive inbound">
+      <span class="msg-interactive-label">${escapeHtml(t("chats.interactive.selectedList"))}</span>
+      <span class="msg-interactive-chip selected">${escapeHtml(meta.title || "—")}</span>
+      ${sub}
+    </div>`;
+  }
+
+  if (meta.kind === "flow_reply") {
+    const fields = (meta.fields || []).map((f) =>
+      `<div class="msg-flow-field"><dt>${escapeHtml(f.key)}</dt><dd>${escapeHtml(f.value)}</dd></div>`
+    ).join("");
+    return `<div class="msg-interactive flow-reply">
+      <span class="msg-interactive-label">${escapeHtml(t("chats.interactive.flowReply"))}</span>
+      ${fields ? `<div class="msg-flow-fields">${fields}</div>` : `<span class="muted sm">${escapeHtml(m.text || "")}</span>`}
+    </div>`;
+  }
+
+  if (meta.kind === "buttons" && meta.buttons && meta.buttons.length) {
+    const chips = meta.buttons.map((b) =>
+      `<span class="msg-interactive-chip">${escapeHtml(b.title || b.id)}</span>`
+    ).join("");
+    const body = meta.body ? `<p class="msg-interactive-body">${escapeHtml(meta.body)}</p>` : "";
+    return `<div class="msg-interactive outbound">${body}<div class="msg-interactive-chips">${chips}</div></div>`;
+  }
+
+  if (meta.kind === "list" && meta.sections && meta.sections.length) {
+    const body = meta.body ? `<p class="msg-interactive-body">${escapeHtml(meta.body)}</p>` : "";
+    const sections = meta.sections.map((sec) => {
+      const rows = (sec.rows || []).map((r) =>
+        `<li><strong>${escapeHtml(r.title)}</strong>${r.description ? `<span class="muted sm">${escapeHtml(r.description)}</span>` : ""}</li>`
+      ).join("");
+      const title = sec.title ? `<div class="msg-list-sec-title">${escapeHtml(sec.title)}</div>` : "";
+      return `${title}<ul class="msg-list-rows">${rows}</ul>`;
+    }).join("");
+    const btn = meta.button ? `<span class="msg-interactive-list-btn">${escapeHtml(meta.button)}</span>` : "";
+    return `<div class="msg-interactive outbound list">${body}${sections}${btn}</div>`;
+  }
+
+  return "";
+}
+
 function renderMsgActions(m) {
   if (m.direction !== "in" || !isWaMessageId(m.id)) return "";
   return `<div class="msg-actions">
@@ -1738,6 +1813,28 @@ function messageErrorLabel(m) {
   return e.title || e.message || (e.code ? `Código ${e.code}` : "");
 }
 
+function canRetryMessage(m) {
+  return m.direction === "out" && m.status === "failed" && m.retryPayload;
+}
+
+function renderRetryAction(m) {
+  if (!canRetryMessage(m)) return "";
+  return `<button type="button" class="msg-retry-btn" data-msg-id="${escapeHtml(m.id)}">${escapeHtml(t("chats.retrySend"))}</button>`;
+}
+
+async function retryFailedMessage(messageId) {
+  const phone = state.activePhone;
+  if (!phone || !messageId) return;
+  const res = await post(`/api/conversations/${encodeURIComponent(phone)}/messages/${encodeURIComponent(messageId)}/retry`, {});
+  if (!res.ok) {
+    toast(formatMetaError(res, "chats.retryFailed"), "error");
+    return;
+  }
+  toast(t("chats.retryOk"), "ok");
+  await loadMessages(phone);
+  renderConversations();
+}
+
 function statusTick(m) {
   if (m.direction === "in") {
     const label = inboundStatusLabel(m);
@@ -1755,8 +1852,9 @@ function statusTick(m) {
     failed: '<span class="tick failed"><svg viewBox="0 0 24 24"><path d="M12 8v4m0 4h.01"/><circle cx="12" cy="12" r="9"/></svg></span>',
   };
   const icon = map[m.status] || "";
-  if (!icon) return "";
-  return `<span class="tick-wrap" title="${escapeHtml(label)}">${icon}<span class="tick-label">${escapeHtml(label)}</span></span>`;
+  const retry = renderRetryAction(m);
+  if (!icon && !retry) return "";
+  return `<span class="tick-wrap" title="${escapeHtml(label)}">${icon}${retry}<span class="tick-label">${escapeHtml(label)}</span></span>`;
 }
 
 function bindAudioDurations() {
@@ -1810,13 +1908,16 @@ function renderMessageRowHtml(m, hi) {
   const media = isReaction ? renderReactionBlock(m) : renderMedia(m);
   const location = renderLocationBlock(m);
   const contacts = renderContactsBlock(m);
+  const interactive = renderInteractiveBlock(m);
   const quote = renderQuoteBlock(m);
-  const caption = m.text && !isReaction && m.type !== "contacts" ? escapeHtml(m.text) : "";
+  const showCaption = m.text && !isReaction && m.type !== "contacts"
+    && !(m.interactiveMeta && ["button_reply", "list_reply", "flow_reply"].includes(m.interactiveMeta.kind));
+  const caption = showCaption ? escapeHtml(m.text) : "";
   const time = messageTimeLabel(m.timestamp);
   const isHi = hi && (m.id === hi);
   return `<div class="msg-row ${m.direction}${isReaction ? " reaction" : ""}" data-msg-id="${escapeHtml(m.id)}"${isHi ? ' id="billHighlightMsg"' : ""}>
     <div class="bubble${tplClass}${isHi ? " msg-highlight" : ""}${isReaction ? " reaction-bubble" : ""}">
-      ${quote}${media}${location}${contacts}${caption}
+      ${quote}${media}${location}${contacts}${interactive}${caption}
       <div class="bubble-meta">${time}${statusTick(m)}${renderMsgActions(m)}</div>
     </div>
   </div>`;
@@ -1843,6 +1944,12 @@ function renderMessages() {
       const msg = state.messages.find((x) => x.id === msgId);
       if (btn.dataset.action === "reply") setReplyTo(msg);
       else if (btn.dataset.action === "react") sendReaction(msgId, btn.dataset.emoji);
+    });
+  });
+  box.querySelectorAll(".msg-retry-btn").forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      retryFailedMessage(btn.dataset.msgId);
     });
   });
   box.scrollTop = box.scrollHeight;

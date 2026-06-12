@@ -34,6 +34,7 @@ const dashboardAuth = require('./services/dashboard-auth');
 const { getOpsStatus } = require('./services/ops-status');
 const { getMetaPlatformStatus } = require('./services/meta-platform-status');
 const { attachMetaError } = require('./services/meta-error-context');
+const { extractInteractiveMeta, interactivePreviewText } = require('./services/interactive-meta');
 const WorkspaceStore = require('./services/workspace-store');
 const reports = require('./services/reports');
 const templateBuilder = require('./services/template-builder');
@@ -328,6 +329,8 @@ app.get('/api/config', async (req, res) => {
     flowsEnabled: Boolean(config.accessToken && config.wabaId && config.phoneNumberId),
     flowEndpointUri: config.publicBaseUrl ? `${config.publicBaseUrl}/api/flows/endpoint` : null,
     botEnabled: config.botEnabled,
+    allowSimulate: config.allowSimulate,
+    isProduction: config.isProduction,
     persistent: Store.isPersistent(),
     workspace: {
       displayName: workspace.displayName,
@@ -2412,6 +2415,13 @@ app.post('/api/send-template', apiJson, async (req, res) => {
     text: `[plantilla] ${template}`,
     type: 'template',
     status: 'pending',
+    retryPayload: {
+      kind: 'template',
+      template,
+      language: language || 'es',
+      components: components || [],
+      name,
+    },
   });
 
   try {
@@ -2498,6 +2508,15 @@ app.post('/api/send-media', parseSendMediaBody, async (req, res) => {
       media: file ? null : link,
       mediaId,
       replyTo,
+      retryPayload: {
+        kind: 'media',
+        mediaType: waType,
+        link: file ? undefined : link,
+        mediaId: mediaId || undefined,
+        caption: caption || undefined,
+        filename: filename || undefined,
+        replyToMessageId: replyTo ? replyTo.messageId : undefined,
+      },
     });
 
     const response = waType === 'sticker'
@@ -2570,6 +2589,14 @@ app.post('/api/send-location', apiJson, async (req, res) => {
       status: 'pending',
       location: { latitude: lat, longitude: lng, name: locName || null, address: locAddr || null },
       replyTo,
+      retryPayload: {
+        kind: 'location',
+        latitude: lat,
+        longitude: lng,
+        name: locName || undefined,
+        address: locAddr || undefined,
+        replyToMessageId: replyTo ? replyTo.messageId : undefined,
+      },
     });
 
     const response = await GraphApi.messageWithLocation(phoneNumberId, phone, {
@@ -2642,6 +2669,11 @@ app.post('/api/send-contacts', apiJson, async (req, res) => {
       status: 'pending',
       contacts: storeContacts,
       replyTo,
+      retryPayload: {
+        kind: 'contacts',
+        contacts: normalized,
+        replyToMessageId: replyTo ? replyTo.messageId : undefined,
+      },
     });
 
     const response = await GraphApi.messageWithContacts(phoneNumberId, phone, normalized, replyTo ? replyTo.messageId : undefined);
@@ -2909,6 +2941,50 @@ app.patch('/api/conversations/:phone', apiJson, async (req, res) => {
   }
 });
 
+// Reintentar un mensaje saliente que falló (misma burbuja, nuevo envío a Meta)
+app.post('/api/conversations/:phone/messages/:messageId/retry', apiJson, async (req, res) => {
+  const phone = String(req.params.phone || '').replace(/\D/g, '');
+  const messageId = String(req.params.messageId || '');
+  if (!phone || !messageId) {
+    return res.status(400).json({ ok: false, error: 'Teléfono o mensaje inválido.' });
+  }
+
+  const msg = await Store.getMessageById(phone, messageId);
+  if (!msg) return res.status(404).json({ ok: false, error: 'Mensaje no encontrado.' });
+  if (msg.direction !== 'out') {
+    return res.status(400).json({ ok: false, error: 'Solo se pueden reintentar mensajes salientes.' });
+  }
+  if (msg.status !== 'failed') {
+    return res.status(400).json({ ok: false, error: 'Solo se pueden reintentar mensajes con error.' });
+  }
+  if (!msg.retryPayload) {
+    return res.status(400).json({ ok: false, error: 'Este mensaje no guardó datos para reintento.' });
+  }
+
+  const convo = await Store.getConversation(phone);
+  const phoneNumberId = (convo && convo.phoneNumberId) || config.phoneNumberId;
+  if (!phoneNumberId || !config.accessToken) {
+    return res.status(400).json({ ok: false, error: 'Falta PHONE_NUMBER_ID o ACCESS_TOKEN.' });
+  }
+
+  await Store.patchMessage(phone, messageId, { status: 'pending', clearError: true });
+
+  try {
+    const response = await resendFromRetryPayload(phone, phoneNumberId, msg.retryPayload);
+    const updated = await finalizeOutbound(phone, { ...msg, id: messageId }, response);
+    res.json({ ok: true, message: updated });
+  } catch (err) {
+    console.error('retry message error:', err.message);
+    await Store.updateMessageStatus(phone, messageId, 'failed');
+    const body = await attachMetaError(
+      { ok: false, error: String(err.message || err) },
+      'messaging',
+      err,
+    );
+    res.status(200).json(body);
+  }
+});
+
 // Send a text message manually from the web interface
 app.post('/api/send', apiJson, async (req, res) => {
   const { phone, text, replyToMessageId } = req.body || {};
@@ -2933,6 +3009,11 @@ app.post('/api/send', apiJson, async (req, res) => {
     type: 'text',
     status: 'pending',
     replyTo,
+    retryPayload: {
+      kind: 'text',
+      text,
+      replyToMessageId: replyTo ? replyTo.messageId : undefined,
+    },
   });
 
   if (!phoneNumberId || !config.accessToken) {
@@ -3516,6 +3597,58 @@ async function finalizeOutbound(phone, stored, response) {
   return stored;
 }
 
+async function resendFromRetryPayload(phone, phoneNumberId, payload) {
+  if (!payload || !payload.kind) {
+    throw new Error('Este mensaje no se puede reintentar.');
+  }
+  const replyId = payload.replyToMessageId;
+  switch (payload.kind) {
+    case 'text':
+      return GraphApi.messageWithText(undefined, phoneNumberId, phone, payload.text, {
+        replyToMessageId: replyId,
+      });
+    case 'template':
+      return GraphApi.sendTemplate(phoneNumberId, phone, {
+        name: payload.template,
+        language: payload.language || 'es',
+        components: payload.components || [],
+      });
+    case 'media': {
+      const waType = payload.mediaType || 'image';
+      if (waType === 'sticker') {
+        if (!payload.mediaId) throw new Error('No hay mediaId para reintentar el sticker.');
+        return GraphApi.messageWithSticker(phoneNumberId, phone, {
+          mediaId: payload.mediaId,
+          replyToMessageId: replyId,
+        });
+      }
+      if (!payload.link && !payload.mediaId) {
+        throw new Error('No se puede reintentar: el archivo original ya no está disponible.');
+      }
+      return GraphApi.messageWithMedia(undefined, phoneNumberId, phone, {
+        mediaType: waType,
+        link: payload.link,
+        mediaId: payload.mediaId,
+        caption: payload.caption,
+        filename: payload.filename,
+        replyToMessageId: replyId,
+      });
+    }
+    case 'location':
+      return GraphApi.messageWithLocation(phoneNumberId, phone, {
+        latitude: payload.latitude,
+        longitude: payload.longitude,
+        name: payload.name,
+        address: payload.address,
+        replyToMessageId: replyId,
+      });
+    case 'contacts':
+      return GraphApi.messageWithContacts(phoneNumberId, phone, payload.contacts, replyId);
+    default:
+      throw new Error('Tipo de mensaje no compatible con reintento.');
+  }
+}
+
 async function handleFlowResponse(rawMessage, contactNames) {
   if (rawMessage.type !== 'interactive') return null;
   const interactive = rawMessage.interactive || {};
@@ -3546,7 +3679,12 @@ async function mirrorIncomingMessage(rawMessage, contactNames, senderPhoneNumber
   await Store.updateConversationMeta(phone, meta);
 
   const audio = rawMessage.type === 'audio' ? rawMessage.audio : null;
-  const text = extractMessageText(rawMessage);
+  const interactiveMeta = rawMessage.type === 'interactive'
+    ? extractInteractiveMeta(rawMessage)
+    : null;
+  const text = interactiveMeta
+    ? (interactivePreviewText(interactiveMeta) || extractMessageText(rawMessage))
+    : extractMessageText(rawMessage);
   const ctx = rawMessage.context;
   const replyTo = ctx && ctx.id ? { messageId: String(ctx.id), from: ctx.from || null } : null;
 
@@ -3591,6 +3729,7 @@ async function mirrorIncomingMessage(rawMessage, contactNames, senderPhoneNumber
     reactionEmoji,
     reactionTo,
     contacts,
+    interactiveMeta,
   });
 
   PortalEvents.pushChatMessage({
@@ -3625,19 +3764,8 @@ function extractMessageText(rawMessage) {
     case 'text':
       return rawMessage.text && rawMessage.text.body;
     case 'interactive': {
-      const interactive = rawMessage.interactive || {};
-      if (interactive.type === 'nfm_reply' && interactive.nfm_reply) {
-        const rj = interactive.nfm_reply.response_json;
-        try {
-          const parsed = typeof rj === 'string' ? JSON.parse(rj) : rj;
-          return `[Flow] ${JSON.stringify(parsed)}`;
-        } catch (_) {
-          return `[Flow] ${rj || 'completado'}`;
-        }
-      }
-      if (interactive.button_reply) return interactive.button_reply.title;
-      if (interactive.list_reply) return interactive.list_reply.title;
-      return '[interactive]';
+      const meta = extractInteractiveMeta(rawMessage);
+      return interactivePreviewText(meta) || '[interactive]';
     }
     case 'button':
       return rawMessage.button && rawMessage.button.text;

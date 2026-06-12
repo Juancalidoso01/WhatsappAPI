@@ -66,6 +66,16 @@
     "document": "Документ",
     "flow": "Интерактивный Flow"
   },
+  "retrySend": "Повторить",
+  "retryOk": "Сообщение отправлено снова.",
+  "retryFailed": "Не удалось повторить отправку.",
+  "interactive": {
+    "button": "Кнопка",
+    "list": "Список",
+    "selectedButton": "Выбранная опция",
+    "selectedList": "Выбранный пункт списка",
+    "flowReply": "Ответ Flow"
+  },
   "msgStatus": {
     "pending": "Отправка…",
     "sent": "Отправлено",

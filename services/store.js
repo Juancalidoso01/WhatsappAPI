@@ -57,7 +57,7 @@ function buildMessage({
   direction, text, type = "text", status = null, id = null,
   media = null, mediaId = null, voice = null,
   replyTo = null, location = null, reactionEmoji = null, reactionTo = null,
-  contacts = null, campaignMeta = null,
+  contacts = null, campaignMeta = null, interactiveMeta = null, retryPayload = null,
 }) {
   const message = {
     id: id || `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
@@ -76,6 +76,8 @@ function buildMessage({
   if (reactionTo) message.reactionTo = reactionTo;
   if (contacts) message.contacts = contacts;
   if (campaignMeta) message.campaignMeta = campaignMeta;
+  if (interactiveMeta) message.interactiveMeta = interactiveMeta;
+  if (retryPayload) message.retryPayload = retryPayload;
   return message;
 }
 
@@ -98,10 +100,13 @@ async function addMessage({
   reactionTo = null,
   contacts = null,
   campaignMeta = null,
+  interactiveMeta = null,
+  retryPayload = null,
 }) {
   const message = buildMessage({
     direction, text, type, status, id, media, mediaId, voice,
     replyTo, location, reactionEmoji, reactionTo, contacts, campaignMeta,
+    interactiveMeta, retryPayload,
   });
 
   if (redis) {
@@ -155,32 +160,53 @@ async function updateMessageId(phone, localId, waId) {
   }
 }
 
-async function updateMessageStatus(phone, messageId, status, errors) {
-  const errObj = Array.isArray(errors) && errors.length ? errors[0] : null;
+async function findMessageIndex(phone, messageId) {
+  const p = String(phone);
   if (redis) {
-    const key = `${PREFIX}msgs:${String(phone)}`;
+    const key = `${PREFIX}msgs:${p}`;
     const raw = await redis.lrange(key, 0, -1);
     for (let i = 0; i < raw.length; i++) {
       const msg = typeof raw[i] === "string" ? JSON.parse(raw[i]) : raw[i];
-      if (msg.id === messageId) {
-        msg.status = status;
-        if (errObj) msg.error = errObj;
-        await redis.lset(key, i, JSON.stringify(msg));
-        emitter.emit("message", { phone, name: phone, message: msg });
-        return;
-      }
+      if (msg.id === messageId) return { msg, index: i, key, convoName: p };
     }
-    return;
+    return null;
   }
+  const convo = memConversations.get(p);
+  if (!convo) return null;
+  const index = convo.messages.findIndex((m) => m.id === messageId);
+  if (index < 0) return null;
+  return { msg: convo.messages[index], index, convo, convoName: convo.name };
+}
 
-  const convo = memConversations.get(phone);
-  if (!convo) return;
-  const message = convo.messages.find((m) => m.id === messageId);
-  if (message) {
-    message.status = status;
-    if (errObj) message.error = errObj;
-    emitter.emit("message", { phone, name: convo.name, message });
+async function getMessageById(phone, messageId) {
+  const hit = await findMessageIndex(phone, messageId);
+  return hit ? hit.msg : null;
+}
+
+async function patchMessage(phone, messageId, patch) {
+  const hit = await findMessageIndex(phone, messageId);
+  if (!hit) return null;
+  const next = { ...hit.msg, ...patch };
+  if (patch.clearError) {
+    delete next.error;
+    delete next.clearError;
   }
+  if (redis) {
+    await redis.lset(hit.key, hit.index, JSON.stringify(next));
+    emitter.emit("message", { phone: String(phone), name: hit.convoName, message: next });
+    return next;
+  }
+  hit.convo.messages[hit.index] = next;
+  emitter.emit("message", { phone: hit.convo.phone, name: hit.convo.name, message: next });
+  return next;
+}
+
+async function updateMessageStatus(phone, messageId, status, errors) {
+  const errObj = Array.isArray(errors) && errors.length ? errors[0] : null;
+  const patch = { status };
+  if (errObj) patch.error = errObj;
+  else if (status !== "failed") patch.clearError = true;
+  return patchMessage(phone, messageId, patch);
 }
 
 function parseConvoMeta(meta, phone) {
@@ -449,6 +475,8 @@ module.exports = {
   getConversationDetail,
   listConversations,
   getMessages,
+  getMessageById,
+  patchMessage,
   deleteConversation,
   subscribe,
   isPersistent,

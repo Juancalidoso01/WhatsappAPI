@@ -66,6 +66,16 @@
     "document": "Documento",
     "flow": "Flow interactivo"
   },
+  "retrySend": "Reintentar",
+  "retryOk": "Mensaje reenviado.",
+  "retryFailed": "No se pudo reintentar el envío.",
+  "interactive": {
+    "button": "Botón",
+    "list": "Lista",
+    "selectedButton": "Opción elegida",
+    "selectedList": "Ítem de lista elegido",
+    "flowReply": "Respuesta de Flow"
+  },
   "msgStatus": {
     "pending": "Enviando…",
     "sent": "Enviado",

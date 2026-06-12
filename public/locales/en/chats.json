@@ -66,6 +66,16 @@
     "document": "Document",
     "flow": "Interactive Flow"
   },
+  "retrySend": "Retry",
+  "retryOk": "Message resent.",
+  "retryFailed": "Could not retry send.",
+  "interactive": {
+    "button": "Button",
+    "list": "List",
+    "selectedButton": "Selected option",
+    "selectedList": "Selected list item",
+    "flowReply": "Flow response"
+  },
   "msgStatus": {
     "pending": "Sending…",
     "sent": "Sent",
