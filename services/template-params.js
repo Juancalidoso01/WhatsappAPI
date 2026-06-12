@@ -41,6 +41,20 @@ function extractEventVariables(template, customKeys) {
     slotIndex++;
   }
 
+  if (hs && hs.kind === "media") {
+    const fmt = String(hs.format || "IMAGE").toLowerCase();
+    slots.push({
+      key: (customKeys && customKeys[slotIndex]) || `header_${fmt}`,
+      index: slotIndex,
+      component: "header",
+      placeholder: hs.format,
+      label: `URL encabezado ${hs.format}`,
+      required: true,
+      mediaFormat: hs.format,
+    });
+    slotIndex++;
+  }
+
   const n = bodyVarCount(template);
   for (let i = 1; i <= n; i++) {
     slots.push({
@@ -92,6 +106,14 @@ function buildComponentsFromRow(template, row) {
     if (text) comps.push({ type: "header", parameters: [{ type: "text", text }] });
   }
 
+  if (hs && hs.kind === "media") {
+    const url = vars[vi++];
+    if (url) {
+      const k = String(hs.format || "IMAGE").toLowerCase();
+      comps.push({ type: "header", parameters: [{ type: k, [k]: { link: url } }] });
+    }
+  }
+
   const n = bodyVarCount(template);
   if (n > 0) {
     const params = [];
@@ -106,7 +128,18 @@ function validateRowsForTemplate(template, rows, eventVariables) {
   const need = eventVariables ? eventVariables.filter((e) => e.required !== false).length : requiredVarCount(template);
   const hs = headerSpec(template);
   if (hs && hs.kind === "media") {
-    return { ok: false, error: "Plantillas con encabezado multimedia no están soportadas en cargas masivas (fase 1)." };
+    const evs = eventVariables || extractEventVariables(template);
+    const headerSlot = evs.find((e) => e.component === "header");
+    const badMedia = rows.find((r) => {
+      const v = headerSlot != null ? (r.vars || [])[headerSlot.index] : (r.vars || [])[0];
+      return !v || !String(v).trim().startsWith("http");
+    });
+    if (badMedia) {
+      return {
+        ok: false,
+        error: `Fila ${badMedia.line || badMedia.phone}: falta URL https del encabezado ${hs.format}.`,
+      };
+    }
   }
   if (!need) return { ok: true, requiredVars: 0, eventVariables: extractEventVariables(template) };
 

@@ -135,6 +135,48 @@ module.exports = class GraphApi {
     return api.call("POST", [`${senderPhoneNumberId}`, "messages"], requestBody);
   }
 
+  static async messageWithContacts(senderPhoneNumberId, recipientPhoneNumber, contacts, replyToMessageId) {
+    const requestBody = this.#withReplyContext({
+      messaging_product: "whatsapp",
+      recipient_type: "individual",
+      to: recipientPhoneNumber,
+      type: "contacts",
+      contacts: (contacts || []).map((c) => {
+        const name = String(c.name || c.formatted_name || "Contacto").trim();
+        const parts = name.split(/\s+/);
+        const entry = {
+          name: {
+            formatted_name: name.slice(0, 256),
+            first_name: parts[0] || name,
+          },
+          phones: [{
+            phone: String(c.phone || "").replace(/\D/g, ""),
+            type: c.phone_type || "CELL",
+          }],
+        };
+        if (parts.length > 1) entry.name.last_name = parts.slice(1).join(" ").slice(0, 256);
+        if (c.email) entry.emails = [{ email: String(c.email).trim(), type: "WORK" }];
+        return entry;
+      }),
+    }, replyToMessageId);
+
+    const api = getApi();
+    return api.call("POST", [`${senderPhoneNumberId}`, "messages"], requestBody);
+  }
+
+  static async messageWithSticker(senderPhoneNumberId, recipientPhoneNumber, { mediaId, replyToMessageId }) {
+    const requestBody = this.#withReplyContext({
+      messaging_product: "whatsapp",
+      recipient_type: "individual",
+      to: recipientPhoneNumber,
+      type: "sticker",
+      sticker: { id: String(mediaId) },
+    }, replyToMessageId);
+
+    const api = getApi();
+    return api.call("POST", [`${senderPhoneNumberId}`, "messages"], requestBody);
+  }
+
   static async messageWithMedia(messageId, senderPhoneNumberId, recipientPhoneNumber, { mediaType, link, mediaId, caption, filename, replyToMessageId }) {
     const type = ["image", "document", "audio", "video"].includes(mediaType) ? mediaType : "image";
     const media = mediaId ? { id: mediaId } : { link };

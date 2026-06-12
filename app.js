@@ -2420,12 +2420,15 @@ app.post('/api/send-media', parseSendMediaBody, async (req, res) => {
 
   const convo = await Store.getConversation(phone);
   const phoneNumberId = (convo && convo.phoneNumberId) || config.phoneNumberId;
-  const waType = file
-    ? resolveMediaType(file.mimetype, mediaType)
-    : (mediaType === 'document' ? 'document' : mediaType === 'audio' ? 'audio' : mediaType === 'video' ? 'video' : 'image');
+  const isSticker = mediaType === 'sticker';
+  const waType = isSticker
+    ? 'sticker'
+    : file
+      ? resolveMediaType(file.mimetype, mediaType)
+      : (mediaType === 'document' ? 'document' : mediaType === 'audio' ? 'audio' : mediaType === 'video' ? 'video' : 'image');
   const filename = file ? file.originalname : (req.body.filename || '');
   const label = caption
-    || (waType === 'document' ? (filename || '[documento]') : waType === 'audio' ? '[audio]' : waType === 'video' ? '[video]' : '[imagen]');
+    || (waType === 'sticker' ? '[sticker]' : waType === 'document' ? (filename || '[documento]') : waType === 'audio' ? '[audio]' : waType === 'video' ? '[video]' : '[imagen]');
 
   if (!phoneNumberId || !config.accessToken) {
     return res.status(200).json({ ok: false, warning: 'Falta PHONE_NUMBER_ID o ACCESS_TOKEN.' });
@@ -2443,7 +2446,7 @@ app.post('/api/send-media', parseSendMediaBody, async (req, res) => {
         buffer: file.buffer,
         mimeType: file.mimetype,
         filename: file.originalname,
-        type: waType,
+        type: waType === 'sticker' ? 'image' : waType,
       });
     }
 
@@ -2459,14 +2462,19 @@ app.post('/api/send-media', parseSendMediaBody, async (req, res) => {
       replyTo,
     });
 
-    const response = await GraphApi.messageWithMedia(undefined, phoneNumberId, phone, {
-      mediaType: waType,
-      link: file ? undefined : link,
-      mediaId,
-      caption,
-      filename,
-      replyToMessageId: replyTo ? replyTo.messageId : undefined,
-    });
+    const response = waType === 'sticker'
+      ? await GraphApi.messageWithSticker(phoneNumberId, phone, {
+        mediaId,
+        replyToMessageId: replyTo ? replyTo.messageId : undefined,
+      })
+      : await GraphApi.messageWithMedia(undefined, phoneNumberId, phone, {
+        mediaType: waType,
+        link: file ? undefined : link,
+        mediaId,
+        caption,
+        filename,
+        replyToMessageId: replyTo ? replyTo.messageId : undefined,
+      });
 
     await finalizeOutbound(phone, stored, response);
     await trackBillableSend({
@@ -2542,6 +2550,71 @@ app.post('/api/send-location', apiJson, async (req, res) => {
       kind: 'location',
       preview: label,
       source: 'send_location',
+    });
+    res.json({ ok: true, message: stored });
+  } catch (err) {
+    if (stored) {
+      await Store.updateMessageStatus(phone, stored.id, 'failed');
+      stored.status = 'failed';
+    }
+    res.status(200).json({ ok: false, message: stored, error: String(err.message || err) });
+  }
+});
+
+app.post('/api/send-contacts', apiJson, async (req, res) => {
+  const { phone, contacts, replyToMessageId } = req.body || {};
+  if (!phone || !Array.isArray(contacts) || !contacts.length) {
+    return res.status(400).json({ error: 'Se requieren phone y contacts (array).' });
+  }
+  const normalized = contacts
+    .map((c) => ({
+      name: String(c.name || c.formatted_name || '').trim(),
+      phone: String(c.phone || '').replace(/\D/g, ''),
+      email: c.email ? String(c.email).trim() : '',
+    }))
+    .filter((c) => c.name && c.phone);
+  if (!normalized.length) {
+    return res.status(400).json({ error: 'Cada contacto necesita nombre y teléfono.' });
+  }
+
+  const convo = await Store.getConversation(phone);
+  const phoneNumberId = (convo && convo.phoneNumberId) || config.phoneNumberId;
+  if (!phoneNumberId || !config.accessToken) {
+    return res.status(200).json({ ok: false, warning: 'Falta PHONE_NUMBER_ID o ACCESS_TOKEN.' });
+  }
+
+  const replyTo = replyToMessageId && isWaMessageId(replyToMessageId)
+    ? { messageId: replyToMessageId }
+    : null;
+  const label = normalized.map((c) => c.name).join(', ');
+  const storeContacts = normalized.map((c) => ({
+    name: c.name,
+    phones: [c.phone],
+    email: c.email || undefined,
+  }));
+
+  let stored;
+  try {
+    stored = await Store.addMessage({
+      phone,
+      phoneNumberId,
+      direction: 'out',
+      text: label,
+      type: 'contacts',
+      status: 'pending',
+      contacts: storeContacts,
+      replyTo,
+    });
+
+    const response = await GraphApi.messageWithContacts(phoneNumberId, phone, normalized, replyTo ? replyTo.messageId : undefined);
+    await finalizeOutbound(phone, stored, response);
+    await trackBillableSend({
+      phone,
+      messageId: stored.id,
+      localMessageId: stored.id,
+      kind: 'contacts',
+      preview: label,
+      source: 'send_contacts',
     });
     res.json({ ok: true, message: stored });
   } catch (err) {
@@ -3434,6 +3507,7 @@ async function mirrorIncomingMessage(rawMessage, contactNames, senderPhoneNumber
 
 function resolveMediaType(mimeType, requested) {
   const mime = String(mimeType || '').toLowerCase();
+  if (requested === 'sticker' || mime === 'image/webp') return 'sticker';
   if (mime.startsWith('image/')) return 'image';
   if (mime.startsWith('audio/')) return 'audio';
   if (mime.startsWith('video/')) return 'video';

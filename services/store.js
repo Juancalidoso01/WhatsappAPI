@@ -57,7 +57,7 @@ function buildMessage({
   direction, text, type = "text", status = null, id = null,
   media = null, mediaId = null, voice = null,
   replyTo = null, location = null, reactionEmoji = null, reactionTo = null,
-  contacts = null,
+  contacts = null, campaignMeta = null,
 }) {
   const message = {
     id: id || `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
@@ -75,6 +75,7 @@ function buildMessage({
   if (reactionEmoji != null) message.reactionEmoji = reactionEmoji;
   if (reactionTo) message.reactionTo = reactionTo;
   if (contacts) message.contacts = contacts;
+  if (campaignMeta) message.campaignMeta = campaignMeta;
   return message;
 }
 
@@ -96,10 +97,11 @@ async function addMessage({
   reactionEmoji = null,
   reactionTo = null,
   contacts = null,
+  campaignMeta = null,
 }) {
   const message = buildMessage({
     direction, text, type, status, id, media, mediaId, voice,
-    replyTo, location, reactionEmoji, reactionTo, contacts,
+    replyTo, location, reactionEmoji, reactionTo, contacts, campaignMeta,
   });
 
   if (redis) {

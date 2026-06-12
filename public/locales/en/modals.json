@@ -19,6 +19,15 @@
     "address": "Address (optional)",
     "addressPlaceholder": "50th Street, Panama City"
   },
+  "contact": {
+    "title": "Send contact",
+    "hint": "Share a contact card with the customer (24 h window).",
+    "name": "Name",
+    "namePlaceholder": "Maria Lopez",
+    "phone": "Phone (with country code)",
+    "email": "Email (optional)",
+    "missing": "Enter the contact name and phone number."
+  },
   "media": {
     "title": "Send file",
     "hint": "Attach an image, document, audio, or video from your device.",

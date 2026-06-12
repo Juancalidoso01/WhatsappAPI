@@ -189,6 +189,9 @@
             <button type="button" id="locationBtn" class="icon-btn ghost" data-i18n-title="chats.sendLocation" data-i18n-aria="chats.sendLocation">
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a7 7 0 0 0-7 7c0 5.25 7 13 7 13s7-7.75 7-13a7 7 0 0 0-7-7zm0 9.5a2.5 2.5 0 1 1 0-5 2.5 2.5 0 0 1 0 5z"/></svg>
             </button>
+            <button type="button" id="contactsBtn" class="icon-btn ghost" data-i18n-title="chats.sendContact" data-i18n-aria="chats.sendContact">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4zm0 2c-4 0-7 2-7 4v1h14v-1c0-2-3-4-7-4z"/></svg>
+            </button>
             <input id="messageInput" type="text" data-i18n-placeholder="chats.writePlaceholder" placeholder="Escribe un mensaje…" autocomplete="off" />
             <button type="submit" class="send-btn" data-i18n-title="chats.send" data-i18n-aria="chats.send">
               <svg viewBox="0 0 24 24"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>
@@ -511,6 +514,7 @@
         <section class="ws-panel hidden" id="wsPanelReports">
           <p class="muted" data-i18n="workspace.reportsIntro">Resumen operativo básico. Luego ampliaremos gráficos y exportación.</p>
           <div id="wsReportsGrid" class="ws-reports-grid muted">Cargando informes…</div>
+          <div id="wsReportsChart" class="ws-reports-chart hidden"></div>
           <div class="ws-actions">
             <button type="button" id="wsRefreshReports" class="btn-ghost sm" data-i18n="workspace.reportsRefresh">Actualizar</button>
             <a id="wsExportReports" class="btn-ghost sm" href="/api/reports/export" download data-i18n="workspace.reportsExport">Exportar CSV</a>
@@ -957,6 +961,26 @@
     </div>
   </div>
 
+  <div id="modalContact" class="modal hidden">
+    <div class="modal-card">
+      <h3 data-i18n="modals.contact.title">Enviar contacto</h3>
+      <p class="muted sm" data-i18n="modals.contact.hint">Comparte un contacto con el cliente (ventana 24 h).</p>
+      <label><span data-i18n="modals.contact.name">Nombre</span>
+        <input id="ctName" type="text" data-i18n-placeholder="modals.contact.namePlaceholder" placeholder="María López" required />
+      </label>
+      <label><span data-i18n="modals.contact.phone">Teléfono (con código de país)</span>
+        <input id="ctPhone" type="text" inputmode="tel" placeholder="50761234567" required />
+      </label>
+      <label><span data-i18n="modals.contact.email">Correo (opcional)</span>
+        <input id="ctEmail" type="email" placeholder="maria@empresa.com" />
+      </label>
+      <div class="modal-actions">
+        <button class="btn-ghost" data-close data-i18n="common.cancel">Cancelar</button>
+        <button type="button" id="ctSend" class="btn-primary" data-i18n="common.send">Enviar</button>
+      </div>
+    </div>
+  </div>
+
   <div id="modalLocation" class="modal hidden">
     <div class="modal-card">
       <h3 data-i18n="modals.location.title">Enviar ubicación</h3>
@@ -996,6 +1020,7 @@
           <option value="document" data-i18n-opt="document">Documento</option>
           <option value="audio" data-i18n-opt="audio">Audio</option>
           <option value="video" data-i18n-opt="video">Video</option>
+          <option value="sticker" data-i18n-opt="sticker">Sticker (WebP)</option>
         </select>
       </label>
       <details class="media-url-fallback">

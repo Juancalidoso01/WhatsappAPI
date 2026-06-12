@@ -59,6 +59,7 @@
     "campaigns": "Массовые рассылки",
     "campaignDelivered": "Доставлено (рассылки)",
     "templatesApproved": "Одобренные шаблоны",
-    "templatesPending": "На проверке"
+    "templatesPending": "На проверке",
+    "chartTitle": "Активность сообщений"
   }
 }

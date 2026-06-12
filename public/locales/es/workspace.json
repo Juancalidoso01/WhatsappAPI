@@ -59,6 +59,7 @@
     "campaigns": "Cargas masivas",
     "campaignDelivered": "Entregados (cargas)",
     "templatesApproved": "Plantillas aprobadas",
-    "templatesPending": "Plantillas en revisión"
+    "templatesPending": "Plantillas en revisión",
+    "chartTitle": "Actividad de mensajes"
   }
 }

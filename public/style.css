@@ -514,6 +514,15 @@ input, textarea, select { font-family: inherit; }
 .msg-row.out .msg-contact { background: rgba(255,255,255,.12); }
 .msg-sticker, .bubble .msg-sticker { max-width: 140px; max-height: 140px; background: transparent; }
 
+.msg-campaign {
+  display: flex; align-items: flex-start; gap: 8px; font-size: 13px; line-height: 1.4;
+}
+.msg-campaign-icon { font-size: 18px; flex-shrink: 0; line-height: 1.2; }
+.msg-campaign strong { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; opacity: .85; margin-bottom: 2px; }
+.msg-campaign-tpl { display: block; font-size: 11px; opacity: .75; margin-top: 2px; }
+.bubble.campaign-bubble { background: var(--surface-2); border: 1px dashed var(--border); }
+.msg-row.out .bubble.campaign-bubble { background: rgba(255,255,255,.14); border-color: rgba(255,255,255,.25); }
+
 .msg-actions { display: inline-flex; gap: 2px; margin-left: auto; opacity: 0; transition: opacity .15s; }
 .msg-row:hover .msg-actions, .msg-row:focus-within .msg-actions { opacity: 1; }
 .msg-action-btn {
@@ -681,6 +690,19 @@ input, textarea, select { font-family: inherit; }
 .ws-report-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 14px; text-align: center; }
 .ws-report-card .n { display: block; font-size: 22px; font-weight: 700; color: var(--text); }
 .ws-report-card .l { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+.ws-reports-chart {
+  margin: 16px 0; padding: 16px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+}
+.ws-chart-title { margin: 0 0 12px; font-size: 13px; font-weight: 600; color: var(--text); }
+.ws-chart-bars { display: flex; flex-direction: column; gap: 10px; }
+.ws-chart-row { display: grid; grid-template-columns: minmax(80px, 1fr) 1fr auto; gap: 10px; align-items: center; font-size: 12px; }
+.ws-chart-label { color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ws-chart-track { height: 8px; background: var(--surface-2); border-radius: 4px; overflow: hidden; }
+.ws-chart-fill { height: 100%; border-radius: 4px; min-width: 2px; transition: width .3s ease; }
+.ws-chart-fill.in { background: var(--brand); }
+.ws-chart-fill.out { background: #5b8def; }
+.ws-chart-fill.camp { background: var(--green); }
+.ws-chart-val { font-weight: 600; font-variant-numeric: tabular-nums; min-width: 2ch; text-align: right; }
 .ws-soon-card { background: var(--surface-2); }
 @media (max-width: 768px) {
   .ws-grid, .ws-form-grid, .ws-reports-grid { grid-template-columns: 1fr; }

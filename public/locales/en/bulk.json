@@ -6,7 +6,7 @@
   "campaignNamePlaceholder": "March 2026 promo",
   "approvedTemplate": "Approved template",
   "csvFile": "CSV file",
-  "csvHint": "Columns: telefono, nombre (optional) and extra variables per template.",
+  "csvHint": "Columns: telefono, nombre (optional) and variables per template. If the template has an image/video/document header, the first variable must be the https URL of the file.",
   "downloadSample": "Download sample CSV",
   "validateCsv": "Validate CSV",
   "createCampaign": "Create campaign",

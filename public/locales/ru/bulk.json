@@ -6,7 +6,7 @@
   "campaignNamePlaceholder": "Промо март 2026",
   "approvedTemplate": "Одобренный шаблон",
   "csvFile": "Файл CSV",
-  "csvHint": "Столбцы: telefono, nombre (необяз.) и переменные по шаблону.",
+  "csvHint": "Столбцы: telefono, nombre (необяз.) и переменные по шаблону. Если в шаблоне есть заголовок с изображением/видео/документом, первая переменная — https URL файла.",
   "downloadSample": "Скачать пример CSV",
   "validateCsv": "Проверить CSV",
   "createCampaign": "Создать рассылку",

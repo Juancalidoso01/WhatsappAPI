@@ -6,7 +6,7 @@
   "campaignNamePlaceholder": "Promo marzo 2026",
   "approvedTemplate": "Plantilla aprobada",
   "csvFile": "Archivo CSV",
-  "csvHint": "Columnas: telefono, nombre (opcional) y variables extra según la plantilla.",
+  "csvHint": "Columnas: telefono, nombre (opcional) y variables según la plantilla. Si la plantilla tiene encabezado con imagen/video/documento, la primera variable debe ser la URL https del archivo.",
   "downloadSample": "Descargar CSV de ejemplo",
   "validateCsv": "Validar CSV",
   "createCampaign": "Crear carga",

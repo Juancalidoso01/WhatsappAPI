@@ -59,6 +59,7 @@
     "campaigns": "Bulk campaigns",
     "campaignDelivered": "Delivered (bulk)",
     "templatesApproved": "Approved templates",
-    "templatesPending": "Templates in review"
+    "templatesPending": "Templates in review",
+    "chartTitle": "Message activity"
   }
 }

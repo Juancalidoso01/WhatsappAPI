@@ -3,6 +3,7 @@
 const GraphApi = require("./graph-api");
 const CampaignStore = require("./campaign-store");
 const BillingLedger = require("./billing-ledger");
+const Store = require("./store");
 const { buildComponentsFromRow } = require("./template-params");
 
 const BATCH_SIZE = 20;
@@ -50,6 +51,24 @@ async function processBatch({ campaignId, templateDef, phoneNumberId }) {
       const sentAt = Date.now();
       await CampaignStore.updateRowStatus(campaignId, row.index, "sent", { wamid, sentAt });
       if (wamid) await CampaignStore.bindWamid(wamid, campaignId, row.index);
+      try {
+        await Store.addMessage({
+          phone: row.phone,
+          name: row.name || row.phone,
+          phoneNumberId,
+          direction: "out",
+          text: campaign.name || campaign.template,
+          type: "campaign",
+          status: "sent",
+          id: wamid,
+          campaignMeta: {
+            campaignId,
+            campaignName: campaign.name || "",
+            template: campaign.template,
+            templateLanguage: campaign.language,
+          },
+        });
+      } catch (_) { /* non-blocking */ }
       try {
         const cat = String((templateDef && templateDef.category) || campaign.templateCategory || "UTILITY").toUpperCase();
         await BillingLedger.record({

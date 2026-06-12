@@ -1342,6 +1342,7 @@ function previewText(m) {
   if (m.type === "sticker") return "[sticker]";
   if (m.type === "location") return m.location?.name || t("chats.location");
   if (m.type === "contacts") return t("chats.contact");
+  if (m.type === "campaign") return t("chats.campaignPreview", { name: m.campaignMeta?.campaignName || m.text || "" });
   return "";
 }
 
@@ -1403,14 +1404,17 @@ function syncComposerState() {
   const open = isMessagingWindowOpen();
   const input = $("messageInput");
   const attach = $("attachBtn");
+  const locationBtn = $("locationBtn");
+  const contactsBtn = $("contactsBtn");
   const composer = $("composer");
   const sendBtn = composer?.querySelector(".send-btn");
   if (input) {
     input.disabled = !open;
     input.placeholder = open ? t("chats.writePlaceholder") : t("chats.writeClosedPlaceholder");
   }
-  if (attach) attach.disabled = !open;
-  if (sendBtn) sendBtn.disabled = !open;
+  [attach, locationBtn, contactsBtn, sendBtn].forEach((el) => {
+    if (el) el.disabled = !open;
+  });
   composer?.classList.toggle("composer-closed", !open);
 }
 
@@ -1469,12 +1473,28 @@ function renderContactsBlock(m) {
   const list = m.contacts;
   if (!Array.isArray(list) || !list.length) return "";
   return list.map((c) => {
-    const phone = (c.phones && c.phones[0]) || "";
+    const phone = (c.phones && c.phones[0]) || c.phone || "";
     return `<div class="msg-contact">
       <strong>${escapeHtml(c.name || t("chats.contact"))}</strong>
       ${phone ? `<span class="muted sm">${escapeHtml(phone)}</span>` : ""}
+      ${c.email ? `<span class="muted sm">${escapeHtml(c.email)}</span>` : ""}
     </div>`;
   }).join("");
+}
+
+function renderCampaignBlock(m) {
+  if (m.type !== "campaign") return "";
+  const meta = m.campaignMeta || {};
+  const name = meta.campaignName || meta.template || m.text || "";
+  const tpl = meta.template ? `<span class="msg-campaign-tpl">${escapeHtml(meta.template)}</span>` : "";
+  return `<div class="msg-campaign">
+    <span class="msg-campaign-icon" aria-hidden="true">📣</span>
+    <div>
+      <strong>${escapeHtml(t("chats.campaignSend"))}</strong>
+      <span>${escapeHtml(name)}</span>
+      ${tpl}
+    </div>
+  </div>`;
 }
 
 function renderQuoteBlock(m) {
@@ -1511,6 +1531,7 @@ async function sendReaction(messageId, emoji) {
 
 function guessMediaType(file) {
   const mime = String(file.type || "").toLowerCase();
+  if (mime === "image/webp") return "sticker";
   if (mime.startsWith("image/")) return "image";
   if (mime.startsWith("audio/")) return "audio";
   if (mime.startsWith("video/")) return "video";
@@ -1592,13 +1613,19 @@ function renderMessages() {
   const hi = state.highlightMessageId;
   box.innerHTML = state.messages
     .map((m) => {
+      if (m.type === "campaign") {
+        const time = new Date(m.timestamp).toLocaleTimeString(localeCode() === "ru" ? "ru" : localeCode() === "en" ? "en-US" : "es", { hour: "2-digit", minute: "2-digit" });
+        return `<div class="msg-row system campaign" data-msg-id="${escapeHtml(m.id)}">
+          <div class="bubble campaign-bubble">${renderCampaignBlock(m)}<div class="bubble-meta">${time}${statusTick(m)}</div></div>
+        </div>`;
+      }
       const tplClass = m.type === "template" ? " tpl" : "";
       const isReaction = m.type === "reaction";
       const media = isReaction ? renderReactionBlock(m) : renderMedia(m);
       const location = renderLocationBlock(m);
       const contacts = renderContactsBlock(m);
       const quote = renderQuoteBlock(m);
-      const caption = m.text && !isReaction ? escapeHtml(m.text) : "";
+      const caption = m.text && !isReaction && m.type !== "contacts" ? escapeHtml(m.text) : "";
       const time = new Date(m.timestamp).toLocaleTimeString(localeCode() === "ru" ? "ru" : localeCode() === "en" ? "en-US" : "es", { hour: "2-digit", minute: "2-digit" });
       const isHi = hi && (m.id === hi);
       return `<div class="msg-row ${m.direction}${isReaction ? " reaction" : ""}" data-msg-id="${escapeHtml(m.id)}"${isHi ? ' id="billHighlightMsg"' : ""}>
@@ -3470,6 +3497,55 @@ function openLocationModal() {
   showModal("modalLocation");
 }
 
+function openContactModal() {
+  if (!state.activePhone) return;
+  if (!isMessagingWindowOpen()) {
+    toast(t("chats.windowClosedHint"), "error");
+    return;
+  }
+  showModal("modalContact");
+}
+
+async function sendContact() {
+  const phone = state.activePhone;
+  if (!phone) return;
+  const name = ($("ctName") || {}).value.trim();
+  const ctPhone = String(($("ctPhone") || {}).value || "").replace(/\D/g, "");
+  const email = ($("ctEmail") || {}).value.trim();
+  if (!name || !ctPhone) {
+    toast(t("modals.contact.missing"), "error");
+    return;
+  }
+  const res = await post("/api/send-contacts", {
+    phone,
+    contacts: [{ name, phone: ctPhone, email: email || undefined }],
+    replyToMessageId: state.replyTo?.id || null,
+  });
+  closeModals();
+  clearReplyTo();
+  if (res.ok) toast(t("toast.sent"), "ok");
+  else toast(t("toast.sendFailed", { error: res.error || res.warning || "error" }), "error");
+  ["ctName", "ctPhone", "ctEmail"].forEach((id) => { const el = $(id); if (el) el.value = ""; });
+  await loadMessages(phone);
+}
+
+function renderReportsChart(s) {
+  const items = [
+    { label: t("workspace.reports.inbound"), value: s.messages.inbound, cls: "in" },
+    { label: t("workspace.reports.outbound"), value: s.messages.outbound, cls: "out" },
+    { label: t("workspace.reports.campaignDelivered"), value: s.campaigns.delivered, cls: "camp" },
+  ];
+  const max = Math.max(...items.map((i) => i.value), 1);
+  return `<div class="ws-chart-bars">${items.map((i) => {
+    const pct = Math.round((i.value / max) * 100);
+    return `<div class="ws-chart-row">
+      <span class="ws-chart-label">${escapeHtml(i.label)}</span>
+      <div class="ws-chart-track"><div class="ws-chart-fill ${i.cls}" style="width:${pct}%"></div></div>
+      <span class="ws-chart-val">${i.value}</span>
+    </div>`;
+  }).join("")}</div>`;
+}
+
 /* ---------- simulate ---------- */
 async function simulate() {
   const phone = $("simPhone").value.replace(/[^0-9]/g, "");
@@ -4341,6 +4417,11 @@ async function loadWorkspaceReports() {
   box.innerHTML = cards.map(([n, l]) =>
     `<div class="ws-report-card"><span class="n">${n}</span><span class="l">${escapeHtml(l)}</span></div>`
   ).join("");
+  const chart = $("wsReportsChart");
+  if (chart) {
+    chart.classList.remove("hidden");
+    chart.innerHTML = `<h3 class="ws-chart-title">${escapeHtml(t("workspace.reports.chartTitle"))}</h3>${renderReportsChart(s)}`;
+  }
 }
 
 async function initWorkspaceScreen() {
@@ -6972,6 +7053,10 @@ function bindEvents() {
   if (locationBtn) locationBtn.addEventListener("click", openLocationModal);
   const locSend = $("locSend");
   if (locSend) locSend.addEventListener("click", sendLocation);
+  const contactsBtn = $("contactsBtn");
+  if (contactsBtn) contactsBtn.addEventListener("click", openContactModal);
+  const ctSend = $("ctSend");
+  if (ctSend) ctSend.addEventListener("click", sendContact);
   $("detailMediaBtn").addEventListener("click", () => showModal("modalMedia"));
   $("mdFile").addEventListener("change", updateMediaPreview);
   $("mdSend").addEventListener("click", sendMedia);

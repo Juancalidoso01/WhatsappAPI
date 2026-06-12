@@ -19,6 +19,15 @@
     "address": "Dirección (opcional)",
     "addressPlaceholder": "Calle 50, Ciudad de Panamá"
   },
+  "contact": {
+    "title": "Enviar contacto",
+    "hint": "Comparte un contacto con el cliente (ventana 24 h).",
+    "name": "Nombre",
+    "namePlaceholder": "María López",
+    "phone": "Teléfono (con código de país)",
+    "email": "Correo (opcional)",
+    "missing": "Indica nombre y teléfono del contacto."
+  },
   "media": {
     "title": "Enviar archivo",
     "hint": "Adjunta una imagen, documento, audio o video desde tu equipo.",
