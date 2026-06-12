@@ -65,6 +65,8 @@
     "title": "AI agent",
     "intro": "Like Intercom: FAQ first, then your role and instructions. Can escalate to a human or apply corrections.",
     "enabled": "AI agent on",
+    "statusOn": "Active",
+    "statusOff": "Inactive",
     "noGeminiKey": "GOOGLE_GENERATIVE_AI_API_KEY is missing on the server. The AI agent cannot reply until it is set.",
     "role": "Agent role",
     "instructions": "Additional instructions",
@@ -108,6 +110,10 @@
     "failedAnswer": "AI answer:",
     "convertToCorrection": "Convert to correction",
     "noFailed": "No failures recorded."
+  },
+  "readiness": {
+    "ok": "Ready: the AI will reply to inbound messages when configured.",
+    "pending": "To enable AI replies:"
   },
   "toast": {
     "created": "Rule created",

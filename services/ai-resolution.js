@@ -161,7 +161,7 @@ function shouldSkipAiAgent(meta) {
   if (meta.needsHuman === "1") return true;
   if (meta.humanActiveAt) {
     const age = Date.now() - Number(meta.humanActiveAt);
-    if (age < 86400000) return true;
+    if (age < 3600000) return true;
   }
   return false;
 }
@@ -169,7 +169,6 @@ function shouldSkipAiAgent(meta) {
 async function markHumanActive(phone) {
   await Store.updateConversationMeta(phone, {
     humanActiveAt: String(Date.now()),
-    needsHuman: "1",
     aiState: "idle",
   });
 }

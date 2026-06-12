@@ -51,6 +51,7 @@
     activeTab: "rules",
     aiFormDirty: false,
     aiViewMounted: false,
+    readiness: null,
   };
 
   function loadActiveTab() {
@@ -225,6 +226,7 @@
         </header>
         <div id="automationBotWarn" class="automation-banner hidden"></div>
         <div id="automationGeminiWarn" class="automation-banner hidden"></div>
+        <div id="automationReadiness" class="automation-readiness hidden"></div>
         <nav class="automation-main-tabs" role="tablist">
           <button type="button" class="automation-main-tab active" data-auto-tab="rules" data-i18n="automation.tabs.rules">${esc(t("automation.tabs.rules"))}</button>
           <button type="button" class="automation-main-tab" data-auto-tab="ai" data-i18n="automation.tabs.ai">${esc(t("automation.tabs.ai"))}</button>
@@ -309,7 +311,27 @@
     const en = document.getElementById("automationEnabled");
     if (en) en.checked = Boolean(state.settings.enabled);
     paintAiWarnings();
+    paintReadiness();
     bindRuleCards();
+  }
+
+  function paintReadiness() {
+    const box = document.getElementById("automationReadiness");
+    if (!box || !state.readiness) {
+      if (box) box.classList.add("hidden");
+      return;
+    }
+    const r = state.readiness;
+    if (r.ready) {
+      box.className = "automation-readiness ok";
+      box.innerHTML = `<strong>${esc(t("automation.readiness.ok"))}</strong>`;
+      box.classList.remove("hidden");
+      return;
+    }
+    box.className = "automation-readiness warn";
+    const items = (r.hints || []).map((h) => `<li>${esc(h)}</li>`).join("");
+    box.innerHTML = `<strong>${esc(t("automation.readiness.pending"))}</strong><ul>${items}</ul>`;
+    box.classList.remove("hidden");
   }
 
   function paintAiWarnings() {
@@ -376,11 +398,16 @@
             <p class="muted sm" data-i18n="automation.ai.intro">${t("automation.ai.intro")}</p>
             <p class="muted sm automation-faq-link">FAQ: <a href="${esc(state.faqSiteUrl || "#")}" target="_blank" rel="noopener">${esc(state.faqSiteUrl || "—")}</a></p>
           </div>
-          <label class="automation-switch">
-            <input type="checkbox" id="aiEnabled" ${ai.enabled ? "checked" : ""} />
-            <span></span>
-            <em data-i18n="automation.ai.enabled">${t("automation.ai.enabled")}</em>
-          </label>
+          <div class="automation-ai-toggle-box ${ai.enabled ? "is-on" : "is-off"}">
+            <div class="automation-ai-toggle-text">
+              <strong>${esc(t("automation.ai.enabled"))}</strong>
+              <span class="automation-ai-status-pill">${esc(ai.enabled ? t("automation.ai.statusOn") : t("automation.ai.statusOff"))}</span>
+            </div>
+            <label class="automation-switch" title="${esc(t("automation.ai.enabled"))}">
+              <input type="checkbox" id="aiEnabled" ${ai.enabled ? "checked" : ""} aria-label="${esc(t("automation.ai.enabled"))}" />
+              <span></span>
+            </label>
+          </div>
         </header>
         <form id="automationAiForm" class="automation-ai-form">
           <label data-i18n="automation.ai.role">${t("automation.ai.role")}
@@ -829,7 +856,10 @@
               body: JSON.stringify({ enabled }),
             });
             state.ai = data.ai;
+            state.readiness = data.readiness || state.readiness;
             toastMsg(t("automation.toast.aiSaved"), "ok");
+            renderAiView();
+            paintReadiness();
           } catch (err) {
             e.target.checked = !enabled;
             toastMsg(err.message, "err");
@@ -848,9 +878,11 @@
             body: JSON.stringify(collectAiPayload()),
           });
           state.ai = data.ai;
+          state.readiness = data.readiness || state.readiness;
           state.aiFormDirty = false;
           toastMsg(t("automation.toast.aiSaved"), "ok");
           renderAiView();
+          paintReadiness();
         } catch (err) {
           toastMsg(err.message, "err");
         }
@@ -918,6 +950,7 @@
     state.botEnabled = Boolean(data.botEnabled);
     state.geminiConfigured = Boolean(data.geminiConfigured);
     state.faqSiteUrl = data.faqSiteUrl || "";
+    state.readiness = data.readiness || null;
     paint();
     if (state.activeTab === "ai" && !state.aiFormDirty) {
       renderAiView();

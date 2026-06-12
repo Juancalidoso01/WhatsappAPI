@@ -43,7 +43,7 @@ const {
 } = require('./services/interactive-send');
 const AutomationStore = require('./services/automation-store');
 const GeminiAgent = require('./services/gemini-agent');
-const { runAutomationForInbound } = require('./services/automation-engine');
+const { runAutomationForInbound, buildReadiness } = require('./services/automation-engine');
 const AiResolution = require('./services/ai-resolution');
 const WorkspaceStore = require('./services/workspace-store');
 const reports = require('./services/reports');
@@ -572,6 +572,14 @@ app.get('/api/automation', async (req, res) => {
       geminiConfigured: GeminiAgent.isConfigured(),
       geminiViaFaq: GeminiAgent.isFaqProxyConfigured(),
       faqSiteUrl: config.faqSiteUrl,
+      readiness: buildReadiness({
+        settings,
+        ai,
+        rules,
+        botEnabled: config.botEnabled,
+        geminiConfigured: GeminiAgent.isConfigured(),
+        geminiViaFaq: GeminiAgent.isFaqProxyConfigured(),
+      }),
     });
   } catch (err) {
     res.status(500).json({ ok: false, error: String(err.message || err) });
@@ -619,7 +627,21 @@ app.patch('/api/automation/settings', apiJson, async (req, res) => {
 app.patch('/api/automation/ai', apiJson, async (req, res) => {
   try {
     const ai = await AutomationStore.setAiSettings(req.body || {});
-    res.json({ ok: true, ai, geminiConfigured: GeminiAgent.isConfigured(), geminiViaFaq: GeminiAgent.isFaqProxyConfigured() });
+    const { rules, settings } = await AutomationStore.listRules();
+    res.json({
+      ok: true,
+      ai,
+      geminiConfigured: GeminiAgent.isConfigured(),
+      geminiViaFaq: GeminiAgent.isFaqProxyConfigured(),
+      readiness: buildReadiness({
+        settings,
+        ai,
+        rules,
+        botEnabled: config.botEnabled,
+        geminiConfigured: GeminiAgent.isConfigured(),
+        geminiViaFaq: GeminiAgent.isFaqProxyConfigured(),
+      }),
+    });
   } catch (err) {
     res.status(400).json({ ok: false, error: String(err.message || err) });
   }
@@ -3107,8 +3129,15 @@ app.patch('/api/conversations/:phone', apiJson, async (req, res) => {
     const merged = leadProfile.merge(meta && meta.leadProfile, leadProfile.sanitizePatch(lead));
     fields.leadProfile = leadProfile.serialize(merged);
   }
+  if (req.body && req.body.releaseAi === true) {
+    fields.needsHuman = '0';
+    fields.humanActiveAt = '';
+    fields.aiState = 'idle';
+    fields.aiEscalationReason = '';
+    fields.aiReplyCount = '0';
+  }
   if (!Object.keys(fields).length) {
-    return res.status(400).json({ error: 'Nada que actualizar (notes, name o lead).' });
+    return res.status(400).json({ error: 'Nada que actualizar (notes, name, lead o releaseAi).' });
   }
   try {
     await Store.updateConversationMeta(req.params.phone, fields);
@@ -3318,7 +3347,6 @@ app.post('/api/send', apiJson, async (req, res) => {
       replyToMessageId: replyTo ? replyTo.messageId : undefined,
     });
     await finalizeOutbound(phone, stored, response);
-    await AiResolution.markHumanActive(phone);
     await trackBillableSend({
       phone,
       messageId: stored.id,

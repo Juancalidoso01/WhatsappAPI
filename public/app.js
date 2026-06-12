@@ -1107,6 +1107,33 @@ function updateDetailArchiveBtn() {
   btn.dataset.archived = archived ? "1" : "0";
 }
 
+function updateDetailReleaseAiBtn() {
+  const btn = $("detailReleaseAiBtn");
+  if (!btn) return;
+  const d = state.conversationDetail;
+  const blocked = Boolean(
+    d && (d.needsHuman === "1" || (d.humanActiveAt && Date.now() - Number(d.humanActiveAt) < 3600000)),
+  );
+  btn.classList.toggle("hidden", !blocked);
+}
+
+async function releaseAiForConversation(phone) {
+  if (!phone) return;
+  const pk = phoneKey(phone);
+  const res = await patch(`/api/conversations/${encodeURIComponent(pk)}`, { releaseAi: true });
+  if (!res.ok) {
+    toast(res.error || t("chats.releaseAiFailed"), "error");
+    return;
+  }
+  if (state.conversationDetail && phoneKey(state.conversationDetail.phone) === pk) {
+    state.conversationDetail.needsHuman = "0";
+    state.conversationDetail.humanActiveAt = "";
+    state.conversationDetail.aiState = "idle";
+    updateDetailReleaseAiBtn();
+  }
+  toast(t("chats.releaseAiOk"), "ok");
+}
+
 async function setConversationArchived(phone, archived) {
   if (!phone) return;
   const pk = phoneKey(phone);
@@ -1538,6 +1565,7 @@ function renderDetailPanel() {
     notesEl.value = d.notes || "";
   }
   updateDetailArchiveBtn();
+  updateDetailReleaseAiBtn();
 }
 
 async function saveNotes() {
@@ -7975,6 +8003,10 @@ function bindEvents() {
   const detailMarkUnreadBtn = $("detailMarkUnreadBtn");
   if (detailMarkUnreadBtn) {
     detailMarkUnreadBtn.addEventListener("click", () => markConversationUnread(state.activePhone));
+  }
+  const detailReleaseAiBtn = $("detailReleaseAiBtn");
+  if (detailReleaseAiBtn) {
+    detailReleaseAiBtn.addEventListener("click", () => releaseAiForConversation(state.activePhone));
   }
   const detailArchiveBtn = $("detailArchiveBtn");
   if (detailArchiveBtn) {

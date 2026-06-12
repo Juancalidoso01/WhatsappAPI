@@ -373,7 +373,10 @@ async function runAutomationForInbound({
   if (!phone || !config.accessToken || !phoneNumberId) return { ran: false };
 
   const { rules, settings, ai } = await AutomationStore.listRules();
-  if (!settings.enabled) return { ran: false, reason: "disabled" };
+  if (!settings.enabled) {
+    console.log("[automation] skipped: global disabled");
+    return { ran: false, reason: "disabled" };
+  }
 
   const ctx = {
     phone: String(phone).replace(/\D/g, ""),
@@ -440,9 +443,16 @@ async function runAutomationForInbound({
     if (rule.stopOnMatch) break;
   }
 
+  if (!matchedAny && ai && ai.enabled && ai.fallbackEnabled && skipAi) {
+    console.log("[automation] ai fallback skipped:", ctx.phone, meta.needsHuman === "1" ? "needsHuman" : "humanActive");
+  }
+
   if (!matchedAny && ai && ai.enabled && ai.fallbackEnabled && !skipAi) {
     try {
       const res = await runAiAgent(ctx, ai, { ruleName: "fallback IA" });
+      if (res.skipped || res.error) {
+        console.warn("[automation] ai fallback:", res.reason || res.error);
+      }
       await AutomationStore.appendLog({
         ruleId: "ai_fallback",
         ruleName: "Agente IA (fallback)",
@@ -473,8 +483,43 @@ async function runAutomationForInbound({
   return { ran: results.length > 0, results };
 }
 
+function buildReadiness({ settings, ai, rules, botEnabled, geminiConfigured, geminiViaFaq }) {
+  const hints = [];
+  const aiOn = Boolean(ai && ai.enabled);
+  const autoOn = Boolean(settings && settings.enabled);
+  const fallback = Boolean(ai && ai.fallbackEnabled);
+  const hasAiRule = (rules || []).some(
+    (r) => r.enabled && (r.actions || []).some((a) => a.type === "reply_ai"),
+  );
+
+  if (botEnabled) hints.push("BOT_ENABLED=true en el servidor bloquea la automatización.");
+  if (!autoOn) hints.push("Activa «Automatización activa» (switch del header).");
+  if (!aiOn) hints.push("Activa «Agente IA» en la pestaña Agente IA.");
+  if (aiOn && !fallback && !hasAiRule) {
+    hints.push("Activa «Fallback IA» o crea una regla con acción «Responder con IA».");
+  }
+  if (!geminiConfigured) {
+    hints.push("Sin conexión IA: configura FAQ proxy (INTEGRATION_API_KEY en FAQ) o GOOGLE_GENERATIVE_AI_API_KEY.");
+  }
+
+  const canReply = autoOn && aiOn && geminiConfigured && (fallback || hasAiRule) && !botEnabled;
+  return {
+    ready: canReply && hints.length === 0,
+    canReply,
+    automationEnabled: autoOn,
+    aiEnabled: aiOn,
+    fallbackEnabled: fallback,
+    hasAiRule,
+    geminiConfigured: Boolean(geminiConfigured),
+    geminiViaFaq: Boolean(geminiViaFaq),
+    botEnabled: Boolean(botEnabled),
+    hints,
+  };
+}
+
 module.exports = {
   runAutomationForInbound,
   evaluateConditions,
   isWindowOpen,
+  buildReadiness,
 };

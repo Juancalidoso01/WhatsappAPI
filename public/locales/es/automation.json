@@ -65,6 +65,8 @@
     "title": "Agente IA",
     "intro": "Como Intercom: primero consulta el FAQ, luego aplica tu rol e instrucciones. Puede escalar a un humano o aplicar correcciones.",
     "enabled": "Agente IA activo",
+    "statusOn": "Activo",
+    "statusOff": "Inactivo",
     "noGeminiKey": "IA no configurada: añade GOOGLE_GENERATIVE_AI_API_KEY aquí, o conecta el proxy FAQ (INTEGRATION_API_KEY compartida con el proyecto FAQ).",
     "role": "Rol del agente",
     "instructions": "Instrucciones adicionales",
@@ -108,6 +110,10 @@
     "failedAnswer": "Respuesta IA:",
     "convertToCorrection": "Convertir en corrección",
     "noFailed": "Sin fallos registrados."
+  },
+  "readiness": {
+    "ok": "Listo: la IA responderá mensajes entrantes cuando corresponda.",
+    "pending": "Para que responda la IA:"
   },
   "toast": {
     "created": "Regla creada",
