@@ -42,6 +42,7 @@ const {
   buildOutboundInteractiveMeta,
 } = require('./services/interactive-send');
 const AutomationStore = require('./services/automation-store');
+const GeminiAgent = require('./services/gemini-agent');
 const { runAutomationForInbound } = require('./services/automation-engine');
 const AiResolution = require('./services/ai-resolution');
 const WorkspaceStore = require('./services/workspace-store');
@@ -568,7 +569,8 @@ app.get('/api/automation', async (req, res) => {
       aiFailed,
       aiResolutionLog,
       botEnabled: config.botEnabled,
-      geminiConfigured: Boolean(config.geminiApiKey),
+      geminiConfigured: GeminiAgent.isConfigured(),
+      geminiViaFaq: GeminiAgent.isFaqProxyConfigured(),
       faqSiteUrl: config.faqSiteUrl,
     });
   } catch (err) {
@@ -617,7 +619,7 @@ app.patch('/api/automation/settings', apiJson, async (req, res) => {
 app.patch('/api/automation/ai', apiJson, async (req, res) => {
   try {
     const ai = await AutomationStore.setAiSettings(req.body || {});
-    res.json({ ok: true, ai, geminiConfigured: Boolean(config.geminiApiKey) });
+    res.json({ ok: true, ai, geminiConfigured: GeminiAgent.isConfigured(), geminiViaFaq: GeminiAgent.isFaqProxyConfigured() });
   } catch (err) {
     res.status(400).json({ ok: false, error: String(err.message || err) });
   }

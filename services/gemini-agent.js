@@ -12,8 +12,12 @@ function resolveGoogleApiKey() {
   );
 }
 
+function isFaqProxyConfigured() {
+  return Boolean(config.faqSiteUrl && config.faqAgentSecret);
+}
+
 function isConfigured() {
-  return Boolean(resolveGoogleApiKey());
+  return Boolean(resolveGoogleApiKey()) || isFaqProxyConfigured();
 }
 
 const RESPONSE_SCHEMA = {
@@ -94,12 +98,45 @@ function buildUserPrompt({ message, contactName, faqContext, history }) {
   ].filter(Boolean).join("\n");
 }
 
-async function generateAgentReply(input) {
-  const apiKey = resolveGoogleApiKey();
-  if (!apiKey) {
-    throw new Error("Falta GEMINI_API_KEY o GOOGLE_GENERATIVE_AI_API_KEY.");
-  }
+function normalizeReply(parsed) {
+  return {
+    reply: String(parsed.reply || "").trim().slice(0, 900),
+    escalate: Boolean(parsed.escalate),
+    escalationReason: String(parsed.escalationReason || "").trim(),
+    confidence: Math.max(0, Math.min(1, Number(parsed.confidence) || 0)),
+    sources: Array.isArray(parsed.sources) ? parsed.sources.map(String) : [],
+    internalNote: String(parsed.internalNote || "").trim(),
+  };
+}
 
+async function generateViaFaqProxy(input) {
+  const url = `${config.faqSiteUrl.replace(/\/$/, "")}/api/agent/reply`;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+      Authorization: `Bearer ${config.faqAgentSecret}`,
+    },
+    body: JSON.stringify({
+      ai: input.ai || {},
+      corrections: input.corrections || [],
+      message: input.message,
+      contactName: input.contactName,
+      faqContext: input.faqContext,
+      history: input.history,
+    }),
+    signal: AbortSignal.timeout(28000),
+  });
+
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || data.ok === false) {
+    throw new Error(data.error || `FAQ agent HTTP ${res.status}`);
+  }
+  return normalizeReply(data);
+}
+
+async function generateDirect(input, apiKey) {
   const model = config.geminiModel || "gemini-2.5-flash";
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
 
@@ -138,18 +175,26 @@ async function generateAgentReply(input) {
     throw new Error("Respuesta IA inválida (JSON).");
   }
 
-  return {
-    reply: String(parsed.reply || "").trim().slice(0, 900),
-    escalate: Boolean(parsed.escalate),
-    escalationReason: String(parsed.escalationReason || "").trim(),
-    confidence: Math.max(0, Math.min(1, Number(parsed.confidence) || 0)),
-    sources: Array.isArray(parsed.sources) ? parsed.sources.map(String) : [],
-    internalNote: String(parsed.internalNote || "").trim(),
-  };
+  return normalizeReply(parsed);
+}
+
+async function generateAgentReply(input) {
+  const apiKey = resolveGoogleApiKey();
+  if (apiKey) {
+    return generateDirect(input, apiKey);
+  }
+  if (isFaqProxyConfigured()) {
+    return generateViaFaqProxy(input);
+  }
+  throw new Error(
+    "IA no configurada: añade GOOGLE_GENERATIVE_AI_API_KEY o conecta el proxy FAQ "
+    + "(FAQ_SITE_URL + INTEGRATION_API_KEY compartida con el proyecto FAQ).",
+  );
 }
 
 module.exports = {
   resolveGoogleApiKey,
+  isFaqProxyConfigured,
   isConfigured,
   generateAgentReply,
 };

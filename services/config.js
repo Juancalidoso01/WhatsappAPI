@@ -86,6 +86,12 @@ module.exports = Object.freeze({
     || process.env.GOOGLE_API_KEY
     || null,
   geminiModel: process.env.GEMINI_MODEL || "gemini-2.5-flash",
+  /** Secreto compartido con FAQ /api/agent/reply (default: INTEGRATION_API_KEY). */
+  faqAgentSecret:
+    process.env.FAQ_AGENT_SECRET
+    || process.env.WHATSAPP_AGENT_SECRET
+    || process.env.INTEGRATION_API_KEY
+    || null,
 
   // Vercel Cron: Authorization Bearer CRON_SECRET
   cronSecret: process.env.CRON_SECRET || null,

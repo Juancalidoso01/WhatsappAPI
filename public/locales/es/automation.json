@@ -65,7 +65,7 @@
     "title": "Agente IA",
     "intro": "Como Intercom: primero consulta el FAQ, luego aplica tu rol e instrucciones. Puede escalar a un humano o aplicar correcciones.",
     "enabled": "Agente IA activo",
-    "noGeminiKey": "Falta GOOGLE_GENERATIVE_AI_API_KEY en el servidor. El agente IA no podrá responder hasta configurarla.",
+    "noGeminiKey": "IA no configurada: añade GOOGLE_GENERATIVE_AI_API_KEY aquí, o conecta el proxy FAQ (INTEGRATION_API_KEY compartida con el proyecto FAQ).",
     "role": "Rol del agente",
     "instructions": "Instrucciones adicionales",
     "instructionsPh": "Tono, límites, qué no decir, cómo saludar…",
