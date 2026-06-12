@@ -197,6 +197,9 @@
             <button type="button" id="contactsBtn" class="icon-btn ghost" data-i18n-title="chats.sendContact" data-i18n-aria="chats.sendContact">
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4zm0 2c-4 0-7 2-7 4v1h14v-1c0-2-3-4-7-4z"/></svg>
             </button>
+            <button type="button" id="interactiveBtn" class="icon-btn ghost" data-i18n-title="chats.sendInteractive" data-i18n-aria="chats.sendInteractive">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="4" rx="1.5"/><rect x="4" y="11" width="16" height="4" rx="1.5"/><rect x="4" y="17" width="10" height="4" rx="1.5"/></svg>
+            </button>
             <input id="messageInput" type="text" data-i18n-placeholder="chats.writePlaceholder" placeholder="Escribe un mensaje…" autocomplete="off" />
             <button type="submit" class="send-btn" data-i18n-title="chats.send" data-i18n-aria="chats.send">
               <svg viewBox="0 0 24 24"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>
@@ -304,6 +307,7 @@
         </div>
         <div class="detail-section">
           <span class="detail-label" data-i18n="chats.actions">Acciones</span>
+          <button type="button" class="btn-ghost block" id="detailInteractiveBtn" data-i18n="chats.sendInteractive">Enviar menú interactivo</button>
           <button type="button" class="btn-ghost block" id="detailMarkUnreadBtn" data-i18n="chats.markUnread">Marcar como no leída</button>
           <button type="button" class="btn-ghost block" id="detailArchiveBtn" data-i18n="chats.archive">Archivar</button>
           <button class="btn-ghost block" id="detailTemplateBtn" data-i18n="chats.sendTemplate">Enviar plantilla</button>
@@ -1012,6 +1016,45 @@
       <div class="modal-actions">
         <button class="btn-ghost" data-close data-i18n="common.cancel">Cancelar</button>
         <button type="button" id="locSend" class="btn-primary" data-i18n="common.send">Enviar</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="modalInteractive" class="modal hidden">
+    <div class="modal-card modal-card-wide">
+      <h3 data-i18n="modals.interactive.title">Menú interactivo</h3>
+      <p class="muted sm" data-i18n="modals.interactive.hint">Botones de respuesta rápida o lista desplegable. Solo dentro de la ventana de 24 h.</p>
+      <div class="iv-tabs" role="tablist">
+        <button type="button" class="iv-tab active" data-iv-tab="buttons" role="tab" aria-selected="true" data-i18n="modals.interactive.tabButtons">Botones</button>
+        <button type="button" class="iv-tab" data-iv-tab="list" role="tab" aria-selected="false" data-i18n="modals.interactive.tabList">Lista</button>
+      </div>
+      <label><span data-i18n="modals.interactive.body">Mensaje</span>
+        <textarea id="ivBody" rows="3" maxlength="1024" data-i18n-placeholder="modals.interactive.bodyPlaceholder" placeholder="¿En qué podemos ayudarte?"></textarea>
+      </label>
+      <label><span data-i18n="modals.interactive.footer">Pie (opcional)</span>
+        <input id="ivFooter" type="text" maxlength="60" data-i18n-placeholder="modals.interactive.footerPlaceholder" placeholder="Máx. 60 caracteres" />
+      </label>
+      <div id="ivButtonsPanel">
+        <span class="detail-label" data-i18n="modals.interactive.buttonsTitle">Botones (máx. 3)</span>
+        <div class="iv-btn-grid">
+          <label><span data-i18n="modals.interactive.button1">Botón 1</span><input id="ivBtn1" type="text" maxlength="20" data-i18n-placeholder="modals.interactive.buttonPlaceholder" placeholder="Sí" /></label>
+          <label><span data-i18n="modals.interactive.button2">Botón 2</span><input id="ivBtn2" type="text" maxlength="20" data-i18n-placeholder="modals.interactive.buttonPlaceholder" placeholder="No" /></label>
+          <label><span data-i18n="modals.interactive.button3">Botón 3 (opcional)</span><input id="ivBtn3" type="text" maxlength="20" /></label>
+        </div>
+      </div>
+      <div id="ivListPanel" class="hidden">
+        <label><span data-i18n="modals.interactive.listButton">Texto del botón que abre la lista</span>
+          <input id="ivListButton" type="text" maxlength="20" data-i18n-placeholder="modals.interactive.listButtonPlaceholder" placeholder="Ver opciones" />
+        </label>
+        <div class="iv-list-head">
+          <span class="detail-label" data-i18n="modals.interactive.listRows">Opciones (máx. 10)</span>
+          <button type="button" id="ivAddRow" class="btn-ghost sm" data-i18n="modals.interactive.addRow">+ Añadir</button>
+        </div>
+        <div id="ivListRows" class="iv-list-rows"></div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-ghost" data-close data-i18n="common.cancel">Cancelar</button>
+        <button type="button" id="ivSend" class="btn-primary" data-i18n="common.send">Enviar</button>
       </div>
     </div>
   </div>

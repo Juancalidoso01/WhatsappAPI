@@ -657,28 +657,78 @@ module.exports = class GraphApi {
   }
 
   static async messageWithInteractiveReply(messageId, senderPhoneNumberId, recipientPhoneNumber, messageText, replyCTAs) {
-    const requestBody = {
+    return this.messageWithInteractiveButtons(senderPhoneNumberId, recipientPhoneNumber, {
+      body: messageText,
+      buttons: replyCTAs,
+      replyToMessageId: undefined,
+      useTypingCall: true,
+      inboundMessageId: messageId,
+    });
+  }
+
+  static async messageWithInteractiveButtons(senderPhoneNumberId, recipientPhoneNumber, {
+    body, footer, buttons, replyToMessageId, useTypingCall, inboundMessageId,
+  }) {
+    const interactive = {
+      type: "button",
+      body: { text: String(body) },
+      action: {
+        buttons: (buttons || []).map((cta) => ({
+          type: "reply",
+          reply: {
+            id: String(cta.id),
+            title: String(cta.title),
+          },
+        })),
+      },
+    };
+    if (footer) interactive.footer = { text: String(footer) };
+
+    const requestBody = this.#withReplyContext({
       messaging_product: "whatsapp",
+      recipient_type: "individual",
       to: recipientPhoneNumber,
       type: "interactive",
-      interactive: {
-        type: "button",
-        body: {
-          text: messageText
-        },
-        action: {
-          buttons: replyCTAs.map(cta => ({
-            type: "reply",
-            reply: {
-              id: cta.id,
-              title: cta.title
-            }
-          }))
-        }
-      }
-    };
+      interactive,
+    }, replyToMessageId);
 
-    return this.#makeApiCall(messageId, senderPhoneNumberId, requestBody);
+    if (useTypingCall && inboundMessageId) {
+      return this.#makeApiCall(inboundMessageId, senderPhoneNumberId, requestBody);
+    }
+    const api = getApi();
+    return api.call("POST", [`${senderPhoneNumberId}`, "messages"], requestBody);
+  }
+
+  static async messageWithInteractiveList(senderPhoneNumberId, recipientPhoneNumber, {
+    body, footer, listButton, sections, replyToMessageId,
+  }) {
+    const interactive = {
+      type: "list",
+      body: { text: String(body) },
+      action: {
+        button: String(listButton),
+        sections: (sections || []).map((sec) => ({
+          title: sec.title || undefined,
+          rows: (sec.rows || []).map((row) => ({
+            id: String(row.id),
+            title: String(row.title),
+            description: row.description ? String(row.description) : undefined,
+          })),
+        })),
+      },
+    };
+    if (footer) interactive.footer = { text: String(footer) };
+
+    const requestBody = this.#withReplyContext({
+      messaging_product: "whatsapp",
+      recipient_type: "individual",
+      to: recipientPhoneNumber,
+      type: "interactive",
+      interactive,
+    }, replyToMessageId);
+
+    const api = getApi();
+    return api.call("POST", [`${senderPhoneNumberId}`, "messages"], requestBody);
   }
 
   static async messageWithUtilityTemplate(messageId, senderPhoneNumberId, recipientPhoneNumber, options) {

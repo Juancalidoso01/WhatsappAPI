@@ -31,6 +31,8 @@
   "attach": "Adjuntar imagen o archivo",
   "sendLocation": "Enviar ubicación",
   "sendContact": "Enviar contacto",
+  "sendInteractive": "Enviar menú interactivo",
+  "interactiveSendFailed": "No se pudo enviar el menú interactivo.",
   "campaignSend": "Carga masiva",
   "campaignPreview": "Carga: {name}",
   "locationInvalid": "Indica latitud y longitud válidas.",

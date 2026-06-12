@@ -31,6 +31,8 @@
   "attach": "Attach image or file",
   "sendLocation": "Send location",
   "sendContact": "Send contact",
+  "sendInteractive": "Send interactive menu",
+  "interactiveSendFailed": "Could not send the interactive menu.",
   "campaignSend": "Bulk campaign",
   "campaignPreview": "Campaign: {name}",
   "locationInvalid": "Enter valid latitude and longitude.",

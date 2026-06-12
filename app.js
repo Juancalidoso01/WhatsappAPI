@@ -35,6 +35,11 @@ const { getOpsStatus } = require('./services/ops-status');
 const { getMetaPlatformStatus } = require('./services/meta-platform-status');
 const { attachMetaError } = require('./services/meta-error-context');
 const { extractInteractiveMeta, interactivePreviewText } = require('./services/interactive-meta');
+const {
+  validateButtonsPayload,
+  validateListPayload,
+  buildOutboundInteractiveMeta,
+} = require('./services/interactive-send');
 const WorkspaceStore = require('./services/workspace-store');
 const reports = require('./services/reports');
 const templateBuilder = require('./services/template-builder');
@@ -2985,6 +2990,115 @@ app.post('/api/conversations/:phone/messages/:messageId/retry', apiJson, async (
   }
 });
 
+// Enviar menú interactivo (botones o lista) dentro de la ventana 24 h
+app.post('/api/send-interactive', apiJson, async (req, res) => {
+  const {
+    phone,
+    variant,
+    body,
+    footer,
+    buttons,
+    listButton,
+    sections,
+    replyToMessageId,
+  } = req.body || {};
+
+  if (!phone) return res.status(400).json({ ok: false, error: 'Se requiere "phone".' });
+  const kind = String(variant || '').toLowerCase();
+  if (kind !== 'buttons' && kind !== 'list') {
+    return res.status(400).json({ ok: false, error: 'variant debe ser "buttons" o "list".' });
+  }
+
+  const validated = kind === 'buttons'
+    ? validateButtonsPayload({ body, footer, buttons })
+    : validateListPayload({ body, footer, listButton, sections });
+
+  if (!validated.ok) {
+    return res.status(400).json({ ok: false, error: validated.errors.join(' ') });
+  }
+
+  const convo = await Store.getConversation(phone);
+  const phoneNumberId = (convo && convo.phoneNumberId) || config.phoneNumberId;
+  if (!phoneNumberId || !config.accessToken) {
+    return res.status(400).json({ ok: false, error: 'Falta PHONE_NUMBER_ID o ACCESS_TOKEN.' });
+  }
+
+  const replyTo = replyToMessageId && isWaMessageId(replyToMessageId)
+    ? { messageId: replyToMessageId }
+    : null;
+
+  const interactiveMeta = buildOutboundInteractiveMeta(kind, validated);
+  const preview = validated.body;
+  const retryPayload = kind === 'buttons'
+    ? {
+      kind: 'interactive',
+      variant: 'buttons',
+      body: validated.body,
+      footer: validated.footer || undefined,
+      buttons: validated.normalized,
+      replyToMessageId: replyTo ? replyTo.messageId : undefined,
+    }
+    : {
+      kind: 'interactive',
+      variant: 'list',
+      body: validated.body,
+      footer: validated.footer || undefined,
+      listButton: validated.listButton,
+      sections: validated.normalizedSections,
+      replyToMessageId: replyTo ? replyTo.messageId : undefined,
+    };
+
+  let stored;
+  try {
+    stored = await Store.addMessage({
+      phone,
+      phoneNumberId,
+      direction: 'out',
+      text: preview,
+      type: 'interactive',
+      status: 'pending',
+      interactiveMeta,
+      retryPayload,
+      replyTo,
+    });
+
+    const response = kind === 'buttons'
+      ? await GraphApi.messageWithInteractiveButtons(phoneNumberId, phone, {
+        body: validated.body,
+        footer: validated.footer || undefined,
+        buttons: validated.normalized,
+        replyToMessageId: replyTo ? replyTo.messageId : undefined,
+      })
+      : await GraphApi.messageWithInteractiveList(phoneNumberId, phone, {
+        body: validated.body,
+        footer: validated.footer || undefined,
+        listButton: validated.listButton,
+        sections: validated.normalizedSections,
+        replyToMessageId: replyTo ? replyTo.messageId : undefined,
+      });
+
+    await finalizeOutbound(phone, stored, response);
+    await trackBillableSend({
+      phone,
+      messageId: stored.id,
+      localMessageId: stored.id,
+      kind: 'interactive',
+      preview,
+      source: `send_interactive_${kind}`,
+    });
+    res.json({ ok: true, message: stored });
+  } catch (err) {
+    console.error('send-interactive error:', err.message);
+    if (stored) await Store.updateMessageStatus(phone, stored.id, 'failed');
+    const body = await attachMetaError(
+      { ok: false, message: stored, error: String(err.message || err) },
+      'messaging',
+      err,
+    );
+    res.status(200).json(body);
+  }
+});
+
 // Send a text message manually from the web interface
 app.post('/api/send', apiJson, async (req, res) => {
   const { phone, text, replyToMessageId } = req.body || {};
@@ -3644,6 +3758,22 @@ async function resendFromRetryPayload(phone, phoneNumberId, payload) {
       });
     case 'contacts':
       return GraphApi.messageWithContacts(phoneNumberId, phone, payload.contacts, replyId);
+    case 'interactive':
+      if (payload.variant === 'list') {
+        return GraphApi.messageWithInteractiveList(phoneNumberId, phone, {
+          body: payload.body,
+          footer: payload.footer,
+          listButton: payload.listButton,
+          sections: payload.sections,
+          replyToMessageId: replyId,
+        });
+      }
+      return GraphApi.messageWithInteractiveButtons(phoneNumberId, phone, {
+        body: payload.body,
+        footer: payload.footer,
+        buttons: payload.buttons,
+        replyToMessageId: replyId,
+      });
     default:
       throw new Error('Tipo de mensaje no compatible con reintento.');
   }

@@ -1507,6 +1507,14 @@ function previewText(m) {
     if (im.kind === "flow_reply") return t("chats.interactive.flowReply");
     if (im.body) return im.body;
   }
+  if (m.type === "interactive" || m.interactiveMeta) {
+    const im = m.interactiveMeta;
+    if (im) {
+      if (im.kind === "buttons" && im.body) return im.body;
+      if (im.kind === "list" && im.body) return im.body;
+    }
+    return m.text || t("modals.msgTypes.interactive");
+  }
   if (m.type === "reaction") return m.reactionEmoji ? `${m.reactionEmoji}` : t("chats.reaction");
   if (m.text) return m.text;
   if (m.type === "image") return `[${t("chats.preview.image")}]`;
@@ -1587,13 +1595,14 @@ function syncComposerState() {
   const attach = $("attachBtn");
   const locationBtn = $("locationBtn");
   const contactsBtn = $("contactsBtn");
+  const interactiveBtn = $("interactiveBtn");
   const composer = $("composer");
   const sendBtn = composer?.querySelector(".send-btn");
   if (input) {
     input.disabled = !open;
     input.placeholder = open ? t("chats.writePlaceholder") : t("chats.writeClosedPlaceholder");
   }
-  [attach, locationBtn, contactsBtn, sendBtn].forEach((el) => {
+  [attach, locationBtn, contactsBtn, interactiveBtn, sendBtn].forEach((el) => {
     if (el) el.disabled = !open;
   });
   composer?.classList.toggle("composer-closed", !open);
@@ -1910,8 +1919,9 @@ function renderMessageRowHtml(m, hi) {
   const contacts = renderContactsBlock(m);
   const interactive = renderInteractiveBlock(m);
   const quote = renderQuoteBlock(m);
+  const imKind = m.interactiveMeta && m.interactiveMeta.kind;
   const showCaption = m.text && !isReaction && m.type !== "contacts"
-    && !(m.interactiveMeta && ["button_reply", "list_reply", "flow_reply"].includes(m.interactiveMeta.kind));
+    && !["button_reply", "list_reply", "flow_reply", "buttons", "list"].includes(imKind);
   const caption = showCaption ? escapeHtml(m.text) : "";
   const time = messageTimeLabel(m.timestamp);
   const isHi = hi && (m.id === hi);
@@ -3926,6 +3936,120 @@ function openLocationModal() {
     return;
   }
   showModal("modalLocation");
+}
+
+const ivState = { variant: "buttons", listRowCount: 3 };
+
+function setInteractiveTab(variant) {
+  ivState.variant = variant === "list" ? "list" : "buttons";
+  document.querySelectorAll(".iv-tab").forEach((btn) => {
+    const on = btn.dataset.ivTab === ivState.variant;
+    btn.classList.toggle("active", on);
+    btn.setAttribute("aria-selected", on ? "true" : "false");
+  });
+  $("ivButtonsPanel")?.classList.toggle("hidden", ivState.variant !== "buttons");
+  $("ivListPanel")?.classList.toggle("hidden", ivState.variant !== "list");
+}
+
+function renderInteractiveListRows(count) {
+  const box = $("ivListRows");
+  if (!box) return;
+  ivState.listRowCount = Math.min(10, Math.max(1, count || ivState.listRowCount || 3));
+  const rows = [];
+  for (let i = 0; i < ivState.listRowCount; i++) {
+    rows.push(`<div class="iv-list-row" data-row="${i}">
+      <label><span>${escapeHtml(t("modals.interactive.rowTitle"))}</span>
+        <input type="text" class="iv-row-title" maxlength="24" data-i18n-placeholder="modals.interactive.rowTitlePlaceholder" placeholder="Opción ${i + 1}" />
+      </label>
+      <label><span>${escapeHtml(t("modals.interactive.rowDesc"))}</span>
+        <input type="text" class="iv-row-desc" maxlength="72" data-i18n-placeholder="modals.interactive.rowDescPlaceholder" placeholder="Descripción breve (opcional)" />
+      </label>
+      ${i >= 2 ? `<button type="button" class="btn-ghost sm iv-row-remove" data-row="${i}">×</button>` : ""}
+    </div>`);
+  }
+  box.innerHTML = rows.join("");
+  box.querySelectorAll(".iv-row-remove").forEach((btn) =>
+    btn.addEventListener("click", () => renderInteractiveListRows(ivState.listRowCount - 1))
+  );
+  if (window.I18n) I18n.applyDom(box);
+}
+
+function resetInteractiveForm() {
+  ["ivBody", "ivFooter", "ivBtn1", "ivBtn2", "ivBtn3", "ivListButton"].forEach((id) => {
+    const el = $(id);
+    if (el) el.value = "";
+  });
+  setInteractiveTab("buttons");
+  renderInteractiveListRows(3);
+}
+
+function collectInteractivePayload() {
+  const body = ($("ivBody") || {}).value.trim();
+  const footer = ($("ivFooter") || {}).value.trim();
+  const replyToMessageId = state.replyTo?.id || null;
+  if (ivState.variant === "list") {
+    const rows = [];
+    document.querySelectorAll("#ivListRows .iv-list-row").forEach((row) => {
+      const title = row.querySelector(".iv-row-title")?.value.trim();
+      const description = row.querySelector(".iv-row-desc")?.value.trim();
+      if (!title) return;
+      rows.push({ title, description });
+    });
+    return {
+      phone: state.activePhone,
+      variant: "list",
+      body,
+      footer: footer || undefined,
+      listButton: ($("ivListButton") || {}).value.trim(),
+      sections: [{ rows }],
+      replyToMessageId,
+    };
+  }
+  const buttons = ["ivBtn1", "ivBtn2", "ivBtn3"]
+    .map((id) => ({ title: ($(id) || {}).value.trim() }))
+    .filter((b) => b.title);
+  return {
+    phone: state.activePhone,
+    variant: "buttons",
+    body,
+    footer: footer || undefined,
+    buttons,
+    replyToMessageId,
+  };
+}
+
+async function sendInteractive() {
+  const phone = state.activePhone;
+  if (!phone) return;
+  if (!isMessagingWindowOpen()) {
+    toast(t("chats.windowClosedHint"), "error");
+    return;
+  }
+  const payload = collectInteractivePayload();
+  const btn = $("ivSend");
+  if (btn) btn.disabled = true;
+  const res = await post("/api/send-interactive", payload);
+  if (btn) btn.disabled = false;
+  if (!res.ok) {
+    toast(formatMetaError(res, "chats.interactiveSendFailed"), "error");
+    return;
+  }
+  closeModals();
+  clearReplyTo();
+  toast(t("toast.sent"), "ok");
+  resetInteractiveForm();
+  await loadMessages(phone);
+  await loadConversations();
+}
+
+function openInteractiveModal() {
+  if (!state.activePhone) return;
+  if (!isMessagingWindowOpen()) {
+    toast(t("chats.windowClosedHint"), "error");
+    return;
+  }
+  resetInteractiveForm();
+  showModal("modalInteractive");
 }
 
 function openContactModal() {
@@ -7731,6 +7855,25 @@ function bindEvents() {
   if (locSend) locSend.addEventListener("click", sendLocation);
   const contactsBtn = $("contactsBtn");
   if (contactsBtn) contactsBtn.addEventListener("click", openContactModal);
+  const interactiveBtn = $("interactiveBtn");
+  if (interactiveBtn) interactiveBtn.addEventListener("click", openInteractiveModal);
+  const detailInteractiveBtn = $("detailInteractiveBtn");
+  if (detailInteractiveBtn) detailInteractiveBtn.addEventListener("click", openInteractiveModal);
+  document.querySelectorAll(".iv-tab").forEach((btn) =>
+    btn.addEventListener("click", () => setInteractiveTab(btn.dataset.ivTab))
+  );
+  const ivAddRow = $("ivAddRow");
+  if (ivAddRow) {
+    ivAddRow.addEventListener("click", () => {
+      if (ivState.listRowCount >= 10) {
+        toast(t("modals.interactive.maxRows"), "error");
+        return;
+      }
+      renderInteractiveListRows(ivState.listRowCount + 1);
+    });
+  }
+  const ivSend = $("ivSend");
+  if (ivSend) ivSend.addEventListener("click", sendInteractive);
   const ctSend = $("ctSend");
   if (ctSend) ctSend.addEventListener("click", sendContact);
   $("detailMediaBtn").addEventListener("click", () => {

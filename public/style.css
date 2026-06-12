@@ -609,6 +609,61 @@ input, textarea, select { font-family: inherit; }
 .msg-flow-field dt { font-weight: 600; opacity: .8; }
 .msg-flow-field dd { margin: 0; word-break: break-word; }
 
+.iv-tabs {
+  display: flex;
+  gap: 8px;
+  margin: 12px 0 14px;
+}
+.iv-tab {
+  flex: 1;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  border-radius: 9px;
+  padding: 8px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+  cursor: pointer;
+}
+.iv-tab.active {
+  border-color: var(--brand);
+  background: var(--brand-50);
+  color: var(--brand);
+}
+.iv-btn-grid {
+  display: grid;
+  gap: 10px;
+  margin-top: 8px;
+}
+.iv-list-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 12px 0 8px;
+}
+.iv-list-rows { display: grid; gap: 10px; max-height: 280px; overflow-y: auto; }
+.iv-list-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr auto;
+  gap: 8px;
+  align-items: end;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-2);
+}
+.iv-list-row .iv-row-remove {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  align-self: center;
+}
+@media (max-width: 640px) {
+  .iv-list-row { grid-template-columns: 1fr; }
+  .iv-list-row .iv-row-remove { justify-self: end; }
+}
+
 .window-banner {
   margin: 0 28px 6px; padding: 9px 14px; border-radius: 11px; font-size: 12.5px;
   background: #fff6e0; color: #8a6300; border: 1px solid #ffe6a8; text-align: center;

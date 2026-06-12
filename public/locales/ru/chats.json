@@ -31,6 +31,8 @@
   "attach": "Прикрепить файл",
   "sendLocation": "Отправить местоположение",
   "sendContact": "Отправить контакт",
+  "sendInteractive": "Отправить интерактивное меню",
+  "interactiveSendFailed": "Не удалось отправить интерактивное меню.",
   "campaignSend": "Массовая рассылка",
   "campaignPreview": "Рассылка: {name}",
   "locationInvalid": "Укажите корректные широту и долготу.",
