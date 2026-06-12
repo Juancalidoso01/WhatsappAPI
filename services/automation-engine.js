@@ -4,6 +4,9 @@ const GraphApi = require("./graph-api");
 const Store = require("./store");
 const AutomationStore = require("./automation-store");
 const { validateButtonsPayload } = require("./interactive-send");
+const { searchFaqArticles, formatFaqContext } = require("./faq-knowledge");
+const GeminiAgent = require("./gemini-agent");
+const AiResolution = require("./ai-resolution");
 const config = require("./config");
 
 function normalizeText(text) {
@@ -162,7 +165,160 @@ async function sendButtonsReply(phone, phoneNumberId, action) {
   return stored;
 }
 
-async function executeAction(action, ctx) {
+function messageMatchesEscalation(text, keywords) {
+  const t = normalizeText(text).toLowerCase();
+  return (keywords || []).some((k) => k && t.includes(String(k).toLowerCase()));
+}
+
+async function getAiReplyCount(phone) {
+  const meta = await Store.getConversationMeta(phone);
+  return Number(meta && meta.aiReplyCount) || 0;
+}
+
+async function bumpAiReplyCount(phone) {
+  const n = (await getAiReplyCount(phone)) + 1;
+  await Store.updateConversationMeta(phone, { aiReplyCount: String(n) });
+  return n;
+}
+
+async function markNeedsHuman(phone, reason) {
+  await Store.updateConversationMeta(phone, {
+    needsHuman: "1",
+    aiEscalationReason: String(reason || "").slice(0, 500),
+    aiEscalatedAt: String(Date.now()),
+  });
+}
+
+async function runAiAgent(ctx, aiSettings, { ruleName } = {}) {
+  if (!GeminiAgent.isConfigured()) {
+    return { ok: false, skipped: true, reason: "no_gemini_key" };
+  }
+  if (!aiSettings || !aiSettings.enabled) {
+    return { ok: false, skipped: true, reason: "ai_disabled" };
+  }
+
+  const esc = aiSettings.escalation || {};
+  const replyCount = await getAiReplyCount(ctx.phone);
+
+  if (replyCount >= (esc.maxRepliesPerChat || 8)) {
+    await markNeedsHuman(ctx.phone, "Límite de respuestas IA alcanzado.");
+    return { ok: false, escalated: true, reason: "max_ai_replies" };
+  }
+
+  if (messageMatchesEscalation(ctx.text, esc.keywords)) {
+    await markNeedsHuman(ctx.phone, "Usuario solicitó agente humano.");
+    const handoff = esc.handoffMessage;
+    if (handoff && (await isWindowOpen(ctx.phone))) {
+      await sendTextReply(ctx.phone, ctx.phoneNumberId, handoff);
+    }
+    return { ok: true, action: "reply_ai", escalated: true, reason: "keyword_escalation" };
+  }
+
+  let faqArticles = [];
+  if (aiSettings.faqEnabled !== false) {
+    try {
+      faqArticles = await searchFaqArticles(ctx.text, {
+        audience: aiSettings.faqAudience || "cliente",
+        limit: aiSettings.faqMaxArticles || 4,
+      });
+    } catch (err) {
+      console.error("faq-knowledge error:", err.message);
+    }
+  }
+
+  const messages = await Store.getMessages(ctx.phone);
+  const history = messages.slice(-8).map((m) => ({
+    direction: m.direction,
+    text: m.text || "",
+  }));
+
+  let generated;
+  try {
+    generated = await GeminiAgent.generateAgentReply({
+      ai: aiSettings,
+      corrections: aiSettings.corrections,
+      message: ctx.text,
+      contactName: ctx.contactName,
+      faqContext: formatFaqContext(faqArticles),
+      history,
+    });
+  } catch (err) {
+    return { ok: false, error: String(err.message || err) };
+  }
+
+  let shouldEscalate = generated.escalate;
+  if (
+    !shouldEscalate
+    && esc.onLowConfidence
+    && generated.confidence < (esc.confidenceThreshold || 0.45)
+  ) {
+    shouldEscalate = true;
+    generated.escalationReason = generated.escalationReason || "Confianza baja según FAQ.";
+  }
+
+  if (shouldEscalate) {
+    await markNeedsHuman(ctx.phone, generated.escalationReason || "Escalamiento IA");
+    if (generated.internalNote) {
+      const meta = await Store.getConversationMeta(ctx.phone);
+      const prev = (meta && meta.notes) || "";
+      const note = `[IA${ruleName ? ` · ${ruleName}` : ""}] ${generated.internalNote}`;
+      await Store.updateConversationMeta(ctx.phone, { notes: prev ? `${prev}\n${note}` : note });
+    }
+    const handoff = esc.handoffMessage;
+    if (handoff && (await isWindowOpen(ctx.phone))) {
+      await sendTextReply(ctx.phone, ctx.phoneNumberId, handoff);
+    }
+    return {
+      ok: true,
+      action: "reply_ai",
+      escalated: true,
+      confidence: generated.confidence,
+      sources: generated.sources,
+      reason: generated.escalationReason,
+    };
+  }
+
+  if (!generated.reply) {
+    return { ok: false, skipped: true, reason: "empty_reply" };
+  }
+
+  if (!(await isWindowOpen(ctx.phone))) {
+    return { ok: false, skipped: true, reason: "window_closed" };
+  }
+
+  await sendTextReply(ctx.phone, ctx.phoneNumberId, generated.reply);
+  await bumpAiReplyCount(ctx.phone);
+
+  if (generated.internalNote) {
+    const meta = await Store.getConversationMeta(ctx.phone);
+    const prev = (meta && meta.notes) || "";
+    const note = `[IA] ${generated.internalNote}`;
+    await Store.updateConversationMeta(ctx.phone, { notes: prev ? `${prev}\n${note}` : note });
+  }
+
+  const resCfg = AiResolution.resolutionSettings(aiSettings);
+  if (resCfg.feedbackEnabled) {
+    try {
+      await AiResolution.sendFeedbackPrompt(ctx.phone, ctx.phoneNumberId, aiSettings, {
+        question: ctx.text,
+        reply: generated.reply,
+        sources: generated.sources,
+      });
+    } catch (err) {
+      console.error("ai-resolution feedback error:", err.message);
+    }
+  }
+
+  return {
+    ok: true,
+    action: "reply_ai",
+    confidence: generated.confidence,
+    sources: generated.sources,
+    faqCount: faqArticles.length,
+  };
+}
+
+async function executeAction(action, ctx, aiSettings) {
   const { phone, phoneNumberId } = ctx;
   switch (action.type) {
     case "reply_text": {
@@ -195,6 +351,12 @@ async function executeAction(action, ctx) {
       await Store.updateConversationMeta(phone, { notes: next });
       return { ok: true, action: "add_note" };
     }
+    case "reply_ai": {
+      if (AiResolution.shouldSkipAiAgent(await Store.getConversationMeta(phone))) {
+        return { ok: false, skipped: true, reason: "human_or_escalated" };
+      }
+      return runAiAgent(ctx, aiSettings, { ruleName: "regla" });
+    }
     default:
       return { ok: false, skipped: true, reason: "unknown_action" };
   }
@@ -206,14 +368,12 @@ async function runAutomationForInbound({
   contactName,
   text,
   messageType,
+  interactiveMeta,
 }) {
   if (!phone || !config.accessToken || !phoneNumberId) return { ran: false };
 
-  const { rules, settings } = await AutomationStore.listRules();
+  const { rules, settings, ai } = await AutomationStore.listRules();
   if (!settings.enabled) return { ran: false, reason: "disabled" };
-
-  const activeRules = rules.filter((r) => r.enabled).sort((a, b) => a.order - b.order);
-  if (!activeRules.length) return { ran: false, reason: "no_rules" };
 
   const ctx = {
     phone: String(phone).replace(/\D/g, ""),
@@ -221,18 +381,44 @@ async function runAutomationForInbound({
     contactName,
     text: normalizeText(text),
     messageType: messageType || "text",
+    interactiveMeta: interactiveMeta || null,
   };
 
+  const feedbackResult = await AiResolution.handleInboundFeedback(ctx, ai);
+  if (feedbackResult.handled) {
+    await AutomationStore.appendLog({
+      ruleId: "ai_resolution",
+      ruleName: `Resolución IA (${feedbackResult.resolution || "feedback"})`,
+      phone: ctx.phone,
+      contactName: contactName || ctx.phone,
+      text: ctx.text,
+      messageType: ctx.messageType,
+      actions: [feedbackResult],
+    });
+    return { ran: true, results: [{ ruleId: "ai_resolution", actions: [feedbackResult] }] };
+  }
+
+  const meta = await Store.getConversationMeta(ctx.phone);
+  const skipAi = AiResolution.shouldSkipAiAgent(meta);
+
+  const activeRules = rules.filter((r) => r.enabled).sort((a, b) => a.order - b.order);
+
   const results = [];
+  let matchedAny = false;
 
   for (const rule of activeRules) {
     const matched = await evaluateConditions(rule.conditions, ctx);
     if (!matched) continue;
+    matchedAny = true;
 
     const actionResults = [];
     for (const action of rule.actions) {
+      if (skipAi && action.type === "reply_ai") {
+        actionResults.push({ ok: false, skipped: true, reason: "human_or_escalated" });
+        continue;
+      }
       try {
-        const res = await executeAction(action, ctx);
+        const res = await executeAction(action, ctx, ai);
         actionResults.push(res);
       } catch (err) {
         actionResults.push({ ok: false, error: String(err.message || err) });
@@ -252,6 +438,36 @@ async function runAutomationForInbound({
     results.push({ ruleId: rule.id, ruleName: rule.name, actions: actionResults });
 
     if (rule.stopOnMatch) break;
+  }
+
+  if (!matchedAny && ai && ai.enabled && ai.fallbackEnabled && !skipAi) {
+    try {
+      const res = await runAiAgent(ctx, ai, { ruleName: "fallback IA" });
+      await AutomationStore.appendLog({
+        ruleId: "ai_fallback",
+        ruleName: "Agente IA (fallback)",
+        phone: ctx.phone,
+        contactName: contactName || ctx.phone,
+        text: ctx.text,
+        messageType: ctx.messageType,
+        actions: [res],
+      });
+      results.push({ ruleId: "ai_fallback", ruleName: "Agente IA (fallback)", actions: [res] });
+    } catch (err) {
+      await AutomationStore.appendLog({
+        ruleId: "ai_fallback",
+        ruleName: "Agente IA (fallback)",
+        phone: ctx.phone,
+        contactName: contactName || ctx.phone,
+        text: ctx.text,
+        messageType: ctx.messageType,
+        actions: [{ ok: false, error: String(err.message || err) }],
+      });
+    }
+  }
+
+  if (!activeRules.length && !(ai && ai.enabled && ai.fallbackEnabled)) {
+    return { ran: false, reason: "no_rules" };
   }
 
   return { ran: results.length > 0, results };

@@ -4,13 +4,22 @@ const redis = require("./upstash");
 
 const RULES_KEY = "wa:automation:rules";
 const SETTINGS_KEY = "wa:automation:settings";
+const AI_KEY = "wa:automation:ai";
 const LOG_KEY = "wa:automation:log";
+const FAILED_KEY = "wa:automation:ai_failed";
+const RES_LOG_KEY = "wa:automation:ai_res_log";
 const MAX_LOG = 80;
+const MAX_CORRECTIONS = 25;
+const MAX_FAILED = 40;
+const MAX_RES_LOG = 60;
 
 const mem = {
   rules: [],
   enabled: false,
+  ai: null,
   log: [],
+  aiFailed: [],
+  aiResLog: [],
 };
 
 const CONDITION_TYPES = new Set([
@@ -26,9 +35,94 @@ const ACTION_TYPES = new Set([
   "reply_text",
   "reply_template",
   "reply_buttons",
+  "reply_ai",
   "archive",
   "add_note",
 ]);
+
+function defaultAiSettings() {
+  return {
+    enabled: false,
+    fallbackEnabled: true,
+    role: "Asistente virtual de Punto Pago",
+    instructions: "",
+    faqEnabled: true,
+    faqAudience: "cliente",
+    faqMaxArticles: 4,
+    escalation: {
+      keywords: ["agente", "humano", "persona", "operador", "representante", "hablar con alguien"],
+      onLowConfidence: true,
+      confidenceThreshold: 0.45,
+      maxRepliesPerChat: 8,
+      handoffMessage: "Te conecto con un agente de nuestro equipo. En breve te atenderán.",
+    },
+    corrections: [],
+    resolution: {
+      feedbackEnabled: true,
+      feedbackPrompt: "¿Te ayudó esta respuesta?",
+      feedbackYes: "Sí, gracias",
+      feedbackNo: "Necesito más ayuda",
+      thankYouMessage: "¡Me alegra haberte ayudado! Si necesitas algo más, escríbenos.",
+      archiveOnConfirmed: false,
+      inactivityMinutes: 4,
+      assumedResolutionEnabled: true,
+      followUpMessage: "¿Sigues necesitando ayuda con algo más?",
+    },
+  };
+}
+
+function sanitizeAiSettings(input) {
+  const base = defaultAiSettings();
+  const src = input || {};
+  const esc = src.escalation || {};
+  const keywords = Array.isArray(esc.keywords)
+    ? esc.keywords.map((k) => String(k).trim().toLowerCase()).filter(Boolean).slice(0, 30)
+    : base.escalation.keywords;
+
+  const corrections = (src.corrections || base.corrections || [])
+    .map((c) => ({
+      id: c.id || `corr_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      when: String(c.when || "").trim().slice(0, 300),
+      prefer: String(c.prefer || "").trim().slice(0, 500),
+      at: c.at || Date.now(),
+    }))
+    .filter((c) => c.when && c.prefer)
+    .slice(0, MAX_CORRECTIONS);
+
+  const res = src.resolution || base.resolution || {};
+  const resolution = {
+    feedbackEnabled: res.feedbackEnabled != null ? Boolean(res.feedbackEnabled) : base.resolution.feedbackEnabled,
+    feedbackPrompt: String(res.feedbackPrompt || base.resolution.feedbackPrompt).trim().slice(0, 200),
+    feedbackYes: String(res.feedbackYes || base.resolution.feedbackYes).trim().slice(0, 20),
+    feedbackNo: String(res.feedbackNo || base.resolution.feedbackNo).trim().slice(0, 20),
+    thankYouMessage: String(res.thankYouMessage || base.resolution.thankYouMessage).trim().slice(0, 500),
+    archiveOnConfirmed: Boolean(res.archiveOnConfirmed),
+    inactivityMinutes: Math.min(30, Math.max(1, Number(res.inactivityMinutes) || base.resolution.inactivityMinutes)),
+    assumedResolutionEnabled: res.assumedResolutionEnabled != null
+      ? Boolean(res.assumedResolutionEnabled)
+      : base.resolution.assumedResolutionEnabled,
+    followUpMessage: String(res.followUpMessage || base.resolution.followUpMessage).trim().slice(0, 300),
+  };
+
+  return {
+    enabled: src.enabled != null ? Boolean(src.enabled) : base.enabled,
+    fallbackEnabled: src.fallbackEnabled != null ? Boolean(src.fallbackEnabled) : base.fallbackEnabled,
+    role: String(src.role || base.role).trim().slice(0, 120) || base.role,
+    instructions: String(src.instructions || "").trim().slice(0, 4000),
+    faqEnabled: src.faqEnabled != null ? Boolean(src.faqEnabled) : base.faqEnabled,
+    faqAudience: ["cliente", "empresa", "all"].includes(src.faqAudience) ? src.faqAudience : base.faqAudience,
+    faqMaxArticles: Math.min(8, Math.max(1, Number(src.faqMaxArticles) || base.faqMaxArticles)),
+    escalation: {
+      keywords,
+      onLowConfidence: esc.onLowConfidence != null ? Boolean(esc.onLowConfidence) : base.escalation.onLowConfidence,
+      confidenceThreshold: Math.max(0.1, Math.min(0.95, Number(esc.confidenceThreshold) || base.escalation.confidenceThreshold)),
+      maxRepliesPerChat: Math.min(30, Math.max(1, Number(esc.maxRepliesPerChat) || base.escalation.maxRepliesPerChat)),
+      handoffMessage: String(esc.handoffMessage || base.escalation.handoffMessage).trim().slice(0, 500),
+    },
+    corrections,
+    resolution,
+  };
+}
 
 function newId() {
   return `rule_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
@@ -67,6 +161,8 @@ function sanitizeAction(a) {
   } else if (type === "add_note") {
     out.note = String(a.note || "").trim();
     if (!out.note) return null;
+  } else if (type === "reply_ai") {
+    // Usa configuración global del agente IA
   }
   return out;
 }
@@ -120,6 +216,63 @@ async function writeRules(rules) {
   return sorted;
 }
 
+async function readAiSettings() {
+  if (redis) {
+    const raw = await redis.get(AI_KEY);
+    if (!raw) return defaultAiSettings();
+    try {
+      const parsed = typeof raw === "string" ? JSON.parse(raw) : raw;
+      return sanitizeAiSettings(parsed);
+    } catch (_) {
+      return defaultAiSettings();
+    }
+  }
+  return sanitizeAiSettings(mem.ai || defaultAiSettings());
+}
+
+async function writeAiSettings(settings) {
+  const next = sanitizeAiSettings(settings);
+  if (redis) {
+    await redis.set(AI_KEY, JSON.stringify(next));
+  } else {
+    mem.ai = next;
+  }
+  return next;
+}
+
+async function getAiSettings() {
+  return readAiSettings();
+}
+
+async function setAiSettings(patch) {
+  const current = await readAiSettings();
+  return writeAiSettings({
+    ...current,
+    ...patch,
+    escalation: { ...current.escalation, ...(patch && patch.escalation) },
+    resolution: { ...current.resolution, ...(patch && patch.resolution) },
+  });
+}
+
+async function addCorrection({ when, prefer }) {
+  const current = await readAiSettings();
+  const row = {
+    id: `corr_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+    when: String(when || "").trim(),
+    prefer: String(prefer || "").trim(),
+    at: Date.now(),
+  };
+  if (!row.when || !row.prefer) throw new Error("Indica cuándo aplicar la corrección y la respuesta preferida.");
+  const corrections = [row, ...(current.corrections || [])].slice(0, MAX_CORRECTIONS);
+  return writeAiSettings({ ...current, corrections });
+}
+
+async function deleteCorrection(id) {
+  const current = await readAiSettings();
+  const corrections = (current.corrections || []).filter((c) => c.id !== id);
+  return writeAiSettings({ ...current, corrections });
+}
+
 async function getSettings() {
   if (redis) {
     const raw = await redis.hgetall(SETTINGS_KEY);
@@ -139,8 +292,8 @@ async function setSettings(patch) {
 }
 
 async function listRules() {
-  const [rules, settings] = await Promise.all([readRules(), getSettings()]);
-  return { rules, settings };
+  const [rules, settings, ai] = await Promise.all([readRules(), getSettings(), readAiSettings()]);
+  return { rules, settings, ai };
 }
 
 async function getRule(id) {
@@ -211,15 +364,84 @@ async function listLog(limit = 30) {
   return mem.log.slice(0, n);
 }
 
+async function readJsonList(key, memField, max) {
+  if (redis) {
+    const raw = await redis.get(key);
+    if (!raw) return [];
+    try {
+      const list = typeof raw === "string" ? JSON.parse(raw) : raw;
+      return Array.isArray(list) ? list : [];
+    } catch (_) {
+      return [];
+    }
+  }
+  return mem[memField] || [];
+}
+
+async function writeJsonList(key, memField, list, max) {
+  const trimmed = list.slice(0, max);
+  if (redis) {
+    await redis.set(key, JSON.stringify(trimmed));
+  } else {
+    mem[memField] = trimmed;
+  }
+  return trimmed;
+}
+
+async function appendFailedResolution(entry) {
+  const row = {
+    id: `fail_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+    at: Date.now(),
+    ...entry,
+  };
+  const list = await readJsonList(FAILED_KEY, "aiFailed", MAX_FAILED);
+  list.unshift(row);
+  await writeJsonList(FAILED_KEY, "aiFailed", list, MAX_FAILED);
+  return row;
+}
+
+async function listFailedResolutions(limit = 20) {
+  const n = Math.min(MAX_FAILED, Math.max(1, Number(limit) || 20));
+  const list = await readJsonList(FAILED_KEY, "aiFailed", MAX_FAILED);
+  return list.slice(0, n);
+}
+
+async function appendResolutionLog(entry) {
+  const row = {
+    id: `res_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+    at: Date.now(),
+    ...entry,
+  };
+  const list = await readJsonList(RES_LOG_KEY, "aiResLog", MAX_RES_LOG);
+  list.unshift(row);
+  await writeJsonList(RES_LOG_KEY, "aiResLog", list, MAX_RES_LOG);
+  return row;
+}
+
+async function listResolutionLog(limit = 30) {
+  const n = Math.min(MAX_RES_LOG, Math.max(1, Number(limit) || 30));
+  const list = await readJsonList(RES_LOG_KEY, "aiResLog", MAX_RES_LOG);
+  return list.slice(0, n);
+}
+
 module.exports = {
   CONDITION_TYPES: [...CONDITION_TYPES],
   ACTION_TYPES: [...ACTION_TYPES],
+  defaultAiSettings,
   listRules,
   getRule,
   createRule,
   updateRule,
   deleteRule,
   setSettings,
+  getAiSettings,
+  setAiSettings,
+  addCorrection,
+  deleteCorrection,
   appendLog,
   listLog,
+  appendFailedResolution,
+  listFailedResolutions,
+  appendResolutionLog,
+  listResolutionLog,
 };

@@ -43,6 +43,7 @@ const {
 } = require('./services/interactive-send');
 const AutomationStore = require('./services/automation-store');
 const { runAutomationForInbound } = require('./services/automation-engine');
+const AiResolution = require('./services/ai-resolution');
 const WorkspaceStore = require('./services/workspace-store');
 const reports = require('./services/reports');
 const templateBuilder = require('./services/template-builder');
@@ -284,6 +285,7 @@ app.post('/webhook', webhookJson, (req, res) => {
                     contactName: contactNames[rawMessage.from],
                     text: mirrored.text,
                     messageType: mirrored.type,
+                    interactiveMeta: mirrored.interactiveMeta || null,
                   });
                 })
                 .catch(err => console.error('addMessage/automation error:', err));
@@ -551,11 +553,24 @@ app.get('/api/reports/export', async (req, res) => {
 
 app.get('/api/automation', async (req, res) => {
   try {
-    const [{ rules, settings }, log] = await Promise.all([
+    const [{ rules, settings, ai }, log, aiFailed, aiResolutionLog] = await Promise.all([
       AutomationStore.listRules(),
       AutomationStore.listLog(40),
+      AutomationStore.listFailedResolutions(15),
+      AutomationStore.listResolutionLog(20),
     ]);
-    res.json({ ok: true, rules, settings, log, botEnabled: config.botEnabled });
+    res.json({
+      ok: true,
+      rules,
+      settings,
+      ai,
+      log,
+      aiFailed,
+      aiResolutionLog,
+      botEnabled: config.botEnabled,
+      geminiConfigured: Boolean(config.geminiApiKey),
+      faqSiteUrl: config.faqSiteUrl,
+    });
   } catch (err) {
     res.status(500).json({ ok: false, error: String(err.message || err) });
   }
@@ -596,6 +611,50 @@ app.patch('/api/automation/settings', apiJson, async (req, res) => {
     res.json({ ok: true, settings });
   } catch (err) {
     res.status(500).json({ ok: false, error: String(err.message || err) });
+  }
+});
+
+app.patch('/api/automation/ai', apiJson, async (req, res) => {
+  try {
+    const ai = await AutomationStore.setAiSettings(req.body || {});
+    res.json({ ok: true, ai, geminiConfigured: Boolean(config.geminiApiKey) });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: String(err.message || err) });
+  }
+});
+
+app.post('/api/automation/ai/corrections', apiJson, async (req, res) => {
+  try {
+    const { when, prefer } = req.body || {};
+    const ai = await AutomationStore.addCorrection({ when, prefer });
+    res.json({ ok: true, ai });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: String(err.message || err) });
+  }
+});
+
+app.delete('/api/automation/ai/corrections/:id', async (req, res) => {
+  try {
+    const ai = await AutomationStore.deleteCorrection(req.params.id);
+    res.json({ ok: true, ai });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: String(err.message || err) });
+  }
+});
+
+app.post('/api/automation/ai/failed/:id/to-correction', apiJson, async (req, res) => {
+  try {
+    const failed = await AutomationStore.listFailedResolutions(40);
+    const row = failed.find((f) => f.id === req.params.id);
+    if (!row) return res.status(404).json({ ok: false, error: 'Registro no encontrado.' });
+    const prefer = (req.body && req.body.prefer) || row.answer || '';
+    const ai = await AutomationStore.addCorrection({
+      when: row.question,
+      prefer: String(prefer).trim(),
+    });
+    res.json({ ok: true, ai });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: String(err.message || err) });
   }
 });
 
@@ -3257,6 +3316,7 @@ app.post('/api/send', apiJson, async (req, res) => {
       replyToMessageId: replyTo ? replyTo.messageId : undefined,
     });
     await finalizeOutbound(phone, stored, response);
+    await AiResolution.markHumanActive(phone);
     await trackBillableSend({
       phone,
       messageId: stored.id,

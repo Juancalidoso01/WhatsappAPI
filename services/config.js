@@ -79,6 +79,14 @@ module.exports = Object.freeze({
     .toLowerCase()
     .replace(/^@/, ""),
 
+  faqSiteUrl: (process.env.FAQ_SITE_URL || "https://faq-sooty-theta.vercel.app").replace(/\/$/, ""),
+  geminiApiKey:
+    process.env.GOOGLE_GENERATIVE_AI_API_KEY
+    || process.env.GEMINI_API_KEY
+    || process.env.GOOGLE_API_KEY
+    || null,
+  geminiModel: process.env.GEMINI_MODEL || "gemini-2.5-flash",
+
   // Vercel Cron: Authorization Bearer CRON_SECRET
   cronSecret: process.env.CRON_SECRET || null,
 

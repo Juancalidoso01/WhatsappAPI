@@ -17,6 +17,7 @@
     "reply_text",
     "reply_template",
     "reply_buttons",
+    "reply_ai",
     "archive",
     "add_note",
   ];
@@ -37,12 +38,22 @@
   const state = {
     rules: [],
     settings: { enabled: false },
+    ai: null,
     log: [],
+    aiFailed: [],
+    aiResolutionLog: [],
     botEnabled: false,
+    geminiConfigured: false,
+    faqSiteUrl: "",
     templates: [],
     editingId: null,
     bound: false,
+    activeTab: "rules",
   };
+
+  function toastMsg(msg, type) {
+    if (typeof window.toast === "function") window.toast(msg, type);
+  }
 
   function esc(s) {
     return String(s)
@@ -52,8 +63,38 @@
       .replace(/"/g, "&quot;");
   }
 
-  function toastMsg(msg, type) {
-    if (typeof window.toast === "function") window.toastMsg(msg, type);
+  function $(id) {
+    return document.getElementById(id);
+  }
+
+  function defaultAi() {
+    return {
+      enabled: false,
+      fallbackEnabled: true,
+      role: "Asistente virtual de Punto Pago",
+      instructions: "",
+      faqEnabled: true,
+      faqAudience: "cliente",
+      faqMaxArticles: 4,
+      escalation: {
+        keywords: ["agente", "humano", "persona"],
+        onLowConfidence: true,
+        confidenceThreshold: 0.45,
+        maxRepliesPerChat: 8,
+        handoffMessage: "Te conecto con un agente de nuestro equipo. En breve te atenderán.",
+      },
+      corrections: [],
+      resolution: {
+        feedbackEnabled: true,
+        feedbackPrompt: "¿Te ayudó esta respuesta?",
+        feedbackYes: "Sí, gracias",
+        feedbackNo: "Necesito más ayuda",
+        thankYouMessage: "¡Me alegra haberte ayudado! Si necesitas algo más, escríbenos.",
+        archiveOnConfirmed: false,
+        inactivityMinutes: 4,
+        assumedResolutionEnabled: true,
+      },
+    };
   }
 
   async function api(path, opts) {
@@ -84,6 +125,7 @@
     if (a.type === "reply_template") return `${base}: ${a.template} (${a.language || "es"})`;
     if (a.type === "reply_buttons") return `${base}: ${(a.body || "").slice(0, 30)}`;
     if (a.type === "add_note") return `${base}: ${(a.note || "").slice(0, 40)}`;
+    if (a.type === "reply_ai") return base;
     return base;
   }
 
@@ -167,7 +209,12 @@
           </div>
         </header>
         <div id="automationBotWarn" class="automation-banner hidden"></div>
-        <div class="automation-grid">
+        <div id="automationGeminiWarn" class="automation-banner hidden"></div>
+        <nav class="automation-main-tabs" role="tablist">
+          <button type="button" class="automation-main-tab active" data-auto-tab="rules" data-i18n="automation.tabs.rules">${esc(t("automation.tabs.rules"))}</button>
+          <button type="button" class="automation-main-tab" data-auto-tab="ai" data-i18n="automation.tabs.ai">${esc(t("automation.tabs.ai"))}</button>
+        </nav>
+        <div id="automationRulesView" class="automation-grid">
           <section class="automation-rules-panel">
             <h2 data-i18n="automation.rulesTitle">${esc(t("automation.rulesTitle"))}</h2>
             <div id="automationRulesList" class="automation-rules-list"></div>
@@ -177,6 +224,7 @@
             <ul id="automationLogList" class="automation-log-list"></ul>
           </section>
         </div>
+        <div id="automationAiView" class="automation-ai-view hidden"></div>
       </main>
       <div id="automationEditor" class="automation-editor-overlay hidden" role="dialog" aria-modal="true">
         <div class="automation-editor-card">
@@ -245,7 +293,195 @@
     }
     const en = document.getElementById("automationEnabled");
     if (en) en.checked = Boolean(state.settings.enabled);
+    paintAiWarnings();
     bindRuleCards();
+    if (state.activeTab === "ai") renderAiView();
+  }
+
+  function paintAiWarnings() {
+    const gem = document.getElementById("automationGeminiWarn");
+    if (gem) {
+      if (!state.geminiConfigured) {
+        gem.classList.remove("hidden");
+        gem.textContent = t("automation.ai.noGeminiKey");
+      } else {
+        gem.classList.add("hidden");
+        gem.textContent = "";
+      }
+    }
+  }
+
+  function setAutomationTab(tab) {
+    state.activeTab = tab === "ai" ? "ai" : "rules";
+    document.querySelectorAll(".automation-main-tab").forEach((btn) => {
+      const on = btn.dataset.autoTab === state.activeTab;
+      btn.classList.toggle("active", on);
+      btn.setAttribute("aria-selected", on ? "true" : "false");
+    });
+    $("automationRulesView")?.classList.toggle("hidden", state.activeTab !== "rules");
+    $("automationAiView")?.classList.toggle("hidden", state.activeTab !== "ai");
+    const newBtn = $("automationNewRule");
+    if (newBtn) newBtn.classList.toggle("hidden", state.activeTab !== "rules");
+    if (state.activeTab === "ai") renderAiView();
+  }
+
+  function renderAiView() {
+    const box = document.getElementById("automationAiView");
+    if (!box) return;
+    const ai = state.ai || defaultAi();
+    const escalation = ai.escalation || defaultAi().escalation;
+    const resolution = ai.resolution || defaultAi().resolution;
+    const keywords = (escalation.keywords || []).join(", ");
+    const corrections = (ai.corrections || [])
+      .map((c) => `<li class="automation-corr-item">
+        <div><strong>${t("automation.ai.corrWhen")}</strong> ${esc(c.when)}</div>
+        <div><strong>${t("automation.ai.corrPrefer")}</strong> ${esc(c.prefer)}</div>
+        <button type="button" class="btn-ghost sm danger corr-delete" data-id="${esc(c.id)}">×</button>
+      </li>`)
+      .join("");
+
+    const failedRows = (state.aiFailed || [])
+      .map((f) => `<li class="automation-failed-item">
+        <div class="muted sm">${esc(formatTime(f.at))} · ${esc(f.contactName || f.phone || "")}</div>
+        <div><strong>${t("automation.ai.failedQuestion")}</strong> ${esc(f.question)}</div>
+        <div><strong>${t("automation.ai.failedAnswer")}</strong> ${esc((f.answer || "").slice(0, 120))}</div>
+        <button type="button" class="btn-ghost sm failed-to-corr" data-id="${esc(f.id)}">${t("automation.ai.convertToCorrection")}</button>
+      </li>`)
+      .join("");
+
+    box.innerHTML = `
+      <section class="automation-ai-panel">
+        <header class="automation-ai-head">
+          <div>
+            <h2 data-i18n="automation.ai.title">${t("automation.ai.title")}</h2>
+            <p class="muted sm" data-i18n="automation.ai.intro">${t("automation.ai.intro")}</p>
+            <p class="muted sm automation-faq-link">FAQ: <a href="${esc(state.faqSiteUrl || "#")}" target="_blank" rel="noopener">${esc(state.faqSiteUrl || "—")}</a></p>
+          </div>
+          <label class="automation-switch">
+            <input type="checkbox" id="aiEnabled" ${ai.enabled ? "checked" : ""} />
+            <span></span>
+            <em data-i18n="automation.ai.enabled">${t("automation.ai.enabled")}</em>
+          </label>
+        </header>
+        <form id="automationAiForm" class="automation-ai-form">
+          <label data-i18n="automation.ai.role">${t("automation.ai.role")}
+            <input type="text" id="aiRole" maxlength="120" value="${esc(ai.role || "")}" />
+          </label>
+          <label data-i18n="automation.ai.instructions">${t("automation.ai.instructions")}
+            <textarea id="aiInstructions" rows="5" placeholder="${esc(t("automation.ai.instructionsPh"))}">${esc(ai.instructions || "")}</textarea>
+          </label>
+          <div class="automation-ai-row">
+            <label class="automation-check"><input type="checkbox" id="aiFaqEnabled" ${ai.faqEnabled !== false ? "checked" : ""} /> ${t("automation.ai.faqEnabled")}</label>
+            <label class="automation-check"><input type="checkbox" id="aiFallback" ${ai.fallbackEnabled !== false ? "checked" : ""} /> ${t("automation.ai.fallbackEnabled")}</label>
+          </div>
+          <div class="automation-ai-row">
+            <label>${t("automation.ai.faqAudience")}
+              <select id="aiFaqAudience">
+                <option value="cliente" ${ai.faqAudience === "cliente" ? "selected" : ""}>${t("automation.ai.audienceCliente")}</option>
+                <option value="empresa" ${ai.faqAudience === "empresa" ? "selected" : ""}>${t("automation.ai.audienceEmpresa")}</option>
+                <option value="all" ${ai.faqAudience === "all" ? "selected" : ""}>${t("automation.ai.audienceAll")}</option>
+              </select>
+            </label>
+            <label>${t("automation.ai.faqMaxArticles")}
+              <input type="number" id="aiFaqMax" min="1" max="8" value="${Number(ai.faqMaxArticles) || 4}" />
+            </label>
+          </div>
+          <fieldset class="automation-fieldset">
+            <legend data-i18n="automation.ai.escalationTitle">${t("automation.ai.escalationTitle")}</legend>
+            <label data-i18n="automation.ai.escalationKeywords">${t("automation.ai.escalationKeywords")}
+              <input type="text" id="aiEscKeywords" value="${esc(keywords)}" placeholder="agente, humano, persona" />
+            </label>
+            <label data-i18n="automation.ai.handoffMessage">${t("automation.ai.handoffMessage")}
+              <textarea id="aiHandoff" rows="2">${esc(escalation.handoffMessage || "")}</textarea>
+            </label>
+            <div class="automation-ai-row">
+              <label class="automation-check"><input type="checkbox" id="aiEscLowConf" ${escalation.onLowConfidence !== false ? "checked" : ""} /> ${t("automation.ai.onLowConfidence")}</label>
+              <label>${t("automation.ai.confidenceThreshold")}
+                <input type="number" id="aiEscThreshold" min="0.1" max="0.95" step="0.05" value="${Number(escalation.confidenceThreshold) || 0.45}" />
+              </label>
+              <label>${t("automation.ai.maxReplies")}
+                <input type="number" id="aiEscMaxReplies" min="1" max="30" value="${Number(escalation.maxRepliesPerChat) || 8}" />
+              </label>
+            </div>
+          </fieldset>
+          <fieldset class="automation-fieldset">
+            <legend data-i18n="automation.ai.resolutionTitle">${t("automation.ai.resolutionTitle")}</legend>
+            <p class="muted sm" data-i18n="automation.ai.resolutionIntro">${t("automation.ai.resolutionIntro")}</p>
+            <label class="automation-check"><input type="checkbox" id="aiFeedbackEnabled" ${resolution.feedbackEnabled !== false ? "checked" : ""} /> ${t("automation.ai.feedbackEnabled")}</label>
+            <label>${t("automation.ai.feedbackPrompt")}
+              <input type="text" id="aiFeedbackPrompt" maxlength="200" value="${esc(resolution.feedbackPrompt || "")}" />
+            </label>
+            <div class="automation-ai-row">
+              <label>${t("automation.ai.feedbackYes")}
+                <input type="text" id="aiFeedbackYes" maxlength="20" value="${esc(resolution.feedbackYes || "")}" />
+              </label>
+              <label>${t("automation.ai.feedbackNo")}
+                <input type="text" id="aiFeedbackNo" maxlength="20" value="${esc(resolution.feedbackNo || "")}" />
+              </label>
+            </div>
+            <label>${t("automation.ai.thankYouMessage")}
+              <textarea id="aiThankYou" rows="2">${esc(resolution.thankYouMessage || "")}</textarea>
+            </label>
+            <div class="automation-ai-row">
+              <label class="automation-check"><input type="checkbox" id="aiArchiveOnConfirmed" ${resolution.archiveOnConfirmed ? "checked" : ""} /> ${t("automation.ai.archiveOnConfirmed")}</label>
+              <label class="automation-check"><input type="checkbox" id="aiAssumedResolution" ${resolution.assumedResolutionEnabled !== false ? "checked" : ""} /> ${t("automation.ai.assumedResolutionEnabled")}</label>
+              <label>${t("automation.ai.inactivityMinutes")}
+                <input type="number" id="aiInactivityMin" min="1" max="30" value="${Number(resolution.inactivityMinutes) || 4}" />
+              </label>
+            </div>
+          </fieldset>
+          <fieldset class="automation-fieldset">
+            <legend data-i18n="automation.ai.correctionsTitle">${t("automation.ai.correctionsTitle")}</legend>
+            <p class="muted sm" data-i18n="automation.ai.correctionsIntro">${t("automation.ai.correctionsIntro")}</p>
+            <ul id="aiCorrectionsList" class="automation-corr-list">${corrections || `<li class="muted sm">${t("automation.ai.noCorrections")}</li>`}</ul>
+            <div class="automation-corr-form">
+              <input type="text" id="corrWhen" placeholder="${esc(t("automation.ai.corrWhenPh"))}" />
+              <textarea id="corrPrefer" rows="2" placeholder="${esc(t("automation.ai.corrPreferPh"))}"></textarea>
+              <button type="button" class="btn-ghost sm" id="corrAddBtn">${t("automation.ai.addCorrection")}</button>
+            </div>
+          </fieldset>
+          <fieldset class="automation-fieldset">
+            <legend data-i18n="automation.ai.failedTitle">${t("automation.ai.failedTitle")}</legend>
+            <p class="muted sm" data-i18n="automation.ai.failedIntro">${t("automation.ai.failedIntro")}</p>
+            <ul class="automation-failed-list">${failedRows || `<li class="muted sm">${t("automation.ai.noFailed")}</li>`}</ul>
+          </fieldset>
+          <footer class="automation-editor-foot">
+            <button type="submit" class="btn-primary" data-i18n="automation.ai.save">${t("automation.ai.save")}</button>
+          </footer>
+        </form>
+      </section>`;
+    if (window.I18n) I18n.applyDom(box);
+  }
+
+  function collectAiPayload() {
+    const keywords = ($("aiEscKeywords") || {}).value || "";
+    return {
+      enabled: Boolean($("aiEnabled") && $("aiEnabled").checked),
+      fallbackEnabled: Boolean($("aiFallback") && $("aiFallback").checked),
+      role: ($("aiRole") || {}).value || "",
+      instructions: ($("aiInstructions") || {}).value || "",
+      faqEnabled: Boolean($("aiFaqEnabled") && $("aiFaqEnabled").checked),
+      faqAudience: ($("aiFaqAudience") || {}).value || "cliente",
+      faqMaxArticles: Number(($("aiFaqMax") || {}).value) || 4,
+      escalation: {
+        keywords: keywords.split(",").map((k) => k.trim()).filter(Boolean),
+        onLowConfidence: Boolean($("aiEscLowConf") && $("aiEscLowConf").checked),
+        confidenceThreshold: Number(($("aiEscThreshold") || {}).value) || 0.45,
+        maxRepliesPerChat: Number(($("aiEscMaxReplies") || {}).value) || 8,
+        handoffMessage: ($("aiHandoff") || {}).value || "",
+      },
+      resolution: {
+        feedbackEnabled: Boolean($("aiFeedbackEnabled") && $("aiFeedbackEnabled").checked),
+        feedbackPrompt: ($("aiFeedbackPrompt") || {}).value || "",
+        feedbackYes: ($("aiFeedbackYes") || {}).value || "",
+        feedbackNo: ($("aiFeedbackNo") || {}).value || "",
+        thankYouMessage: ($("aiThankYou") || {}).value || "",
+        archiveOnConfirmed: Boolean($("aiArchiveOnConfirmed") && $("aiArchiveOnConfirmed").checked),
+        assumedResolutionEnabled: Boolean($("aiAssumedResolution") && $("aiAssumedResolution").checked),
+        inactivityMinutes: Number(($("aiInactivityMin") || {}).value) || 4,
+      },
+      corrections: (state.ai && state.ai.corrections) || [],
+    };
   }
 
   function conditionRowHtml(c, idx) {
@@ -300,6 +536,8 @@
       fields = `<textarea class="act-body" rows="2" placeholder="${esc(t("automation.editor.bodyPh"))}">${esc(a.body || "")}</textarea>${btns}`;
     } else if (type === "add_note") {
       fields = `<textarea class="act-note" rows="2" placeholder="${esc(t("automation.editor.notePh"))}">${esc(a.note || "")}</textarea>`;
+    } else if (type === "reply_ai") {
+      fields = `<span class="muted sm">${esc(t("automation.editor.aiUsesGlobal"))}</span>`;
     } else {
       fields = `<span class="muted">${esc(t("automation.editor.noExtraFields"))}</span>`;
     }
@@ -550,14 +788,86 @@
         toastMsg(err.message, "err");
       }
     });
+
+    document.querySelectorAll(".automation-main-tab").forEach((btn) => {
+      btn.addEventListener("click", () => setAutomationTab(btn.dataset.autoTab));
+    });
+
+    const aiView = document.getElementById("automationAiView");
+    if (aiView && !aiView.dataset.bound) {
+      aiView.dataset.bound = "1";
+      aiView.addEventListener("submit", async (e) => {
+        const form = e.target.closest("#automationAiForm");
+        if (!form) return;
+        e.preventDefault();
+        try {
+          const data = await api("/api/automation/ai", {
+            method: "PATCH",
+            body: JSON.stringify(collectAiPayload()),
+          });
+          state.ai = data.ai;
+          toastMsg(t("automation.toast.aiSaved"), "ok");
+          renderAiView();
+        } catch (err) {
+          toastMsg(err.message, "err");
+        }
+      });
+      aiView.addEventListener("click", async (e) => {
+        if (e.target.id === "corrAddBtn") {
+          const when = ($("corrWhen") || {}).value.trim();
+          const prefer = ($("corrPrefer") || {}).value.trim();
+          if (!when || !prefer) return toastMsg(t("automation.ai.corrRequired"), "err");
+          try {
+            const data = await api("/api/automation/ai/corrections", {
+              method: "POST",
+              body: JSON.stringify({ when, prefer }),
+            });
+            state.ai = data.ai;
+            $("corrWhen").value = "";
+            $("corrPrefer").value = "";
+            toastMsg(t("automation.toast.correctionAdded"), "ok");
+            renderAiView();
+          } catch (err) {
+            toastMsg(err.message, "err");
+          }
+        }
+        const del = e.target.closest(".corr-delete");
+        if (del) {
+          try {
+            const data = await api(`/api/automation/ai/corrections/${encodeURIComponent(del.dataset.id)}`, { method: "DELETE" });
+            state.ai = data.ai;
+            toastMsg(t("automation.toast.correctionDeleted"), "ok");
+            renderAiView();
+          } catch (err) {
+            toastMsg(err.message, "err");
+          }
+        }
+        const toCorr = e.target.closest(".failed-to-corr");
+        if (toCorr) {
+          try {
+            const data = await api(`/api/automation/ai/failed/${encodeURIComponent(toCorr.dataset.id)}/to-correction`, { method: "POST", body: "{}" });
+            state.ai = data.ai;
+            toastMsg(t("automation.toast.correctionAdded"), "ok");
+            await refresh();
+          } catch (err) {
+            toastMsg(err.message, "err");
+          }
+        }
+      });
+    }
   }
 
   async function refresh() {
     const data = await api("/api/automation");
     state.rules = data.rules || [];
     state.settings = data.settings || { enabled: false };
+    state.ai = data.ai || defaultAi();
     state.log = data.log || [];
+    state.aiFailed = data.aiFailed || [];
+    state.aiResolutionLog = data.aiResolutionLog || [];
     state.botEnabled = Boolean(data.botEnabled);
+    state.geminiConfigured = Boolean(data.geminiConfigured);
+    state.faqSiteUrl = data.faqSiteUrl || "";
     paint();
   }
 
